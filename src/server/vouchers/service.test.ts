@@ -104,7 +104,7 @@ async function create(input: VoucherInput, actor = staff): Promise<string> {
 
 async function setApproval(on: boolean) {
   const c = await getCompany(db);
-  const r = await updateCompany(db, { ...c, approvalRequired: on });
+  const r = await updateCompany(db, { ...c, approvalRequired: on }, manager.id);
   if (!r.ok) throw new Error(r.error);
 }
 

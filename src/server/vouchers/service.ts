@@ -15,10 +15,10 @@ import type {
 } from "@/lib/vouchers/types";
 import { getVatAccountIds } from "@/server/accounts/service";
 import type { SessionUser } from "@/server/auth/service";
-import { getCompany } from "@/server/company/service";
 import type { Db } from "@/server/db/client";
 import {
   accounts,
+  company,
   departments,
   partners,
   sites,
@@ -113,11 +113,25 @@ const NONE_ALLOWED: Allowed = { accounts: new Set(), partners: new Set(), sites:
 
 const nonNull = <T>(xs: (T | null)[]): T[] => [...new Set(xs.filter((x): x is T => x !== null))];
 
-/** Read before the transaction: VAT account ids (for the simple-entry re-check) and the approval setting. */
+/** Read before the transaction: VAT account ids (for the simple-entry re-check). */
 type Context = { vat: VatAccounts; approvalRequired: boolean };
-async function loadContext(db: Db): Promise<Context> {
-  const [vat, company] = await Promise.all([getVatAccountIds(db), getCompany(db)]);
-  return { vat, approvalRequired: company.approvalRequired };
+async function loadVat(db: Db): Promise<VatAccounts> {
+  return getVatAccountIds(db);
+}
+
+/**
+ * The approval setting, read inside the write transaction under a share lock: it waits for an
+ * in-flight toggle (which holds FOR UPDATE on the row until commit) and blocks a later toggle
+ * until this voucher commits, so the toggle's auto-approve always sees the voucher.
+ */
+async function readApproval(tx: Tx): Promise<boolean> {
+  const [row] = await tx
+    .select({ approvalRequired: company.approvalRequired })
+    .from(company)
+    .where(eq(company.id, 1))
+    .for("share");
+  if (!row) throw new Error("회사 정보가 없습니다. 시드를 실행하세요.");
+  return row.approvalRequired;
 }
 
 async function validate(tx: Conn, ctx: Context, input: VoucherInput, allowed: Allowed): Promise<string | null> {
@@ -253,8 +267,9 @@ export async function createVoucher(
   actor: SessionUser,
   input: VoucherInput,
 ): Promise<Result<{ id: string }>> {
-  const ctx = await loadContext(db);
+  const vat = await loadVat(db);
   return db.transaction(async (tx) => {
+    const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
     const error = await validate(tx, ctx, input, NONE_ALLOWED);
     if (error) return fail(error);
     const no = await nextNo(tx, input.date);
@@ -307,8 +322,9 @@ export async function updateVoucher(
   version: number,
   input: VoucherInput,
 ): Promise<Result> {
-  const ctx = await loadContext(db);
+  const vat = await loadVat(db);
   return db.transaction(async (tx) => {
+    const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
     const locked = await lockForWrite(tx, actor, id, version);
     if (!locked.ok) return locked;
 

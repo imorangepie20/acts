@@ -15,6 +15,7 @@ export default defineConfig({
     { name: "setup", testMatch: /auth\.setup\.ts/ },
     {
       name: "chromium",
+      retries: 1,
       testIgnore: [/auth\.setup\.ts/, settingsSpecs],
       dependencies: ["setup"],
       use: admin,

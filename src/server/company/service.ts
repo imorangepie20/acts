@@ -40,7 +40,7 @@ export async function getCompany(db: Db): Promise<Company> {
  * Switching approval off approves every pending voucher in the same transaction, so the
  * "posted" rule stays a single `status = 'approved'` check. `actorId` is the approver of record.
  */
-export async function updateCompany(db: Db, input: Company, actorId?: string): Promise<Result> {
+export async function updateCompany(db: Db, input: Company, actorId: string): Promise<Result> {
   const name = input.name.trim();
   if (!name) return fail(ERR_NAME);
   if (
@@ -74,7 +74,6 @@ export async function updateCompany(db: Db, input: Company, actorId?: string): P
       })
       .where(eq(company.id, 1));
     if (before.approvalRequired && !input.approvalRequired) {
-      if (!actorId) throw new Error("approval switched off without an actor");
       await approveAllPending(tx, actorId);
     }
     return ok();

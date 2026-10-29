@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 
-// Changes the company approval setting, so it runs in the serial `settings-serial` project.
+// Changes the company approval setting, so it runs in the serial `settings-serial-approval` project.
 test.describe.configure({ mode: "serial" });
 
 async function setApproval(page: Page, on: boolean) {
