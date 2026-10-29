@@ -73,3 +73,29 @@ export const sessions = pgTable(
   },
   (t) => [index("sessions_user_id_idx").on(t.userId)],
 );
+
+export const accountGroup = pgEnum("account_group", [
+  "current_asset",
+  "noncurrent_asset",
+  "current_liability",
+  "noncurrent_liability",
+  "equity",
+  "revenue",
+  "cost_of_sales",
+  "sga",
+  "non_operating_income",
+  "non_operating_expense",
+  "income_tax",
+]);
+
+export const accounts = pgTable("accounts", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  group: accountGroup("account_group").notNull(),
+  requiresPartner: boolean("requires_partner").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  isSystem: boolean("is_system").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

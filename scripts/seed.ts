@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "../src/server/auth/password";
 import { createDb, type Db } from "../src/server/db/client";
+import { seedStandardAccounts } from "../src/server/accounts/service";
 import { company, users } from "../src/server/db/schema";
 
 export async function seed(
@@ -11,6 +12,7 @@ export async function seed(
 ): Promise<"created" | "exists" | "exists-not-admin"> {
   const email = opts.email.trim().toLowerCase();
   await db.insert(company).values({ id: 1, name: "우리회사" }).onConflictDoNothing();
+  await seedStandardAccounts(db);
   const [existing] = await db
     .select({ role: users.role, isActive: users.isActive })
     .from(users)
