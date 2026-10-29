@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Command } from "lucide-react";
-import { navGroups } from "@/lib/nav";
+import { navGroupsFor } from "@/lib/nav";
 import type { SessionUser } from "@/server/auth/service";
 import {
   Sidebar,
@@ -17,8 +17,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-// `user` will drive role-based nav filtering (Task 5).
-export function AppSidebar(_props: { user: SessionUser }) {
+export function AppSidebar({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   return (
     <Sidebar collapsible="icon">
@@ -27,11 +26,11 @@ export function AppSidebar(_props: { user: SessionUser }) {
           <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <Command className="size-4" />
           </div>
-          <span className="font-semibold group-data-[collapsible=icon]:hidden">Shadcn UI Kit</span>
+          <span className="font-semibold group-data-[collapsible=icon]:hidden">회계 시스템</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {navGroups.map((group) => (
+        {navGroupsFor(user.role).map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarMenu>

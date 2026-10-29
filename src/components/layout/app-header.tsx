@@ -14,7 +14,7 @@ export function AppHeader({ user }: { user: SessionUser }) {
       <Separator orientation="vertical" className="mr-2 h-4" />
       <Breadcrumbs />
       <div className="ml-auto flex items-center gap-2">
-        <CommandPalette />
+        <CommandPalette role={user.role} />
         <ThemeToggle />
         <Notifications />
         <UserMenu user={user} />

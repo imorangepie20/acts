@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
-import { navGroups } from "@/lib/nav";
+import { navGroupsFor } from "@/lib/nav";
+import type { Role } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -21,7 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export function CommandPalette() {
+export function CommandPalette({ role }: { role: Role })  {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
@@ -44,7 +45,7 @@ export function CommandPalette() {
         onClick={() => setOpen(true)}
       >
         <Search className="size-4" />
-        <span className="ml-2">Search…</span>
+        <span className="ml-2">검색…</span>
         <kbd className="pointer-events-none absolute right-2 top-2 hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 text-[10px] font-medium sm:flex">
           ⌘K
         </kbd>
@@ -55,14 +56,14 @@ export function CommandPalette() {
           showCloseButton={false}
         >
           <DialogHeader className="sr-only">
-            <DialogTitle>Command Palette</DialogTitle>
-            <DialogDescription>Search for a page to navigate to.</DialogDescription>
+            <DialogTitle>메뉴 검색</DialogTitle>
+            <DialogDescription>이동할 메뉴를 검색합니다.</DialogDescription>
           </DialogHeader>
           <Command>
-            <CommandInput placeholder="Type a page name…" />
+            <CommandInput placeholder="메뉴 이름을 입력하세요…" />
             <CommandList>
-              <CommandEmpty>No results found.</CommandEmpty>
-              {navGroups.map((group) => (
+              <CommandEmpty>결과가 없습니다.</CommandEmpty>
+              {navGroupsFor(role).map((group) => (
                 <CommandGroup key={group.label} heading={group.label}>
                   {group.items.map((item) => (
                     <CommandItem

@@ -1,98 +1,68 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  LayoutDashboard, ShoppingCart, CreditCard, Hotel, KanbanSquare,
-  Building2, TrendingUp, Users, BarChart3, FolderOpen, Bitcoin,
-  GraduationCap, Stethoscope, Wallet, StickyNote, MessageSquare,
-  Share2, Mail, ListTodo, CheckSquare, Calendar, KeyRound, Store,
-  BookOpen, Bot, Image as ImageIcon, AudioLines, UserCircle, Rocket,
-  Layers, Settings, Tag, ShieldCheck, Bell, TriangleAlert, Boxes,
-  Component, Blocks, FlaskConical, Globe,
+  LayoutDashboard, FilePlus2, FileText, Upload, BookOpen, BookText, Users,
+  Scale, TrendingUp, Landmark, Lock, ArrowRightLeft, FileSpreadsheet,
+  Building2, ListTree, Handshake, MapPin, UserCog,
 } from "lucide-react";
+import { can, type Permission, type Role } from "@/lib/permissions";
 
-export type NavItem = { title: string; href: string; icon?: LucideIcon };
+export type NavItem = { title: string; href: string; icon?: LucideIcon; permission: Permission };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const navGroups: NavGroup[] = [
   {
-    label: "Dashboards",
+    label: "경영 현황",
+    items: [{ title: "대시보드", href: "/overview", icon: LayoutDashboard, permission: "overview:view" }],
+  },
+  {
+    label: "전표",
     items: [
-      { title: "Default", href: "/dashboard/default", icon: LayoutDashboard },
-      { title: "E-commerce", href: "/dashboard/ecommerce", icon: ShoppingCart },
-      { title: "Payment", href: "/dashboard/payment", icon: CreditCard },
-      { title: "Hotel", href: "/dashboard/hotel", icon: Hotel },
-      { title: "Project Management", href: "/dashboard/project-management", icon: KanbanSquare },
-      { title: "Real Estate", href: "/dashboard/real-estate", icon: Building2 },
-      { title: "Sales", href: "/dashboard/sales", icon: TrendingUp },
-      { title: "CRM", href: "/dashboard/crm", icon: Users },
-      { title: "Website Analytics", href: "/dashboard/analytics", icon: BarChart3 },
-      { title: "File Manager", href: "/dashboard/file-manager", icon: FolderOpen },
-      { title: "Crypto", href: "/dashboard/crypto", icon: Bitcoin },
-      { title: "Academy", href: "/dashboard/academy", icon: GraduationCap },
-      { title: "Hospital", href: "/dashboard/hospital", icon: Stethoscope },
-      { title: "Finance", href: "/dashboard/finance", icon: Wallet },
+      { title: "전표 입력", href: "/vouchers/new", icon: FilePlus2, permission: "voucher:create" },
+      { title: "전표 목록", href: "/vouchers", icon: FileText, permission: "ledger:view" },
+      { title: "자료 불러오기", href: "/imports", icon: Upload, permission: "voucher:create" },
     ],
   },
   {
-    label: "Apps",
+    label: "장부",
     items: [
-      { title: "Kanban", href: "/apps/kanban", icon: KanbanSquare },
-      { title: "Notes", href: "/apps/notes", icon: StickyNote },
-      { title: "Chats", href: "/apps/chats", icon: MessageSquare },
-      { title: "Social Media", href: "/apps/social", icon: Share2 },
-      { title: "Mail", href: "/apps/mail", icon: Mail },
-      { title: "Todo List", href: "/apps/todo", icon: ListTodo },
-      { title: "Tasks", href: "/apps/tasks", icon: CheckSquare },
-      { title: "Calendar", href: "/apps/calendar", icon: Calendar },
-      { title: "File Manager", href: "/apps/file-manager", icon: FolderOpen },
-      { title: "API Keys", href: "/apps/api-keys", icon: KeyRound },
-      { title: "POS", href: "/apps/pos", icon: Store },
-      { title: "Courses", href: "/apps/courses", icon: BookOpen },
+      { title: "분개장", href: "/ledgers/journal", icon: BookOpen, permission: "ledger:view" },
+      { title: "계정별 원장", href: "/ledgers/accounts", icon: BookText, permission: "ledger:view" },
+      { title: "거래처별 원장", href: "/ledgers/partners", icon: Users, permission: "ledger:view" },
     ],
   },
   {
-    label: "AI Apps",
+    label: "재무제표",
     items: [
-      { title: "AI Chat", href: "/ai/chat", icon: Bot },
-      { title: "AI Chat V2", href: "/ai/chat-v2", icon: Bot },
-      { title: "Image Generator", href: "/ai/image-generator", icon: ImageIcon },
-      { title: "Text to Speech", href: "/ai/text-to-speech", icon: AudioLines },
+      { title: "합계잔액시산표", href: "/reports/trial-balance", icon: Scale, permission: "ledger:view" },
+      { title: "손익계산서", href: "/reports/income-statement", icon: TrendingUp, permission: "ledger:view" },
+      { title: "재무상태표", href: "/reports/balance-sheet", icon: Landmark, permission: "ledger:view" },
     ],
   },
   {
-    label: "Pages",
+    label: "결산·세무",
     items: [
-      { title: "Users List", href: "/users", icon: Users },
-      { title: "Profile V1", href: "/profile", icon: UserCircle },
-      { title: "Profile V2", href: "/profile/v2", icon: UserCircle },
-      { title: "Onboarding", href: "/onboarding", icon: Rocket },
-      { title: "Empty States", href: "/empty-states", icon: Layers },
-      { title: "Settings", href: "/settings", icon: Settings },
-      { title: "Pricing", href: "/pricing", icon: Tag },
-      { title: "Authentication", href: "/login", icon: ShieldCheck },
-      { title: "Notifications", href: "/notifications", icon: Bell },
-      { title: "Error Pages", href: "/error/404", icon: TriangleAlert },
+      { title: "월 마감", href: "/closing", icon: Lock, permission: "period:close" },
+      { title: "기초잔액·이월", href: "/closing/opening", icon: ArrowRightLeft, permission: "period:close" },
+      { title: "세무사 자료", href: "/exports", icon: FileSpreadsheet, permission: "export:tax" },
     ],
   },
   {
-    label: "Others",
+    label: "설정",
     items: [
-      { title: "Widgets", href: "/widgets", icon: Boxes },
-      { title: "Components", href: "/components", icon: Component },
-      { title: "Blocks", href: "/blocks", icon: Blocks },
-      { title: "Examples", href: "/examples", icon: FlaskConical },
-      { title: "Website Templates", href: "/templates", icon: Globe },
+      { title: "회사 정보", href: "/admin/company", icon: Building2, permission: "settings:manage" },
+      { title: "계정과목", href: "/admin/accounts", icon: ListTree, permission: "settings:manage" },
+      { title: "거래처", href: "/admin/partners", icon: Handshake, permission: "settings:manage" },
+      { title: "사업장·부서", href: "/admin/sites", icon: MapPin, permission: "settings:manage" },
+      { title: "사용자", href: "/admin/users", icon: UserCog, permission: "settings:manage" },
     ],
   },
 ];
 
-// Auth routes live outside the dashboard shell (the (auth) group).
-export const authRoutes: NavItem[] = [
-  { title: "Login", href: "/login" },
-  { title: "Register", href: "/register" },
-  { title: "Forgot Password", href: "/forgot-password" },
-  { title: "Reset Password", href: "/reset-password" },
-  { title: "Verify Email", href: "/verify" },
-];
-
-// Flat list of every dashboard-shell route (used by ⌘K and stub generation).
+// Flat list of every menu item (used by e2e and stub generation).
 export const allNavItems: NavItem[] = navGroups.flatMap((g) => g.items);
+
+export function navGroupsFor(role: Role): NavGroup[] {
+  return navGroups
+    .map((g) => ({ ...g, items: g.items.filter((i) => can(role, i.permission)) }))
+    .filter((g) => g.items.length > 0);
+}
