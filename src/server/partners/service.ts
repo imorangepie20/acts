@@ -1,5 +1,5 @@
 import { and, asc, eq, ilike, or, type SQL } from "drizzle-orm";
-import { isValidBusinessNumber, normalizeBusinessNumber } from "@/lib/business-number";
+import { cleanBusinessNumber, normalizeBusinessNumber } from "@/lib/business-number";
 import type { Db } from "@/server/db/client";
 import { isUniqueViolation } from "@/server/db/errors";
 import { partners } from "@/server/db/schema";
@@ -29,7 +29,6 @@ const columns = {
 };
 
 const ERR_NAME = "거래처명을 입력하세요.";
-const ERR_BN = "사업자등록번호가 올바르지 않습니다.";
 const ERR_DUP = "이미 등록된 사업자등록번호입니다.";
 const ERR_NOT_FOUND = "거래처를 찾을 수 없습니다.";
 
@@ -39,13 +38,9 @@ const orNull = (v: string | null | undefined) => v?.trim() || null;
 function clean(input: PartnerInput): Result<Omit<typeof partners.$inferInsert, "id" | "isActive">> {
   const name = input.name.trim();
   if (!name) return fail(ERR_NAME);
-  let businessNumber: string | null = null;
-  const rawBn = input.businessNumber?.trim();
-  if (rawBn) {
-    if (/[^\d\s-]/.test(rawBn)) return fail(ERR_BN);
-    businessNumber = normalizeBusinessNumber(rawBn);
-    if (!isValidBusinessNumber(businessNumber)) return fail(ERR_BN);
-  }
+  const bn = cleanBusinessNumber(input.businessNumber);
+  if (!bn.ok) return bn;
+  const businessNumber = bn.value;
   return ok({
     name,
     businessNumber,
