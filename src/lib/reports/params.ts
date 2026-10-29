@@ -1,5 +1,5 @@
 import { isIsoDate } from "@/lib/vouchers/dates";
-import { defaultPeriod } from "./fiscal";
+import { defaultPeriod, fiscalYearStart } from "./fiscal";
 import type { ReportFilter } from "./types";
 
 export type SearchParams = Record<string, string | string[] | undefined>;
@@ -18,8 +18,18 @@ export function parseReportParams(sp: SearchParams, today: string, startMonth: n
   const def = defaultPeriod(today, startMonth);
   const f = first(sp.from);
   const t = first(sp.to);
-  let from = isIsoDate(f) ? f : def.from;
-  let to = isIsoDate(t) ? t : def.to;
-  if (from > to) [from, to] = [to, from];
+  let from: string;
+  let to: string;
+  if (isIsoDate(f) && isIsoDate(t)) {
+    [from, to] = f <= t ? [f, t] : [t, f];
+  } else if (isIsoDate(t)) {
+    to = t;
+    from = fiscalYearStart(t, startMonth);
+  } else if (isIsoDate(f)) {
+    from = f;
+    to = f > today ? f : today;
+  } else {
+    ({ from, to } = def);
+  }
   return { from, to, siteId: positiveInt(first(sp.site)), departmentId: positiveInt(first(sp.dept)) };
 }

@@ -2,9 +2,8 @@ import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { Db } from "@/server/db/client";
 import { accounts, voucherLines, vouchers } from "@/server/db/schema";
 import { POSTED_STATUSES } from "@/lib/vouchers/types";
-import type { AccountGroup } from "@/lib/accounts";
-
-export type AccountTotal = { accountId: number; debit: number; credit: number };
+import { isPnlGroup } from "@/lib/accounts";
+import type { AccountTotal } from "@/lib/reports/types";
 
 export type TotalsFilter = {
   from: string | null;
@@ -13,14 +12,6 @@ export type TotalsFilter = {
   departmentId: number | null;
 };
 
-export const PNL_GROUPS: readonly AccountGroup[] = [
-  "revenue",
-  "cost_of_sales",
-  "sga",
-  "non_operating_income",
-  "non_operating_expense",
-  "income_tax",
-];
 
 /** Debit/credit sums per account over posted lines in [from, to]. */
 export async function accountTotals(db: Db, f: TotalsFilter): Promise<AccountTotal[]> {
@@ -52,6 +43,6 @@ export async function profitBetween(db: Db, f: TotalsFilter): Promise<number> {
     accountTotals(db, f),
     db.select({ id: accounts.id, group: accounts.group }).from(accounts),
   ]);
-  const pnl = new Set(groups.filter((a) => PNL_GROUPS.includes(a.group)).map((a) => a.id));
+  const pnl = new Set(groups.filter((a) => isPnlGroup(a.group)).map((a) => a.id));
   return totals.reduce((s, t) => (pnl.has(t.accountId) ? s + t.credit - t.debit : s), 0);
 }

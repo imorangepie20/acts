@@ -22,6 +22,14 @@ describe("parseReportParams", () => {
     expect(parseReportParams({ site: "2", dept: "-3" }, today, 1)).toMatchObject({ siteId: 2, departmentId: null });
     expect(parseReportParams({ site: "1.5" }, today, 1).siteId).toBeNull();
   });
+  it("keeps an as-of date and derives from", () => {
+    expect(parseReportParams({ to: "2025-06-30" }, "2026-10-30", 1)).toMatchObject({ from: "2025-01-01", to: "2025-06-30" });
+    expect(parseReportParams({ to: "2025-02-10" }, "2026-10-30", 4)).toMatchObject({ from: "2024-04-01", to: "2025-02-10" });
+  });
+  it("handles from only", () => {
+    expect(parseReportParams({ from: "2026-03-01" }, today, 1)).toMatchObject({ from: "2026-03-01", to: today });
+    expect(parseReportParams({ from: "2027-03-01" }, today, 1)).toMatchObject({ from: "2027-03-01", to: "2027-03-01" });
+  });
   it("uses the first element of arrays", () => {
     const f = parseReportParams({ from: ["2026-02-01", "x"], site: ["3", "4"] }, today, 1);
     expect(f.from).toBe("2026-02-01");

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
 import type { SessionUser } from "@/server/auth/service";
 import { getCompany, updateCompany } from "@/server/company/service";
-import { accounts, sites, users } from "@/server/db/schema";
+import { accounts, departments, sites, users } from "@/server/db/schema";
 import { createSite } from "@/server/sites/service";
 import { approveVoucher, createVoucher, rejectVoucher } from "@/server/vouchers/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
@@ -82,6 +82,16 @@ describe("accountTotals", () => {
     expect(t2).toEqual([{ accountId: acc["811"], debit: 50, credit: 0 }]);
     const t1 = await accountTotals(db, { ...all, siteId });
     expect(t1).toEqual([{ accountId: acc["101"], debit: 0, credit: 50 }]);
+  });
+});
+
+describe("department filter", () => {
+  it("filters lines by department", async () => {
+    const [d] = await db.insert(departments).values({ name: "영업" }).returning({ id: departments.id });
+    const l = line("811", "debit", 70);
+    await create(voucher("2026-10-01", [{ ...l, departmentId: d.id }, line("101", "credit", 70)]));
+    const t = await accountTotals(db, { ...all, departmentId: d.id });
+    expect(t).toEqual([{ accountId: acc["811"], debit: 70, credit: 0 }]);
   });
 });
 

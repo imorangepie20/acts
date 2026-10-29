@@ -14,6 +14,28 @@ export const ACCOUNT_GROUPS = [
 
 export type AccountGroup = (typeof ACCOUNT_GROUPS)[number];
 
+/** Profit-and-loss groups (accumulate within a fiscal year). */
+export const PNL_GROUPS: readonly AccountGroup[] = [
+  "revenue",
+  "cost_of_sales",
+  "sga",
+  "non_operating_income",
+  "non_operating_expense",
+  "income_tax",
+];
+
+/** Balance-sheet groups (accumulate from the beginning of time). */
+export const BS_GROUPS: readonly AccountGroup[] = [
+  "current_asset",
+  "noncurrent_asset",
+  "current_liability",
+  "noncurrent_liability",
+  "equity",
+];
+
+export const isPnlGroup = (g: AccountGroup): boolean => PNL_GROUPS.includes(g);
+export const isBalanceSheetGroup = (g: AccountGroup): boolean => BS_GROUPS.includes(g);
+
 export const ACCOUNT_GROUP_LABELS: Record<AccountGroup, string> = {
   current_asset: "유동자산",
   noncurrent_asset: "비유동자산",

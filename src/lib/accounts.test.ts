@@ -1,5 +1,5 @@
-import { expect, it } from "vitest";
-import { normalSideOf, suggestGroup } from "./accounts";
+import { describe, expect, it } from "vitest";
+import { ACCOUNT_GROUPS, isBalanceSheetGroup, isPnlGroup, normalSideOf, suggestGroup } from "./accounts";
 
 it("suggests group from Douzone ranges", () => {
   expect(suggestGroup("103")).toBe("current_asset");
@@ -14,4 +14,10 @@ it("suggests group from Douzone ranges", () => {
 it("normal side", () => {
   expect(normalSideOf("sga")).toBe("debit");
   expect(normalSideOf("revenue")).toBe("credit");
+});
+
+describe("pnl/bs split", () => {
+  it("puts every group in exactly one set", () => {
+    for (const g of ACCOUNT_GROUPS) expect(isPnlGroup(g) !== isBalanceSheetGroup(g)).toBe(true);
+  });
 });

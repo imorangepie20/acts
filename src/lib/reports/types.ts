@@ -5,4 +5,6 @@ export type ReportFilter = {
   departmentId: number | null;
 };
 
+export type AccountTotal = { accountId: number; debit: number; credit: number };
+
 export type ReportMode = "period" | "asOf";

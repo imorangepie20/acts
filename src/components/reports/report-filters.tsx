@@ -5,6 +5,8 @@ import type { ReportFilter, ReportMode } from "@/lib/reports/types";
 
 type Option = { id: number; name: string };
 
+const RESERVED = new Set(["from", "to", "site", "dept"]);
+
 export type ReportFiltersProps = {
   filter: ReportFilter;
   mode: ReportMode;
@@ -30,7 +32,7 @@ export function ReportFilters({
   return (
     <form method="get" className="flex flex-wrap items-end gap-3">
       {Object.entries(extraParams).map(([k, v]) =>
-        v === undefined || v === "" ? null : <input key={k} type="hidden" name={k} value={v} />,
+        v === undefined || v === "" || RESERVED.has(k) ? null : <input key={k} type="hidden" name={k} value={v} />,
       )}
       {mode === "period" ? (
         <div className="flex flex-col gap-1.5">
