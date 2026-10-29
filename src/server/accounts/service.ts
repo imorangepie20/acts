@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { type AccountGroup, VAT_INPUT_CODE, VAT_OUTPUT_CODE } from "@/lib/accounts";
 import type { Db } from "@/server/db/client";
 import { isUniqueViolation } from "@/server/db/errors";
@@ -69,7 +69,7 @@ export async function updateAccount(
   id: number,
   patch: { name?: string; group?: AccountGroup; requiresPartner?: boolean; isActive?: boolean },
 ): Promise<Result> {
-  const set: Partial<typeof accounts.$inferInsert> = { updatedAt: new Date() };
+  const set: Partial<Omit<typeof accounts.$inferInsert, "updatedAt">> & { updatedAt: SQL } = { updatedAt: sql`now()` };
   if (patch.name !== undefined) {
     const name = patch.name.trim();
     if (!name) return fail(ERR_NAME);

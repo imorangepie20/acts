@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, or, sql, type SQL } from "drizzle-orm";
 import { cleanBusinessNumber, normalizeBusinessNumber } from "@/lib/business-number";
 import type { Db } from "@/server/db/client";
 import { isUniqueViolation } from "@/server/db/errors";
@@ -111,7 +111,7 @@ export async function updatePartner(
   try {
     const rows = await db
       .update(partners)
-      .set({ ...v.value, isActive: input.isActive, updatedAt: new Date() })
+      .set({ ...v.value, isActive: input.isActive, updatedAt: sql`now()` })
       .where(eq(partners.id, id))
       .returning({ id: partners.id });
     return rows.length ? ok() : fail(ERR_NOT_FOUND);

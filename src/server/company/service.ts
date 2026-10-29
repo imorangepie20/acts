@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   isValidBusinessNumber,
   normalizeBusinessNumber,
@@ -70,7 +70,7 @@ export async function updateCompany(db: Db, input: Company, actorId: string): Pr
         representative,
         fiscalYearStartMonth: input.fiscalYearStartMonth,
         approvalRequired: input.approvalRequired,
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(eq(company.id, 1));
     if (before.approvalRequired && !input.approvalRequired) {

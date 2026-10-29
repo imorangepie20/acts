@@ -72,7 +72,7 @@ export async function updateSite(
       }
       const rows = await tx
         .update(sites)
-        .set({ ...v.value, isActive: input.isActive, updatedAt: new Date() })
+        .set({ ...v.value, isActive: input.isActive, updatedAt: sql`now()` })
         .where(eq(sites.id, id))
         .returning({ id: sites.id });
       return rows.length ? ok() : fail(ERR_SITE_NOT_FOUND);
@@ -116,7 +116,7 @@ export async function updateDepartment(
   try {
     const rows = await db
       .update(departments)
-      .set({ name, isActive: input.isActive, updatedAt: new Date() })
+      .set({ name, isActive: input.isActive, updatedAt: sql`now()` })
       .where(eq(departments.id, id))
       .returning({ id: departments.id });
     return rows.length ? ok() : fail(ERR_DEPT_NOT_FOUND);

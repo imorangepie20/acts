@@ -353,7 +353,7 @@ export async function updateVoucher(
         rejectReason: null,
         version: sql`${vouchers.version} + 1`,
         updatedBy: actor.id,
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .where(and(eq(vouchers.id, id), eq(vouchers.version, version)))
       .returning({ id: vouchers.id });
@@ -523,7 +523,7 @@ async function decide(
     if (locked.value.status !== "pending") return fail(ERR_NOT_PENDING);
     const updated = await tx
       .update(vouchers)
-      .set({ ...set, version: sql`${vouchers.version} + 1`, updatedAt: new Date() })
+      .set({ ...set, version: sql`${vouchers.version} + 1`, updatedAt: sql`now()` })
       .where(and(eq(vouchers.id, id), eq(vouchers.version, version)))
       .returning({ id: vouchers.id });
     if (updated.length === 0) return fail(ERR_CONFLICT);

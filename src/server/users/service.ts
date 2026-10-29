@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import type { Role } from "@/lib/permissions";
 import { hashPassword } from "@/server/auth/password";
@@ -74,8 +74,8 @@ export async function updateUser(
   id: string,
   patch: { name?: string; role?: Role; isActive?: boolean },
 ): Promise<Result> {
-  const set: { name?: string; role?: Role; isActive?: boolean; updatedAt: Date } = {
-    updatedAt: new Date(),
+  const set: { name?: string; role?: Role; isActive?: boolean; updatedAt: SQL } = {
+    updatedAt: sql`now()`,
   };
   if (patch.name !== undefined) {
     const name = patch.name.trim();
@@ -112,7 +112,7 @@ export async function resetPassword(db: Db, id: string, password: string): Promi
   return db.transaction(async (tx): Promise<Result> => {
     const updated = await tx
       .update(users)
-      .set({ passwordHash, updatedAt: new Date() })
+      .set({ passwordHash, updatedAt: sql`now()` })
       .where(eq(users.id, id))
       .returning({ id: users.id });
     if (updated.length === 0) return fail(ERR_NOT_FOUND);

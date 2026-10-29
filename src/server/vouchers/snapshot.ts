@@ -67,7 +67,7 @@ export async function approveAllPending(tx: Tx, actorId: string): Promise<void> 
       approvedBy: actorId,
       approvedAt: new Date(),
       version: sql`${vouchers.version} + 1`,
-      updatedAt: new Date(),
+      updatedAt: sql`now()`,
     })
     .where(eq(vouchers.status, "pending"))
     .returning({ id: vouchers.id });
