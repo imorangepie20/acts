@@ -31,7 +31,7 @@ Local `.env` must set `ADMIN_PASSWORD` (non-default, >= 8 chars) and `COOKIE_SEC
 
 Playwright's `webServer` runs `pnpm db:migrate && pnpm db:seed && pnpm build && pnpm start` on :3710, so tests hit a **production build**. Locally it reuses a server already on :3710 — if `pnpm dev` is running, tests run against dev instead (and a stale server means stale code).
 
-Deploy: `docker compose --profile prod up -d --build` (db, migrate, app, cloudflared) on the server; `scripts/backup.sh` for Postgres dumps. See `docs/deploy.md` (Korean). `next.config.ts` uses `output: "standalone"`.
+Deploy: `docker compose --profile prod up -d --build` (db, migrate, app, cloudflared) on the server; `scripts/backup.sh` for Postgres dumps plus an uploads-volume archive. See `docs/deploy.md` (Korean). `next.config.ts` uses `output: "standalone"`.
 
 ## Architecture
 

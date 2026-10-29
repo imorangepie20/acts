@@ -67,15 +67,15 @@ git pull && docker compose --profile prod up -d --build
 0 3 * * * cd /home/approid/acts && mkdir -p backups && bash scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
-증빙 첨부파일(영수증 사진·PDF)은 DB가 아니라 Docker 볼륨 `acts_uploads`(컨테이너의 `/app/uploads`)에 저장되므로 DB 덤프와 함께 따로 백업해야 합니다. `scripts/backup.sh` 가 다음 명령으로 `backups/uploads-YYYY-MM-DD.tgz` 를 만들고, 30일 지난 파일은 함께 삭제합니다.
+증빙 첨부파일(영수증 사진·PDF)은 DB가 아니라 Docker 볼륨 `acts_uploads`(컨테이너의 `/app/uploads`)에 저장되므로 DB 덤프와 함께 따로 백업해야 합니다. `scripts/backup.sh` 가 다음 명령으로 `backups/uploads-YYYY-MM-DD-HHMM.tgz` 를 만듭니다. 매번 전체 사본이므로 디스크를 아끼기 위해 최신 7개만 남기고 나머지는 삭제합니다 (DB 덤프는 30일 보관). 실행 끝에 `df -h` 로 백업 디렉터리의 디스크 사용량을 로그에 남깁니다.
 
 ```bash
-docker run --rm -v acts_uploads:/u -v "$PWD/backups":/b alpine tar czf /b/uploads-$(date +%F).tgz -C /u .
+docker run --rm -v acts_uploads:/u -v "$PWD/backups":/b alpine tar czf /b/uploads-$(date +%F-%H%M).tgz -C /u .
 ```
 
-첨부파일 복구: `docker run --rm -v acts_uploads:/u -v "$PWD/backups":/b alpine tar xzf /b/uploads-2026-01-01.tgz -C /u` (DB 덤프와 같은 날짜의 파일을 사용하세요).
+첨부파일 복구: `docker run --rm -v acts_uploads:/u -v "$PWD/backups":/b alpine tar xzf /b/uploads-2026-01-01-0300.tgz -C /u` (DB 덤프와 같은 날짜·시각의 파일을 사용하세요).
 
-백업 파일은 같은 서버에 있으므로 주기적으로 다른 장비로도 복사해 두세요.
+`backups/` 는 DB와 같은 디스크에 있으므로 서버 장애에 대비해 주기적으로 `backups/` 를 다른 장비(외장 디스크·NAS·클라우드)로 복사해 두세요.
 
 ## 6. 복구
 

@@ -6,7 +6,7 @@ import type { VoucherInput } from "@/lib/vouchers/types";
 import { getVatAccountIds, listAccounts } from "@/server/accounts/service";
 import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
-import { getEntryOptions } from "@/server/sites/service";
+import { getEntryOptions, listDepartments, listSites } from "@/server/sites/service";
 import { canModify, getVoucher, type VoucherDetail } from "@/server/vouchers/service";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -71,11 +71,30 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   if (!voucher) notFound();
   if (!canModify(user, { createdBy: voucher.createdBy.id })) redirect(`/vouchers/${id}`);
 
-  const [allAccounts, vat, options] = await Promise.all([
+  const [allAccounts, vat, activeOptions, allSites, allDepartments] = await Promise.all([
     listAccounts(db),
     getVatAccountIds(db),
     getEntryOptions(db),
+    listSites(db),
+    listDepartments(db),
   ]);
+  // A deactivated 사업장/부서 already on the voucher stays selectable (labelled), so the select
+  // shows what will be saved. New vouchers never see inactive ones.
+  const currentSite = allSites.find((s) => s.id === voucher.lines[0].siteId);
+  const currentDept = allDepartments.find((d) => d.id === voucher.lines[0].departmentId);
+  const extraSite = currentSite && !currentSite.isActive ? currentSite : null;
+  const extraDept = currentDept && !currentDept.isActive ? currentDept : null;
+  const options = {
+    ...activeOptions,
+    sites: extraSite
+      ? [...activeOptions.sites, { ...extraSite, name: `${extraSite.name} (중지)` }]
+      : activeOptions.sites,
+    departments: extraDept
+      ? [...activeOptions.departments, { ...extraDept, name: `${extraDept.name} (중지)` }]
+      : activeOptions.departments,
+    showSite: activeOptions.showSite || extraSite !== null,
+    showDepartment: activeOptions.showDepartment || extraDept !== null,
+  };
   const used = new Set(voucher.lines.map((l) => l.accountId));
   const accounts = allAccounts
     .filter((a) => a.isActive || used.has(a.id))
