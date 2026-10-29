@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { AccountLedgerTable } from "@/components/reports/account-ledger-table";
 import { AccountSelect } from "@/components/reports/account-select";
+import { LedgerPager } from "@/components/reports/ledger-pager";
 import { PartnerSummaryTable } from "@/components/reports/partner-summary-table";
 import { ReportFilters } from "@/components/reports/report-filters";
-import { exportHref, first, parseReportParams, type SearchParams } from "@/lib/reports/params";
+import { exportHref, first, pageParam, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { listAccounts } from "@/server/accounts/service";
 import { requirePermission } from "@/server/auth/dal";
@@ -37,7 +38,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
     }).toString();
 
   const detail =
-    account && partnerId !== null ? await getAccountLedger(db, account.id, filter, { partnerId }) : null;
+    account && partnerId !== null ? await getAccountLedger(db, account.id, filter, { partnerId, page: pageParam(sp) }) : null;
   const summary = account && !detail ? await getPartnerSummary(db, account.id, filter) : null;
   const partnerName = detail && partnerId !== null ? ((await listPartnersByIds(db, [partnerId]))[0]?.name ?? "") : "";
 
@@ -67,6 +68,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
             <h2 className="text-lg font-medium">{partnerName}</h2>
           </div>
           <AccountLedgerTable rows={detail.rows} />
+          <LedgerPager
+            page={detail.page ?? 1}
+            pages={detail.pages}
+            totalLines={detail.totalLines}
+            href={(p) => `?${qs({ account: String(account.id), partner: String(partnerId), page: String(p) })}`}
+          />
         </div>
       ) : (
         <PartnerSummaryTable rows={summary ?? []} href={(id) => `?${qs({ account: String(account.id), partner: String(id) })}`} />

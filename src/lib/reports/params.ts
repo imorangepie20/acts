@@ -14,6 +14,11 @@ function positiveInt(v: string | undefined): number | null {
   return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
+/** `?page=` as a 1-based page number (1 when missing or invalid). */
+export function pageParam(sp: SearchParams): number {
+  return positiveInt(first(sp.page)) ?? 1;
+}
+
 export function parseReportParams(sp: SearchParams, today: string, startMonth: number): ReportFilter {
   const def = defaultPeriod(today, startMonth);
   const f = first(sp.from);

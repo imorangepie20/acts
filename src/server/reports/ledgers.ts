@@ -109,13 +109,32 @@ export type LedgerRow =
   | { kind: "month"; month: string; debit: number; credit: number }
   | { kind: "cumulative"; debit: number; credit: number };
 
-/** 계정별 원장: full ledger with running balance, 월계 and 누계. `null` for an unknown account. */
+export const LEDGER_PAGE_SIZE = 1000;
+
+export type AccountLedger = {
+  account: AccountRow;
+  rows: LedgerRow[];
+  /** Balance after the last returned line (the period closing when unpaged or on the last page). */
+  closing: number;
+  /** Lines in the whole period (all pages). */
+  totalLines: number;
+  /** 1-based page, or null for the full ledger. */
+  page: number | null;
+  pages: number;
+};
+
+/**
+ * 계정별 원장 with running balance, 월계 and 누계. `null` for an unknown account.
+ * Without `opts.page` it returns the full ledger (exports). With `opts.page` (1-based) it returns
+ * `opts.pageSize` lines (default LEDGER_PAGE_SIZE); the opening row carries the balance brought forward from earlier pages,
+ * and 월계/누계 rows cover the whole month and period, emitted on the page where the month ends.
+ */
 export async function getAccountLedger(
   db: Db,
   accountId: number,
   f: ReportFilter,
-  opts: { partnerId?: number | null } = {},
-): Promise<{ account: AccountRow; rows: LedgerRow[]; closing: number } | null> {
+  opts: { partnerId?: number | null; page?: number | null; pageSize?: number } = {},
+): Promise<AccountLedger | null> {
   const account = await getAccountById(db, accountId);
   if (!account) return null;
   const company = await getCompany(db);
@@ -123,15 +142,19 @@ export async function getAccountLedger(
   const openFrom = isPnlGroup(account.group) ? fiscalYearStart(f.from, company.fiscalYearStartMonth) : null;
   const partnerCond = opts.partnerId == null ? undefined : eq(voucherLines.partnerId, opts.partnerId);
   const common = [...scope(f), eq(voucherLines.accountId, accountId), partnerCond];
+  const inPeriod = and(...common, gte(vouchers.date, f.from), lte(vouchers.date, f.to));
+  const order = [asc(vouchers.date), asc(vouchers.no), asc(voucherLines.lineNo)];
+  const page = opts.page != null ? Math.max(1, Math.floor(opts.page!)) : null;
+  const size = opts.pageSize ?? LEDGER_PAGE_SIZE;
 
   const [open] = await db
     .select({ debit: debitSum, credit: creditSum })
     .from(voucherLines)
     .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
     .where(and(...common, openFrom === null ? undefined : gte(vouchers.date, openFrom), lt(vouchers.date, f.from)));
-  const opening = sign * (Number(open.debit) - Number(open.credit));
+  let balance = sign * (Number(open.debit) - Number(open.credit));
 
-  const lines = await db
+  const query = db
     .select({
       voucherId: vouchers.id,
       date: vouchers.date,
@@ -145,15 +168,51 @@ export async function getAccountLedger(
     .from(voucherLines)
     .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
     .leftJoin(partners, eq(partners.id, voucherLines.partnerId))
-    .where(and(...common, gte(vouchers.date, f.from), lte(vouchers.date, f.to)))
-    .orderBy(asc(vouchers.date), asc(vouchers.no), asc(voucherLines.lineNo));
+    .where(inPeriod)
+    .orderBy(...order)
+    .$dynamic();
 
-  const rows: LedgerRow[] = [{ kind: "opening", balance: opening }];
-  let balance = opening;
+  let lines: Awaited<typeof query>;
+  let totalLines: number;
   let cumDebit = 0;
   let cumCredit = 0;
   let monthDebit = 0;
   let monthCredit = 0;
+  /** Month of the first line after this page, when the page ends mid-month. */
+  let continuesInto: string | null = null;
+  if (page === null) {
+    lines = await query;
+    totalLines = lines.length;
+  } else {
+    const offset = (page - 1) * size;
+    const [[count], fetched, prefix] = await Promise.all([
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(voucherLines)
+        .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
+        .where(inPeriod),
+      // One extra line tells whether the last month continues on the next page.
+      query.limit(size + 1).offset(offset),
+      offset === 0 ? Promise.resolve([]) : ledgerPrefixByMonth(db, inPeriod, order, offset),
+    ]);
+    totalLines = Number(count.n);
+    lines = fetched.slice(0, size);
+    if (fetched.length > size) continuesInto = fetched[size].date.slice(0, 7);
+    const firstMonth = lines[0]?.date.slice(0, 7);
+    for (const m of prefix) {
+      const d = Number(m.debit);
+      const c = Number(m.credit);
+      balance += sign * (d - c);
+      cumDebit += d;
+      cumCredit += c;
+      if (m.month === firstMonth) {
+        monthDebit = d;
+        monthCredit = c;
+      }
+    }
+  }
+
+  const rows: LedgerRow[] = [{ kind: "opening", balance }];
   lines.forEach((l, i) => {
     const debit = l.side === "debit" ? l.amount : 0;
     const credit = l.side === "credit" ? l.amount : 0;
@@ -174,14 +233,36 @@ export async function getAccountLedger(
       balance,
     });
     const month = l.date.slice(0, 7);
-    if (i === lines.length - 1 || lines[i + 1].date.slice(0, 7) !== month) {
+    const next = i === lines.length - 1 ? continuesInto : lines[i + 1].date.slice(0, 7);
+    if (next !== month) {
       rows.push({ kind: "month", month, debit: monthDebit, credit: monthCredit });
       rows.push({ kind: "cumulative", debit: cumDebit, credit: cumCredit });
       monthDebit = 0;
       monthCredit = 0;
     }
   });
-  return { account, rows, closing: balance };
+  const pages = page === null ? 1 : Math.max(1, Math.ceil(totalLines / size));
+  return { account, rows, closing: balance, totalLines, page, pages };
+}
+
+/** Debit/credit per month over the first `n` ledger lines (the pages before the current one). */
+async function ledgerPrefixByMonth(db: Db, where: SQL | undefined, order: SQL[], n: number) {
+  const prefix = db
+    .select({ date: vouchers.date, side: voucherLines.side, amount: voucherLines.amount })
+    .from(voucherLines)
+    .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
+    .where(where)
+    .orderBy(...order)
+    .limit(n)
+    .as("prefix");
+  return db
+    .select({
+      month: sql<string>`to_char(${prefix.date}::date, 'YYYY-MM')`,
+      debit: sql<number>`coalesce(sum(case when ${prefix.side} = 'debit' then ${prefix.amount} else 0 end), 0)::bigint`,
+      credit: sql<number>`coalesce(sum(case when ${prefix.side} = 'credit' then ${prefix.amount} else 0 end), 0)::bigint`,
+    })
+    .from(prefix)
+    .groupBy(sql`1`);
 }
 
 export type PartnerSummaryRow = {

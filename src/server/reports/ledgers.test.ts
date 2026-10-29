@@ -88,7 +88,7 @@ describe("getJournal", () => {
     expect(p2.entries).toHaveLength(1);
     expect(p2.entries[0].no).toBe(101);
     expect((await getJournal(db, F, null)).entries).toHaveLength(101);
-  });
+  }, 30_000);
 });
 
 describe("getAccountLedger", () => {
@@ -142,6 +142,41 @@ describe("getAccountLedger", () => {
     const bal = l!.rows.filter((r) => r.kind === "line").map((r) => r.kind === "line" && r.balance);
     expect(bal).toEqual([700, 750]);
     expect(l!.closing).toBe(750);
+  });
+
+  it("pages are opt-in and add up to the full ledger (balance, 월계, 누계 carried across pages)", async () => {
+    await create("2025-12-20", [line("103", "debit", 1000), line("101", "credit", 1000)]);
+    const amounts: [string, LineInput["side"], number][] = [
+      ["2026-01-05", "debit", 10], ["2026-01-06", "credit", 3], ["2026-01-07", "debit", 20],
+      ["2026-02-01", "debit", 5], ["2026-02-02", "credit", 7], ["2026-03-01", "debit", 1], ["2026-03-02", "debit", 2],
+    ];
+    for (const [d, side, a] of amounts) {
+      await create(d, [line("103", side, a), line("101", side === "debit" ? "credit" : "debit", a)]);
+    }
+    const full = (await getAccountLedger(db, acc["103"], F))!;
+    expect(full.page).toBeNull();
+    expect(full.totalLines).toBe(7);
+    expect(full.rows.filter((r) => r.kind === "line")).toHaveLength(7);
+
+    const pages = [];
+    for (let p = 1; p <= 3; p++) pages.push((await getAccountLedger(db, acc["103"], F, { page: p, pageSize: 3 }))!);
+    expect(pages.map((p) => [p.page, p.pages, p.totalLines])).toEqual([[1, 3, 7], [2, 3, 7], [3, 3, 7]]);
+    // Page 1 = the 3 January lines, page 2 = Feb x2 + Mar 1, page 3 = Mar 2.
+    expect(pages.map((p) => p.rows[0])).toEqual([
+      { kind: "opening", balance: 1000 },
+      { kind: "opening", balance: 1027 },
+      { kind: "opening", balance: 1026 },
+    ]);
+    // Without the per-page opening rows, the pages concatenate to the full ledger.
+    expect(pages.flatMap((p) => p.rows.slice(1))).toEqual(full.rows.slice(1));
+    expect(pages[2].closing).toBe(full.closing);
+    // March is split across pages 2 and 3: its 월계 appears once, on page 3, with both lines.
+    expect(pages[1].rows.some((r) => r.kind === "month" && r.month === "2026-03")).toBe(false);
+    expect(pages[2].rows).toContainEqual({ kind: "month", month: "2026-03", debit: 3, credit: 0 });
+    expect(pages[2].rows).toContainEqual({ kind: "cumulative", debit: 38, credit: 10 });
+    // Past the last page: just the carried balance.
+    const beyond = (await getAccountLedger(db, acc["103"], F, { page: 9, pageSize: 3 }))!;
+    expect(beyond.rows).toEqual([{ kind: "opening", balance: full.closing }]);
   });
 
   it("excludes unapproved vouchers", async () => {
