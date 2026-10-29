@@ -25,11 +25,12 @@ export function CompanyForm({ company }: { company: Company }) {
     if (state.success) toast.success("저장되었습니다.");
   }, [state]);
 
+  const v = state.values;
   return (
-    <form action={formAction} className="flex max-w-lg flex-col gap-4">
+    <form key={state.nonce} action={formAction} className="flex max-w-lg flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="company-name">회사명</Label>
-        <Input id="company-name" name="name" defaultValue={company.name} required />
+        <Input id="company-name" name="name" defaultValue={v?.name ?? company.name} required />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="company-bn">사업자등록번호</Label>
@@ -38,19 +39,21 @@ export function CompanyForm({ company }: { company: Company }) {
           name="businessNumber"
           inputMode="numeric"
           placeholder="000-00-00000"
-          defaultValue={company.businessNumber ? formatBusinessNumber(company.businessNumber) : ""}
+          defaultValue={
+            v ? v.businessNumber : company.businessNumber ? formatBusinessNumber(company.businessNumber) : ""
+          }
         />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="company-rep">대표자</Label>
-        <Input id="company-rep" name="representative" defaultValue={company.representative ?? ""} />
+        <Input id="company-rep" name="representative" defaultValue={v ? v.representative : (company.representative ?? "")} />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="company-month">회계연도 시작 월</Label>
         <select
           id="company-month"
           name="fiscalYearStartMonth"
-          defaultValue={String(company.fiscalYearStartMonth)}
+          defaultValue={v?.fiscalYearStartMonth || String(company.fiscalYearStartMonth)}
           className={selectClass}
         >
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
@@ -66,7 +69,7 @@ export function CompanyForm({ company }: { company: Company }) {
           name="approvalRequired"
           value="true"
           uncheckedValue="false"
-          defaultChecked={company.approvalRequired}
+          defaultChecked={v ? v.approvalRequired : company.approvalRequired}
         />
         <div className="flex flex-col gap-1">
           <Label htmlFor="company-approval">전표 승인 사용</Label>

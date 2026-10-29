@@ -24,6 +24,14 @@ describe("company service", () => {
     expect(r).toEqual({ ok: false, error: "사업자등록번호가 올바르지 않습니다." });
     expect((await getCompany(db)).name).toBe("우리회사");
   });
+  it("rejects business numbers with non-digit characters and keeps the stored value", async () => {
+    await updateCompany(db, valid);
+    for (const bad of ["abc", "220-81-6251x", "220.81.62517"]) {
+      const r = await updateCompany(db, { ...valid, businessNumber: bad });
+      expect(r).toEqual({ ok: false, error: "사업자등록번호가 올바르지 않습니다." });
+    }
+    expect((await getCompany(db)).businessNumber).toBe("2208162517");
+  });
   it("rejects an empty name", async () => {
     const r = await updateCompany(db, { ...valid, name: "   " });
     expect(r).toEqual({ ok: false, error: "회사명을 입력하세요." });

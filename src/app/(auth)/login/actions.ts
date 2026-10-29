@@ -7,7 +7,7 @@ import { SESSION_COOKIE } from "@/server/auth/dal";
 import { authenticate, createSession, deleteSession } from "@/server/auth/service";
 import { db } from "@/server/db";
 
-export type LoginState = { error?: string };
+export type LoginState = { error?: string; email?: string; nonce?: number };
 
 export async function loginAction(_prev: LoginState, form: FormData): Promise<LoginState> {
   const email = String(form.get("email") ?? "");
@@ -15,6 +15,8 @@ export async function loginAction(_prev: LoginState, form: FormData): Promise<Lo
   const result = await authenticate(db, email, password);
   if (!result.ok) {
     return {
+      email,
+      nonce: Date.now(),
       error:
         result.reason === "locked"
           ? "로그인 실패가 반복되어 계정이 잠겼습니다. 15분 후 다시 시도하세요."

@@ -15,10 +15,10 @@ export default function LoginPage() {
 
   return (
     <AuthCard title="로그인">
-      <form action={formAction} className="flex flex-col gap-4">
+      <form key={state.nonce} action={formAction} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="email">이메일</Label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
+          <Input id="email" name="email" type="email" autoComplete="email" defaultValue={state.email ?? ""} required />
         </div>
 
         <div className="flex flex-col gap-1.5">

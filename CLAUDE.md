@@ -15,7 +15,8 @@ Package manager is **pnpm**. Ports: app 3710, Postgres 5710 (override with `APP_
 ```bash
 docker compose up -d db  # dev database only (prod services are under profile `prod`)
 pnpm db:migrate          # apply Drizzle migrations (drizzle/)
-pnpm db:seed             # idempotent; creates admin from ADMIN_EMAIL / ADMIN_PASSWORD
+pnpm db:seed             # idempotent; creates admin from ADMIN_EMAIL / ADMIN_PASSWORD (refuses empty / "change-me-now")
+NEW_PASSWORD=... pnpm admin:reset-password <email>  # reset password, clear lock, drop sessions
 pnpm dev                 # dev server at http://localhost:3710
 pnpm build               # production build (does NOT run lint)
 pnpm lint                # eslint — run separately from build
@@ -25,6 +26,8 @@ pnpm test:e2e            # Playwright, all specs
 pnpm exec playwright test e2e/auth.spec.ts      # single spec file
 pnpm exec playwright test -g "title fragment"   # single test by title
 ```
+
+Local `.env` must set `ADMIN_PASSWORD` (non-default, >= 8 chars) and `COOKIE_SECURE=false` (plain-http dev/e2e; `.env.example` leaves both out so production defaults to secure cookies). `ADMIN_PASSWORD` is only used on the first seed.
 
 Playwright's `webServer` runs `pnpm db:migrate && pnpm db:seed && pnpm build && pnpm start` on :3710, so tests hit a **production build**. Locally it reuses a server already on :3710 — if `pnpm dev` is running, tests run against dev instead (and a stale server means stale code).
 

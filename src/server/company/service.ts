@@ -45,6 +45,7 @@ export async function updateCompany(db: Db, input: Company): Promise<Result> {
   )
     return fail(ERR_MONTH);
 
+  if (/[^\d\s-]/.test(input.businessNumber ?? "")) return fail(ERR_BN);
   const bnDigits = normalizeBusinessNumber(input.businessNumber ?? "");
   if (bnDigits && !isValidBusinessNumber(bnDigits)) return fail(ERR_BN);
   const representative = input.representative?.trim() || null;

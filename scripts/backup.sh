@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Daily Postgres backup: custom-format dump into backups/, keep 30 days.
+umask 077
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p backups

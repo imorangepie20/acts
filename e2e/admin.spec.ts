@@ -54,4 +54,8 @@ test("회사 정보: 사업자등록번호와 전표 승인 사용이 저장된�
   await expect(page.getByRole("alert").filter({ hasText: "사업자등록번호" })).toHaveText(
     "사업자등록번호가 올바르지 않습니다.",
   );
+  await expect(page.getByLabel("사업자등록번호")).toHaveValue("220-81-62518");
+
+  await page.reload();
+  await expect(page.getByLabel("사업자등록번호")).toHaveValue("220-81-62517");
 });

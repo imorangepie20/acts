@@ -53,19 +53,20 @@ function RoleSelect({ id, defaultValue }: { id: string; defaultValue: Role }) {
 
 export function CreateUserForm({ onDone }: { onDone: () => void }) {
   const { state, formAction, pending } = useUserForm(createUserAction, onDone, "사용자를 추가했습니다.");
+  const v = state.values;
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form key={state.nonce} action={formAction} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="new-email">이메일</Label>
-        <Input id="new-email" name="email" type="email" autoComplete="off" required />
+        <Input id="new-email" name="email" type="email" autoComplete="off" defaultValue={v?.email ?? ""} required />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="new-name">이름</Label>
-        <Input id="new-name" name="name" required />
+        <Input id="new-name" name="name" defaultValue={v?.name ?? ""} required />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="new-role">역할</Label>
-        <RoleSelect id="new-role" defaultValue="staff" />
+        <RoleSelect id="new-role" defaultValue={(v?.role as Role | undefined) ?? "staff"} />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="new-password">초기 비밀번호</Label>
@@ -81,8 +82,9 @@ export function CreateUserForm({ onDone }: { onDone: () => void }) {
 
 export function EditUserForm({ user, onDone }: { user: UserRow; onDone: () => void }) {
   const { state, formAction, pending } = useUserForm(updateUserAction, onDone, "저장했습니다.");
+  const v = state.values;
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form key={state.nonce} action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="id" value={user.id} />
       <div className="flex flex-col gap-1.5">
         <Label>이메일</Label>
@@ -90,18 +92,18 @@ export function EditUserForm({ user, onDone }: { user: UserRow; onDone: () => vo
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="edit-name">이름</Label>
-        <Input id="edit-name" name="name" defaultValue={user.name} required />
+        <Input id="edit-name" name="name" defaultValue={v?.name ?? user.name} required />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="edit-role">역할</Label>
-        <RoleSelect id="edit-role" defaultValue={user.role} />
+        <RoleSelect id="edit-role" defaultValue={(v?.role as Role | undefined) ?? user.role} />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="edit-active">상태</Label>
         <select
           id="edit-active"
           name="isActive"
-          defaultValue={String(user.isActive)}
+          defaultValue={v?.isActive ?? String(user.isActive)}
           className={selectClass}
         >
           <option value="true">사용</option>

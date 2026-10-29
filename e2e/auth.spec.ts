@@ -13,10 +13,14 @@ test.describe("인증", () => {
 
   test("잘못된 비밀번호는 오류 메시지를 표시", async ({ page }) => {
     await page.goto("/login");
-    await page.getByLabel("이메일", { exact: true }).fill(email);
+    // nonexistent email so this test can never lock the real admin
+    const typed = "nobody@acts.kr";
+    await page.getByLabel("이메일", { exact: true }).fill(typed);
     await page.getByLabel("비밀번호", { exact: true }).fill("wrong-password-xyz");
     await page.getByRole("button", { name: "로그인" }).click();
     await expect(page.getByText("이메일 또는 비밀번호가 올바르지 않습니다.")).toBeVisible();
+    await expect(page.getByLabel("이메일", { exact: true })).toHaveValue(typed);
+    await expect(page.getByLabel("비밀번호", { exact: true })).toHaveValue("");
   });
 
   test("관리자 로그인 후 /overview 로 이동, 로그아웃 후 보호됨", async ({ page }) => {
