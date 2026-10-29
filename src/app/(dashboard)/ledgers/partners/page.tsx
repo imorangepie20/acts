@@ -21,9 +21,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const company = await getCompany(db);
   const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
   const [allAccounts, options] = await Promise.all([listAccounts(db), getEntryOptions(db)]);
-  const accounts = allAccounts.filter((a) => a.requiresPartner);
+  const accounts = allAccounts;
   const requested = toId(first(sp.account));
-  const account = accounts.find((a) => a.id === requested) ?? accounts[0] ?? null;
+  const account =
+    accounts.find((a) => a.id === requested) ?? accounts.find((a) => a.requiresPartner) ?? accounts[0] ?? null;
   const partnerId = toId(first(sp.partner));
 
   const qs = (extra: Record<string, string>) =>
@@ -54,7 +55,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
       </div>
       {!account ? (
         <p className="rounded-xl border border-dashed py-16 text-center text-muted-foreground">
-          거래처 필수 계정과목이 없습니다.
+          계정과목이 없습니다.
         </p>
       ) : detail ? (
         <div className="space-y-3">

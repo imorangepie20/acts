@@ -117,4 +117,10 @@ test("거래처별 원장: 계정별 거래처 요약에서 거래처를 눌러 
   await page.getByRole("link", { name: "전체 거래처" }).click();
   await expect(page).not.toHaveURL(/partner=/);
   await expect(page.getByRole("link", { name: partner, exact: true })).toBeVisible();
+
+  // a non-requiresPartner account (811) also lists the partner on its lines
+  const before = page.url();
+  await pick(page, "계정과목", "811");
+  await expect.poll(() => page.url()).not.toBe(before);
+  await expect(page.getByRole("link", { name: partner, exact: true })).toBeVisible();
 });
