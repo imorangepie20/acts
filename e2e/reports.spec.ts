@@ -124,3 +124,22 @@ test("거래처별 원장: 계정별 거래처 요약에서 거래처를 눌러 
   await expect.poll(() => page.url()).not.toBe(before);
   await expect(page.getByRole("link", { name: partner, exact: true })).toBeVisible();
 });
+
+test("엑셀 다운로드: 시산표 버튼이 .xlsx 파일을 내려준다", async ({ page }) => {
+  await page.goto("/reports/trial-balance");
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "엑셀 다운로드" }).click(),
+  ]);
+  const name = download.suggestedFilename();
+  expect(name.startsWith("합계잔액시산표_")).toBe(true);
+  expect(name.endsWith(".xlsx")).toBe(true);
+});
+
+test("엑셀 다운로드: 로그아웃 상태에서는 스프레드시트를 받을 수 없다", async ({ browser }) => {
+  const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const res = await ctx.request.get("http://localhost:3710/api/exports/trial-balance", { maxRedirects: 0 });
+  expect(res.headers()["content-type"] ?? "").not.toContain("spreadsheetml");
+  expect(res.status()).not.toBe(200);
+  await ctx.close();
+});

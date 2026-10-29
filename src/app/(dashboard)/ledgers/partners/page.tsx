@@ -3,7 +3,7 @@ import { AccountLedgerTable } from "@/components/reports/account-ledger-table";
 import { AccountSelect } from "@/components/reports/account-select";
 import { PartnerSummaryTable } from "@/components/reports/partner-summary-table";
 import { ReportFilters } from "@/components/reports/report-filters";
-import { first, parseReportParams, type SearchParams } from "@/lib/reports/params";
+import { exportHref, first, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { listAccounts } from "@/server/accounts/service";
 import { requirePermission } from "@/server/auth/dal";
@@ -50,6 +50,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
           filter={filter}
           mode="period"
           {...options}
+          exportHref={account ? exportHref("partner-ledger", filter, { account: String(account.id), partner: detail && partnerId !== null ? String(partnerId) : undefined }) : undefined}
           extraParams={{ account: account ? String(account.id) : undefined, partner: detail ? String(partnerId) : undefined }}
         />
       </div>

@@ -1,6 +1,6 @@
 import { IncomeStatementTable } from "@/components/reports/income-statement-table";
 import { ReportFilters } from "@/components/reports/report-filters";
-import { parseReportParams, type SearchParams } from "@/lib/reports/params";
+import { exportHref, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
@@ -17,7 +17,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">손익계산서</h1>
-      <ReportFilters filter={filter} mode="period" {...options} />
+      <ReportFilters filter={filter} mode="period" {...options} exportHref={exportHref("income-statement", filter)} />
       <IncomeStatementTable
         lines={is.lines}
         period={is.period}

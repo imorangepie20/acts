@@ -33,3 +33,12 @@ export function parseReportParams(sp: SearchParams, today: string, startMonth: n
   }
   return { from, to, siteId: positiveInt(first(sp.site)), departmentId: positiveInt(first(sp.dept)) };
 }
+
+/** `/api/exports/<report>` link for the current filters; `extra` carries account/partner (empty values are dropped). */
+export function exportHref(report: string, f: ReportFilter, extra: Record<string, string | null | undefined> = {}): string {
+  const q = new URLSearchParams({ from: f.from, to: f.to });
+  if (f.siteId !== null) q.set("site", String(f.siteId));
+  if (f.departmentId !== null) q.set("dept", String(f.departmentId));
+  for (const [k, v] of Object.entries(extra)) if (v) q.set(k, v);
+  return `/api/exports/${report}?${q.toString()}`;
+}

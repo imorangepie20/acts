@@ -3,7 +3,7 @@ import { JournalTable } from "@/components/reports/journal-table";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { Button } from "@/components/ui/button";
 import { formatWon } from "@/lib/money";
-import { first, parseReportParams, type SearchParams } from "@/lib/reports/params";
+import { exportHref, first, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
@@ -29,7 +29,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">분개장</h1>
-      <ReportFilters filter={filter} mode="period" {...options} />
+      <ReportFilters filter={filter} mode="period" {...options} exportHref={exportHref("journal", filter)} />
       <JournalTable entries={journal.entries} debitSum={journal.debitSum} creditSum={journal.creditSum} />
       <div className="flex items-center justify-between text-sm text-muted-foreground">
         <span>총 {formatWon(journal.total)}건</span>

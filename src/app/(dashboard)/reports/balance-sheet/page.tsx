@@ -1,7 +1,7 @@
 import { BalanceSheetTable } from "@/components/reports/balance-sheet-table";
 import { formatWon } from "@/lib/money";
 import { ReportFilters } from "@/components/reports/report-filters";
-import { parseReportParams, type SearchParams } from "@/lib/reports/params";
+import { exportHref, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
@@ -21,7 +21,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">재무상태표</h1>
-      <ReportFilters filter={filter} mode="asOf" {...options} />
+      <ReportFilters filter={filter} mode="asOf" {...options} exportHref={exportHref("balance-sheet", filter)} />
       {diff !== 0 && (
         <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {filtered ? "사업장·부서 필터가 적용되어 " : ""}자산총계와 부채와자본총계가 다릅니다. (차액 {formatWon(Math.abs(diff))})

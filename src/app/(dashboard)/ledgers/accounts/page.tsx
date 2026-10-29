@@ -1,7 +1,7 @@
 import { AccountLedgerTable } from "@/components/reports/account-ledger-table";
 import { AccountSelect } from "@/components/reports/account-select";
 import { ReportFilters } from "@/components/reports/report-filters";
-import { first, parseReportParams, type SearchParams } from "@/lib/reports/params";
+import { exportHref, first, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { listAccounts } from "@/server/accounts/service";
 import { requirePermission } from "@/server/auth/dal";
@@ -31,6 +31,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
           filter={filter}
           mode="period"
           {...options}
+          exportHref={ledger ? exportHref("account-ledger", filter, { account: String(ledger.account.id) }) : undefined}
           extraParams={{ account: ledger ? String(ledger.account.id) : undefined }}
         />
       </div>
