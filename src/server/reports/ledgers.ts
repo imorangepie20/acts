@@ -126,7 +126,7 @@ export type AccountLedger = {
 /**
  * 계정별 원장 with running balance, 월계 and 누계. `null` for an unknown account.
  * Without `opts.page` it returns the full ledger (exports). With `opts.page` (1-based) it returns
- * `opts.pageSize` lines (default LEDGER_PAGE_SIZE); the opening row carries the balance brought forward from earlier pages,
+ * `opts.pageSize` lines (default LEDGER_PAGE_SIZE; pages past the end are clamped to the last); the opening row carries the balance brought forward from earlier pages,
  * and 월계/누계 rows cover the whole month and period, emitted on the page where the month ends.
  */
 export async function getAccountLedger(
@@ -144,7 +144,7 @@ export async function getAccountLedger(
   const common = [...scope(f), eq(voucherLines.accountId, accountId), partnerCond];
   const inPeriod = and(...common, gte(vouchers.date, f.from), lte(vouchers.date, f.to));
   const order = [asc(vouchers.date), asc(vouchers.no), asc(voucherLines.lineNo)];
-  const page = opts.page != null ? Math.max(1, Math.floor(opts.page!)) : null;
+  let page = opts.page != null ? Math.max(1, Math.floor(opts.page!)) : null;
   const size = opts.pageSize ?? LEDGER_PAGE_SIZE;
 
   const [open] = await db
@@ -184,18 +184,20 @@ export async function getAccountLedger(
     lines = await query;
     totalLines = lines.length;
   } else {
+    const [count] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(voucherLines)
+      .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
+      .where(inPeriod);
+    totalLines = Number(count.n);
+    // Out-of-range pages show the last page.
+    page = Math.min(page, Math.max(1, Math.ceil(totalLines / size)));
     const offset = (page - 1) * size;
-    const [[count], fetched, prefix] = await Promise.all([
-      db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(voucherLines)
-        .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
-        .where(inPeriod),
+    const [fetched, prefix] = await Promise.all([
       // One extra line tells whether the last month continues on the next page.
       query.limit(size + 1).offset(offset),
       offset === 0 ? Promise.resolve([]) : ledgerPrefixByMonth(db, inPeriod, order, offset),
     ]);
-    totalLines = Number(count.n);
     lines = fetched.slice(0, size);
     if (fetched.length > size) continuesInto = fetched[size].date.slice(0, 7);
     const firstMonth = lines[0]?.date.slice(0, 7);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseReportParams } from "./params";
+import { pageParam, parseReportParams } from "./params";
 
 const today = "2026-10-30";
 
@@ -34,5 +34,14 @@ describe("parseReportParams", () => {
     const f = parseReportParams({ from: ["2026-02-01", "x"], site: ["3", "4"] }, today, 1);
     expect(f.from).toBe("2026-02-01");
     expect(f.siteId).toBe(3);
+  });
+});
+
+describe("pageParam", () => {
+  it("parses a positive integer and falls back to 1 otherwise", () => {
+    expect(pageParam({ page: "7" })).toBe(7);
+    expect(pageParam({})).toBe(1);
+    for (const page of ["abc", "0", "-1", "1.5", "", "99999999999999999999"]) expect(pageParam({ page }), page).toBe(1);
+    expect(pageParam({ page: ["2", "3"] })).toBe(2);
   });
 });

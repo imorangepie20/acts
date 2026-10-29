@@ -174,9 +174,28 @@ describe("getAccountLedger", () => {
     expect(pages[1].rows.some((r) => r.kind === "month" && r.month === "2026-03")).toBe(false);
     expect(pages[2].rows).toContainEqual({ kind: "month", month: "2026-03", debit: 3, credit: 0 });
     expect(pages[2].rows).toContainEqual({ kind: "cumulative", debit: 38, credit: 10 });
-    // Past the last page: just the carried balance.
+    // Past the last page: clamped to the last page.
     const beyond = (await getAccountLedger(db, acc["103"], F, { page: 9, pageSize: 3 }))!;
-    expect(beyond.rows).toEqual([{ kind: "opening", balance: full.closing }]);
+    expect(beyond.page).toBe(3);
+    expect(beyond.rows).toEqual(pages[2].rows);
+    // An empty ledger has one (empty) page.
+    const empty = (await getAccountLedger(db, acc["811"], F, { page: 4, pageSize: 3 }))!;
+    expect([empty.page, empty.pages, empty.rows]).toEqual([1, 1, [{ kind: "opening", balance: 0 }]]);
+  });
+
+  it("splits one date's vouchers across a page boundary in date/no/line order", async () => {
+    for (let i = 1; i <= 5; i++) {
+      await create("2026-05-10", [line("103", "debit", i), line("101", "credit", i)], `d${i}`);
+    }
+    const full = (await getAccountLedger(db, acc["103"], F))!;
+    const p1 = (await getAccountLedger(db, acc["103"], F, { page: 1, pageSize: 2 }))!;
+    const p2 = (await getAccountLedger(db, acc["103"], F, { page: 2, pageSize: 2 }))!;
+    const p3 = (await getAccountLedger(db, acc["103"], F, { page: 3, pageSize: 2 }))!;
+    const nos = (r: typeof p1) => r.rows.flatMap((x) => (x.kind === "line" ? [x.no] : []));
+    expect([nos(p1), nos(p2), nos(p3)]).toEqual([[1, 2], [3, 4], [5]]);
+    expect(p2.rows[0]).toEqual({ kind: "opening", balance: 3 });
+    expect(p3.rows[0]).toEqual({ kind: "opening", balance: 10 });
+    expect([p1, p2, p3].flatMap((p) => p.rows.slice(1))).toEqual(full.rows.slice(1));
   });
 
   it("excludes unapproved vouchers", async () => {

@@ -19,6 +19,7 @@ export function AccountSelect({ accounts, value }: { accounts: AccountOption[]; 
           const q = new URLSearchParams(params.toString());
           q.set("account", String(id));
           q.delete("partner"); // a partner belongs to one account
+          q.delete("page"); // the old page number is meaningless for another ledger
           router.push(`${pathname}?${q.toString()}`);
         }}
       />
