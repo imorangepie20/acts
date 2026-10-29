@@ -32,8 +32,9 @@ Deploy: `docker compose --profile prod up -d --build` (db, migrate, app, cloudfl
 
 ## Architecture
 
-- **Route groups:** `src/app/(dashboard)` wraps pages in the app shell (`SidebarProvider` + `AppSidebar` + `AppHeader`); `src/app/(auth)` uses a bare centered layout. `/` redirects to `/dashboard/default`.
-- **`src/lib/nav.ts` is the sitemap.** `navGroups` drives the sidebar *and* the ⌘K command palette, and `allNavItems` drives `e2e/smoke.spec.ts`, which renders every route and fails on HTTP ≥400 or uncaught page errors. Adding a route means adding it here.
+- **Route groups:** `src/app/(dashboard)` wraps pages in the app shell (`SidebarProvider` + `AppSidebar` + `AppHeader`); `src/app/(auth)` uses a bare centered layout. `/` redirects to the role's home (staff → `/vouchers`, others → `/overview`).
+- **`src/lib/nav.ts` is the sitemap.** `navGroupsFor(role)` (items carry a `permission`) drives the sidebar *and* the ⌘K command palette, and `allNavItems` drives `e2e/smoke.spec.ts`, which renders every route and fails on HTTP ≥400 or uncaught page errors. Adding a route means adding it here.
+- **Server layering.** Domain services in `src/server/<area>/service.ts` take `db` first and return a `Result` (`src/server/result.ts`). Pages and actions go through `src/server/auth/dal.ts` (`verifySession`, `requirePermission`); `src/proxy.ts` is only an optimistic cookie check. The permission matrix is `src/lib/permissions.ts`. Tests: Vitest runs against the real `acts_test` DB (`tests/helpers/db.ts`); e2e uses a stored admin session from `e2e/auth.setup.ts`.
 - **Thin pages, fat feature folders.** `page.tsx` files only compose components. Each feature lives in a folder mirroring its route:
   - `src/components/dashboards/<name>/` (shared bits in `dashboards/shared/`)
   - `src/components/apps/<name>/` — usually a client component plus a co-located `data.ts` with mock data and types

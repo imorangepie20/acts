@@ -23,6 +23,7 @@
 ssh approid@192.168.219.174
 git clone https://github.com/imorangepie20/acts.git ~/acts
 cd ~/acts
+mkdir -p backups
 cp .env.example .env
 nano .env
 ```
@@ -61,7 +62,7 @@ git pull && docker compose --profile prod up -d --build
 매일 새벽 3시 cron (`crontab -e`):
 
 ```cron
-0 3 * * * cd /home/approid/acts && bash scripts/backup.sh >> backups/backup.log 2>&1
+0 3 * * * cd /home/approid/acts && mkdir -p backups && bash scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
 백업 파일은 같은 서버에 있으므로 주기적으로 다른 장비로도 복사해 두세요.
@@ -81,7 +82,7 @@ docker compose --profile prod up -d
 
 ## 8. 문제 해결
 
-- 로그인 시 Server Action 이 거부되면(리버스 프록시의 Origin/Host 불일치) `next.config.ts` 에 다음을 추가하고 다시 빌드합니다. 이는 Step 7(실서버 검증)에서 확인합니다.
+- 로그인 시 Server Action 이 거부되면(리버스 프록시의 Origin/Host 불일치) `next.config.ts` 에 다음을 추가하고 다시 빌드합니다. 실서버에 처음 배포할 때 도메인으로 로그인해 보며 확인하세요.
 
   ```ts
   experimental: { serverActions: { allowedOrigins: ["acts.approid.team"] } },

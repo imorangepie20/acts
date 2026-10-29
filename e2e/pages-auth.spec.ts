@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 const authPages = [
-  { href: "/login", mark: "Sign in" },
+  { href: "/login", mark: "로그인" },
   { href: "/register", mark: "Create account" },
   { href: "/forgot-password", mark: "Send reset link" },
   { href: "/reset-password", mark: "Reset password" },
@@ -19,8 +19,10 @@ for (const p of authPages) {
   });
 }
 
-test("login links to register and forgot-password", async ({ page }) => {
+test("login page shows Korean email/password fields and no sign-up links", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.getByRole("link", { name: "Sign up" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Forgot password?" })).toBeVisible();
+  await expect(page.getByLabel("이메일", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("비밀번호", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign up" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Forgot password?" })).toHaveCount(0);
 });

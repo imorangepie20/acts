@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p backups
 out="backups/acts-$(date +%F-%H%M).dump"
-docker compose exec -T db pg_dump -U acts -Fc acts > "$out"
+docker compose exec -T db pg_dump -U acts -Fc acts > "$out" || { rm -f "$out"; echo "pg_dump failed" >&2; exit 1; }
 [ -s "$out" ] || { echo "backup is empty: $out" >&2; rm -f "$out"; exit 1; }
 find backups -name 'acts-*.dump' -mtime +30 -delete
 echo "$out"
