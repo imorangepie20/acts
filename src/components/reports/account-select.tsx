@@ -18,6 +18,7 @@ export function AccountSelect({ accounts, value }: { accounts: AccountOption[]; 
         onChange={(id) => {
           const q = new URLSearchParams(params.toString());
           q.set("account", String(id));
+          q.delete("partner"); // a partner belongs to one account
           router.push(`${pathname}?${q.toString()}`);
         }}
       />

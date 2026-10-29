@@ -87,3 +87,34 @@ test("분개장·계정별 원장: 전표가 분개장에 보이고 103 원장�
   await expect(page.getByRole("cell", { name: /^월계/ }).first()).toBeVisible();
   await expect(page.getByRole("cell", { name: "누계", exact: true }).first()).toBeVisible();
 });
+
+test("거래처별 원장: 계정별 거래처 요약에서 거래처를 눌러 원장을 본다", async ({ page }) => {
+  const ts = Date.now();
+  const partner = `E2E원장처 ${ts}`;
+  await page.goto("/vouchers/new");
+  await page.getByLabel("적요").fill(`E2E 거래처원장 ${ts}`);
+  await pick(page, "계정", "811");
+  await pick(page, "결제 계정", "253");
+  await page.getByRole("combobox", { name: "거래처" }).click();
+  await page.getByPlaceholder("거래처명 또는 사업자등록번호").fill(partner);
+  await page.getByRole("option", { name: /새 거래처 추가/ }).click();
+  await page.getByRole("dialog", { name: "새 거래처 추가" }).getByRole("button", { name: "추가" }).click();
+  await expect(page.getByRole("combobox", { name: "거래처" })).toContainText(partner);
+  await page.getByLabel("합계").fill("4000");
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.goto("/ledgers/partners");
+  await expect(page.getByRole("heading", { name: "거래처별 원장" })).toBeVisible();
+  await pick(page, "계정과목", "253");
+  await expect(page).toHaveURL(/account=\d+/);
+  await expect(page.getByRole("columnheader", { name: "거래처" })).toBeVisible();
+  await expect(rowNamed(page, "합계")).toBeVisible();
+  await page.getByRole("link", { name: partner, exact: true }).click();
+  await expect(page).toHaveURL(/partner=\d+/);
+  await expect(page.getByRole("cell", { name: "이월", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: partner })).toBeVisible();
+  await page.getByRole("link", { name: "전체 거래처" }).click();
+  await expect(page).not.toHaveURL(/partner=/);
+  await expect(page.getByRole("link", { name: partner, exact: true })).toBeVisible();
+});

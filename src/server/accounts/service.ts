@@ -40,6 +40,11 @@ export async function listAccounts(
   return (opts.activeOnly ? q.where(eq(accounts.isActive, true)) : q).orderBy(asc(accounts.code));
 }
 
+export async function getAccountById(db: Db, id: number): Promise<AccountRow | null> {
+  const [row] = await db.select(columns).from(accounts).where(eq(accounts.id, id)).limit(1);
+  return row ?? null;
+}
+
 export async function createAccount(
   db: Db,
   input: { code: string; name: string; group: AccountGroup; requiresPartner: boolean },

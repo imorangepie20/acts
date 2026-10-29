@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
 import type { SessionUser } from "@/server/auth/service";
 import { getCompany, updateCompany } from "@/server/company/service";
-import { accounts, partners, sites, users } from "@/server/db/schema";
+import { eq } from "drizzle-orm";
+import { accounts, partners, sites, users, voucherLines } from "@/server/db/schema";
 import { createSite } from "@/server/sites/service";
 import { approveVoucher, createVoucher } from "@/server/vouchers/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
-import { getAccountLedger, getJournal } from "./ledgers";
+import { getAccountLedger, getJournal, getPartnerSummary } from "./ledgers";
 
 const db = getTestDb();
 let staff: SessionUser;
@@ -132,6 +133,17 @@ describe("getAccountLedger", () => {
     expect(l!.closing).toBe(500);
   });
 
+  it("credit-normal account uses sign -1 for opening and running balance", async () => {
+    await create("2025-12-10", [line("101", "debit", 900), line("254", "credit", 900)]);
+    await create("2026-02-05", [line("254", "debit", 200), line("101", "credit", 200)]);
+    await create("2026-02-06", [line("101", "debit", 50), line("254", "credit", 50)]);
+    const l = await getAccountLedger(db, acc["254"], { ...F, from: "2026-02-01" });
+    expect(l!.rows[0]).toEqual({ kind: "opening", balance: 900 });
+    const bal = l!.rows.filter((r) => r.kind === "line").map((r) => r.kind === "line" && r.balance);
+    expect(bal).toEqual([700, 750]);
+    expect(l!.closing).toBe(750);
+  });
+
   it("excludes unapproved vouchers", async () => {
     const c = await getCompany(db);
     await updateCompany(db, { ...c, approvalRequired: true }, manager.id);
@@ -139,5 +151,35 @@ describe("getAccountLedger", () => {
     expect((await getAccountLedger(db, acc["103"], F))!.rows).toEqual([{ kind: "opening", balance: 0 }]);
     expect((await approveVoucher(db, manager, id, 1)).ok).toBe(true);
     expect((await getAccountLedger(db, acc["103"], F))!.closing).toBe(500);
+  });
+});
+
+describe("getPartnerSummary", () => {
+  it("one row per partner with opening/debit/credit/closing; no-partner row last", async () => {
+    const [{ id: pb }] = await db.insert(partners).values({ name: "나거래처" }).returning({ id: partners.id });
+    const [{ id: pa }] = await db.insert(partners).values({ name: "가거래처" }).returning({ id: partners.id });
+    const pl = (code: string, side: LineInput["side"], amount: number, partnerId: number | null): LineInput => ({
+      ...line(code, side, amount), partnerId,
+    });
+    await create("2025-12-01", [pl("108", "debit", 1000, pb), line("101", "credit", 1000)]);
+    await create("2026-02-01", [pl("108", "debit", 500, pb), line("101", "credit", 500)]);
+    await create("2026-02-02", [pl("101", "debit", 300, null), pl("108", "credit", 300, pb)]);
+    await create("2026-02-03", [pl("108", "debit", 70, pa), line("101", "credit", 70)]);
+    // The voucher service requires a partner on 108, so null one out directly.
+    await create("2026-02-04", [pl("108", "debit", 9, pa), line("101", "credit", 9)]);
+    await db.update(voucherLines).set({ partnerId: null }).where(eq(voucherLines.amount, 9));
+    await create("2026-02-05", [pl("108", "debit", 1, pa), line("101", "credit", 1)]);
+    const rows = await getPartnerSummary(db, acc["108"], { ...F, from: "2026-02-01" });
+    expect(rows).toEqual([
+      { partnerId: pa, partnerName: "가거래처", opening: 0, debit: 71, credit: 0, closing: 71 },
+      { partnerId: pb, partnerName: "나거래처", opening: 1000, debit: 500, credit: 300, closing: 1200 },
+      { partnerId: null, partnerName: "(거래처 없음)", opening: 0, debit: 9, credit: 0, closing: 9 },
+    ]);
+  });
+
+  it("returns [] for an unknown account and omits partners without activity", async () => {
+    await db.insert(partners).values({ name: "무활동" });
+    expect(await getPartnerSummary(db, 999999, F)).toEqual([]);
+    expect(await getPartnerSummary(db, acc["108"], F)).toEqual([]);
   });
 });

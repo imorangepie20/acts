@@ -3,7 +3,7 @@ import { isPnlGroup, normalSideOf } from "@/lib/accounts";
 import { fiscalYearStart } from "@/lib/reports/fiscal";
 import type { ReportFilter } from "@/lib/reports/types";
 import { POSTED_STATUSES, type Side } from "@/lib/vouchers/types";
-import { listAccounts, type AccountRow } from "@/server/accounts/service";
+import { getAccountById, type AccountRow } from "@/server/accounts/service";
 import { getCompany } from "@/server/company/service";
 import type { Db } from "@/server/db/client";
 import { accounts, partners, voucherLines, vouchers } from "@/server/db/schema";
@@ -116,7 +116,7 @@ export async function getAccountLedger(
   f: ReportFilter,
   opts: { partnerId?: number | null } = {},
 ): Promise<{ account: AccountRow; rows: LedgerRow[]; closing: number } | null> {
-  const account = (await listAccounts(db)).find((a) => a.id === accountId);
+  const account = await getAccountById(db, accountId);
   if (!account) return null;
   const company = await getCompany(db);
   const sign = normalSideOf(account.group) === "debit" ? 1 : -1;
@@ -182,4 +182,65 @@ export async function getAccountLedger(
     }
   });
   return { account, rows, closing: balance };
+}
+
+export type PartnerSummaryRow = {
+  partnerId: number | null;
+  /** "(거래처 없음)" for lines without a partner. */
+  partnerName: string;
+  opening: number;
+  debit: number;
+  credit: number;
+  closing: number;
+};
+
+export const NO_PARTNER_LABEL = "(거래처 없음)";
+
+/** 거래처별 원장 summary for one account: one aggregate query, grouped by partner. */
+export async function getPartnerSummary(db: Db, accountId: number, f: ReportFilter): Promise<PartnerSummaryRow[]> {
+  const account = await getAccountById(db, accountId);
+  if (!account) return [];
+  const company = await getCompany(db);
+  const sign = normalSideOf(account.group) === "debit" ? 1 : -1;
+  const openFrom = isPnlGroup(account.group) ? fiscalYearStart(f.from, company.fiscalYearStartMonth) : null;
+
+  const before = sql`${vouchers.date} < ${f.from}${openFrom === null ? sql`` : sql` and ${vouchers.date} >= ${openFrom}`}`;
+  const inPeriod = sql`${vouchers.date} >= ${f.from} and ${vouchers.date} <= ${f.to}`;
+  const sumWhen = (cond: SQL, side: "debit" | "credit") =>
+    sql<number>`coalesce(sum(case when ${cond} and ${voucherLines.side} = ${side} then ${voucherLines.amount} else 0 end), 0)::bigint`;
+
+  const grouped = await db
+    .select({
+      partnerId: voucherLines.partnerId,
+      partnerName: partners.name,
+      openDebit: sumWhen(before, "debit"),
+      openCredit: sumWhen(before, "credit"),
+      debit: sumWhen(inPeriod, "debit"),
+      credit: sumWhen(inPeriod, "credit"),
+    })
+    .from(voucherLines)
+    .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
+    .leftJoin(partners, eq(partners.id, voucherLines.partnerId))
+    .where(and(...scope(f), eq(voucherLines.accountId, accountId), lte(vouchers.date, f.to)))
+    .groupBy(voucherLines.partnerId, partners.name);
+
+  const rows = grouped
+    .map((g): PartnerSummaryRow => {
+      const opening = sign * (Number(g.openDebit) - Number(g.openCredit));
+      const debit = Number(g.debit);
+      const credit = Number(g.credit);
+      return {
+        partnerId: g.partnerId,
+        partnerName: g.partnerId === null ? NO_PARTNER_LABEL : (g.partnerName ?? ""),
+        opening,
+        debit,
+        credit,
+        closing: opening + sign * (debit - credit),
+      };
+    })
+    .filter((r) => r.opening !== 0 || r.debit !== 0 || r.credit !== 0);
+  return rows.sort((a, b) => {
+    if ((a.partnerId === null) !== (b.partnerId === null)) return a.partnerId === null ? 1 : -1;
+    return a.partnerName.localeCompare(b.partnerName, "ko");
+  });
 }
