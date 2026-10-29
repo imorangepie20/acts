@@ -24,3 +24,42 @@ test("합계잔액시산표: 전표 입력 후 합계 행이 보이고 차액 �
   await expect(page.getByRole("row").filter({ has: page.getByRole("cell", { name: "합계", exact: true }) })).toBeVisible();
   await expect(page.getByText("차액")).toHaveCount(0);
 });
+
+const rowNamed = (page: Page, name: string) =>
+  page.getByRole("row").filter({ has: page.getByRole("cell", { name, exact: true }) });
+
+test("손익계산서: 당기순이익 행과 비교 기간 헤더가 보인다", async ({ page }) => {
+  await page.goto("/reports/income-statement?from=2026-01-01&to=2026-12-31");
+  await expect(page.getByRole("heading", { name: "손익계산서" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "당기 (2026-01-01 ~ 2026-12-31)" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "전기 (2025-01-01 ~ 2025-12-31)" })).toBeVisible();
+  for (const label of ["Ⅰ. 매출액", "Ⅲ. 매출총이익", "Ⅴ. 영업이익", "Ⅹ. 당기순이익"]) {
+    await expect(rowNamed(page, label)).toBeVisible();
+  }
+});
+
+test("재무상태표: 자산총계와 부채와자본총계가 같다", async ({ page }) => {
+  const desc = `E2E 재무상태표 ${Date.now()}`;
+  await page.goto("/vouchers/new");
+  await page.getByLabel("적요").fill(desc);
+  await pick(page, "계정", "811");
+  await pick(page, "결제 계정", "101");
+  await page.getByLabel("합계").fill("7000");
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.goto("/reports/balance-sheet");
+  await expect(page.getByRole("heading", { name: "재무상태표" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: /^전기말 \(\d{4}-\d{2}-\d{2}\)$/ })).toBeVisible();
+  const assets = rowNamed(page, "자산총계");
+  const le = rowNamed(page, "부채와자본총계");
+  await expect(assets).toBeVisible();
+  await expect(le).toBeVisible();
+  for (const col of [1, 2]) {
+    const a = await assets.getByRole("cell").nth(col).innerText();
+    const b = await le.getByRole("cell").nth(col).innerText();
+    expect(a).toMatch(/\d/);
+    expect(a).toBe(b);
+  }
+  await expect(page.getByText("차액")).toHaveCount(0);
+});

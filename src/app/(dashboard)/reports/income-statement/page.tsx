@@ -1,7 +1,29 @@
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { IncomeStatementTable } from "@/components/reports/income-statement-table";
+import { ReportFilters } from "@/components/reports/report-filters";
+import { parseReportParams, type SearchParams } from "@/lib/reports/params";
+import { todayInSeoul } from "@/lib/vouchers/dates";
 import { requirePermission } from "@/server/auth/dal";
+import { getCompany } from "@/server/company/service";
+import { db } from "@/server/db";
+import { getIncomeStatement } from "@/server/reports/service";
+import { getEntryOptions } from "@/server/sites/service";
 
-export default async function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requirePermission("ledger:view");
-  return <PlaceholderPage title="손익계산서" />;
+  const sp = await searchParams;
+  const company = await getCompany(db);
+  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
+  const [is, options] = await Promise.all([getIncomeStatement(db, filter), getEntryOptions(db)]);
+  return (
+    <div className="space-y-4">
+      <h1 className="text-2xl font-semibold">손익계산서</h1>
+      <ReportFilters filter={filter} mode="period" {...options} />
+      <IncomeStatementTable
+        lines={is.lines}
+        period={is.period}
+        priorPeriod={is.priorPeriod}
+        scope={{ siteId: filter.siteId, departmentId: filter.departmentId }}
+      />
+    </div>
+  );
 }

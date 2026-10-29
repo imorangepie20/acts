@@ -6,7 +6,10 @@ import { accounts, sites, users } from "@/server/db/schema";
 import { createSite } from "@/server/sites/service";
 import { createVoucher } from "@/server/vouchers/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
-import { getTrialBalance } from "./service";
+import { priorYearPeriod } from "@/lib/reports/fiscal";
+import type { StatementLine } from "@/lib/reports/statements";
+import { updateAccount } from "@/server/accounts/service";
+import { getBalanceSheet, getIncomeStatement, getTrialBalance } from "./service";
 
 const db = getTestDb();
 let staff: SessionUser;
@@ -79,5 +82,109 @@ describe("getTrialBalance", () => {
     expect(tb.balanced).toBe(false);
     expect(tb.total.debitTotal).toBe(700);
     expect(tb.total.creditTotal).toBe(0);
+  });
+});
+
+const key = (lines: StatementLine[], k: string) =>
+  lines.find((l) => (l.kind === "section" || l.kind === "computed") && l.key === k);
+const row = (lines: StatementLine[], name: string) =>
+  lines.find((l) => l.kind === "account" && (l.code === name || l.name === name));
+const setStartMonth = async (m: number) => {
+  const c = await getCompany(db);
+  const r = await updateCompany(db, { ...c, fiscalYearStartMonth: m }, staff.id);
+  if (!r.ok) throw new Error(r.error);
+};
+
+describe("fiscal-year boundary (start month 1)", () => {
+  beforeEach(async () => {
+    await create("2025-12-31", [line("811", "debit", 100), line("101", "credit", 100)]);
+    await create("2026-01-01", [line("101", "debit", 2000), line("401", "credit", 2000)]);
+  });
+
+  it("trial balance: 12-31 is prior-years profit, 01-01 is current P&L", async () => {
+    const tb = await getTrialBalance(db, f("2026-01-01"));
+    expect(tb.fiscalStart).toBe("2026-01-01");
+    expect(acct(tb, "811")).toBeUndefined();
+    expect(acct(tb, "401")).toMatchObject({ creditBalance: 2000 });
+    expect(tb.rows.find((r) => r.kind === "auto")).toMatchObject({ debitBalance: 100 });
+  });
+
+  it("balance sheet: 12-31 is prior-years profit, 01-01 is current profit", async () => {
+    const bs = await getBalanceSheet(db, f("2026-01-01"));
+    expect(bs.priorAsOf).toBe("2025-12-31");
+    expect(row(bs.lines, "이월이익잉여금(전기 손익)")).toMatchObject({ amount: -100, prior: 0 });
+    expect(row(bs.lines, "당기순이익")).toMatchObject({ amount: 2000, prior: -100 });
+    expect(key(bs.lines, "total_assets")).toMatchObject({ amount: 1900, prior: -100 });
+    expect(key(bs.lines, "total_liabilities_equity")).toMatchObject({ amount: 1900, prior: -100 });
+  });
+});
+
+describe("hidden accounts with activity", () => {
+  it("still appear in the trial balance and the income statement", async () => {
+    await create("2026-02-01", [line("812", "debit", 300), line("101", "credit", 300)]);
+    const r = await updateAccount(db, acc["812"], { isActive: false });
+    if (!r.ok) throw new Error(r.error);
+    const tb = await getTrialBalance(db, f("2026-03-01"));
+    expect(acct(tb, "812")).toMatchObject({ debitBalance: 300 });
+    const is = await getIncomeStatement(db, { ...f("2026-03-01"), from: "2026-01-01" });
+    expect(row(is.lines, "812")).toMatchObject({ amount: 300 });
+  });
+});
+
+describe("getIncomeStatement", () => {
+  it("current and prior period columns; prior period is priorYearPeriod", async () => {
+    await create("2025-02-15", [line("101", "debit", 700), line("401", "credit", 700)]);
+    await create("2025-03-31", [line("811", "debit", 999), line("101", "credit", 999)]); // outside prior period
+    await create("2026-02-10", [line("101", "debit", 5000), line("401", "credit", 5000)]);
+    await create("2026-03-01", [line("811", "debit", 1200), line("101", "credit", 1200)]);
+    await create("2026-03-02", [line("811", "debit", 50), line("101", "credit", 50)]); // after period
+    const filter = { from: "2026-02-01", to: "2026-03-01", siteId: null, departmentId: null };
+    const is = await getIncomeStatement(db, filter);
+    expect(is.period).toEqual({ from: "2026-02-01", to: "2026-03-01" });
+    expect(is.priorPeriod).toEqual(priorYearPeriod(filter));
+    expect(is.priorPeriod).toEqual({ from: "2025-02-01", to: "2025-03-01" });
+    expect(row(is.lines, "401")).toMatchObject({ amount: 5000, prior: 700 });
+    expect(row(is.lines, "811")).toMatchObject({ amount: 1200, prior: 0 });
+    expect(key(is.lines, "net")).toMatchObject({ amount: 3800, prior: 700 });
+  });
+
+  it("applies the site filter to lines", async () => {
+    const r = await createSite(db, { name: "B", businessNumber: null });
+    if (!r.ok) throw new Error(r.error);
+    await create("2026-02-01", [line("101", "debit", 900, r.value.id), line("401", "credit", 900, siteId)]);
+    const is = await getIncomeStatement(db, { from: "2026-01-01", to: "2026-03-01", siteId: r.value.id, departmentId: null });
+    expect(row(is.lines, "401")).toBeUndefined();
+    expect(key(is.lines, "net")).toMatchObject({ amount: 0 });
+  });
+});
+
+describe("getBalanceSheet", () => {
+  it("non-January fiscal year: start month 4, as-of 2026-02-10", async () => {
+    await setStartMonth(4);
+    await create("2024-03-31", [line("101", "debit", 1), line("401", "credit", 1)]); // prior column: prior-years
+    await create("2024-04-01", [line("101", "debit", 20), line("401", "credit", 20)]); // prior column: current
+    await create("2025-03-31", [line("101", "debit", 300), line("401", "credit", 300)]); // prior column: current
+    await create("2025-04-01", [line("101", "debit", 4000), line("401", "credit", 4000)]);
+    await create("2026-02-10", [line("101", "debit", 50000), line("401", "credit", 50000)]);
+    await create("2026-02-11", [line("101", "debit", 600000), line("401", "credit", 600000)]); // after as-of
+    const bs = await getBalanceSheet(db, { from: "2026-01-01", to: "2026-02-10", siteId: null, departmentId: null });
+    expect(bs.asOf).toBe("2026-02-10");
+    expect(bs.priorAsOf).toBe("2025-03-31");
+    expect(row(bs.lines, "이월이익잉여금(전기 손익)")).toMatchObject({ amount: 321, prior: 1 });
+    expect(row(bs.lines, "당기순이익")).toMatchObject({ amount: 54000, prior: 320 });
+    expect(row(bs.lines, "101")).toMatchObject({ amount: 54321, prior: 321 });
+    expect(key(bs.lines, "total_assets")).toMatchObject({ amount: 54321, prior: 321 });
+    expect(key(bs.lines, "total_liabilities_equity")).toMatchObject({ amount: 54321, prior: 321 });
+  });
+
+  it("balance-sheet accounts accumulate from the beginning of time", async () => {
+    await create("2020-05-05", [line("101", "debit", 10000), line("331", "credit", 10000)]);
+    await create("2026-02-01", [line("212", "debit", 3000), line("101", "credit", 3000)]);
+    const bs = await getBalanceSheet(db, f("2026-03-01"));
+    expect(row(bs.lines, "101")).toMatchObject({ amount: 7000, prior: 10000 });
+    expect(row(bs.lines, "212")).toMatchObject({ amount: 3000, prior: 0 });
+    expect(row(bs.lines, "331")).toMatchObject({ amount: 10000, prior: 10000 });
+    expect(key(bs.lines, "total_assets")).toMatchObject({ amount: 10000, prior: 10000 });
+    expect(key(bs.lines, "total_liabilities_equity")).toMatchObject({ amount: 10000, prior: 10000 });
   });
 });
