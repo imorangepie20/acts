@@ -35,3 +35,9 @@ for (const item of allNavItems) {
     expect(errors, `uncaught page errors on ${item.href}`).toEqual([]);
   });
 }
+
+test("app title is Korean and header has no notifications button", async ({ page }) => {
+  await page.goto("/overview");
+  await expect(page).toHaveTitle("회계 시스템");
+  await expect(page.locator("header").getByRole("button", { name: /알림|notification/i })).toHaveCount(0);
+});

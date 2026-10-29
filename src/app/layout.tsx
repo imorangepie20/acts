@@ -8,7 +8,7 @@ import { Toaster } from "@/components/ui/sonner";
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Shadcn UI Kit",
+  title: "회계 시스템",
   description: "Admin dashboard template",
 };
 

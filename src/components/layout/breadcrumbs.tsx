@@ -10,27 +10,23 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-
-function label(segment: string) {
-  return segment.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
+import { breadcrumbTrail } from "@/lib/nav";
 
 export function Breadcrumbs() {
   const pathname = usePathname();
-  const segments = pathname.split("/").filter(Boolean);
+  const trail = breadcrumbTrail(pathname);
   return (
     <Breadcrumb>
       <BreadcrumbList>
-        {segments.map((seg, i) => {
-          const href = "/" + segments.slice(0, i + 1).join("/");
-          const isLast = i === segments.length - 1;
+        {trail.map(({ href, label }, i) => {
+          const isLast = i === trail.length - 1;
           return (
             <Fragment key={href}>
               <BreadcrumbItem>
                 {isLast ? (
-                  <BreadcrumbPage>{label(seg)}</BreadcrumbPage>
+                  <BreadcrumbPage>{label}</BreadcrumbPage>
                 ) : (
-                  <BreadcrumbLink href={href}>{label(seg)}</BreadcrumbLink>
+                  <BreadcrumbLink href={href}>{label}</BreadcrumbLink>
                 )}
               </BreadcrumbItem>
               {!isLast && <BreadcrumbSeparator />}

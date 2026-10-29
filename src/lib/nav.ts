@@ -66,3 +66,18 @@ export function navGroupsFor(role: Role): NavGroup[] {
     .map((g) => ({ ...g, items: g.items.filter((i) => can(role, i.permission)) }))
     .filter((g) => g.items.length > 0);
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function breadcrumbTrail(pathname: string): { href: string; label: string }[] {
+  const segments = pathname.split("/").filter(Boolean);
+  const trail: { href: string; label: string }[] = [];
+  segments.forEach((seg, i) => {
+    const href = "/" + segments.slice(0, i + 1).join("/");
+    const item = allNavItems.find((n) => n.href === href);
+    if (item) trail.push({ href, label: item.title });
+    else if (segments[0] === "vouchers" && i === 1 && UUID_RE.test(seg)) trail.push({ href, label: "전표 상세" });
+    else if (seg === "edit" && i > 0) trail.push({ href, label: "수정" });
+  });
+  return trail;
+}
