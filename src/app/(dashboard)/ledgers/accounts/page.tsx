@@ -9,7 +9,7 @@ import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
 import { getAccountLedger } from "@/server/reports/ledgers";
-import { getEntryOptions } from "@/server/sites/service";
+import { getReportFilterOptions } from "@/server/sites/service";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requirePermission("ledger:view");
@@ -20,7 +20,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const accountId = raw && /^\d+$/.test(raw) ? Number(raw) : null;
   const [accounts, options, ledger] = await Promise.all([
     listAccounts(db),
-    getEntryOptions(db),
+    getReportFilterOptions(db),
     accountId === null ? null : getAccountLedger(db, accountId, filter, { page: pageParam(sp) }),
   ]);
   const pageHref = (p: number) => {

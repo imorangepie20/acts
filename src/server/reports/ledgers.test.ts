@@ -89,6 +89,13 @@ describe("getJournal", () => {
     expect(p2.entries[0].no).toBe(101);
     expect((await getJournal(db, F, null)).entries).toHaveLength(101);
   }, 30_000);
+
+  it("clamps an out-of-range page to the last page", async () => {
+    await create("2026-04-01", [line("811", "debit", 1), line("101", "credit", 1)], "only");
+    const j = await getJournal(db, F, 999);
+    expect(j.total).toBe(1);
+    expect(j.entries.map((e) => e.description)).toEqual(["only"]);
+  });
 });
 
 describe("getAccountLedger", () => {

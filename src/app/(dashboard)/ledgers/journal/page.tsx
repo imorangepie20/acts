@@ -3,23 +3,22 @@ import { JournalTable } from "@/components/reports/journal-table";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { Button } from "@/components/ui/button";
 import { formatWon } from "@/lib/money";
-import { exportHref, first, parseReportParams, type SearchParams } from "@/lib/reports/params";
+import { exportHref, pageParam, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
 import { getJournal, JOURNAL_PAGE_SIZE } from "@/server/reports/ledgers";
-import { getEntryOptions } from "@/server/sites/service";
+import { getReportFilterOptions } from "@/server/sites/service";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requirePermission("ledger:view");
   const sp = await searchParams;
   const company = await getCompany(db);
   const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
-  const raw = Number(first(sp.page));
-  const page = Number.isSafeInteger(raw) && raw >= 1 ? raw : 1;
-  const [journal, options] = await Promise.all([getJournal(db, filter, page), getEntryOptions(db)]);
+  const [journal, options] = await Promise.all([getJournal(db, filter, pageParam(sp)), getReportFilterOptions(db)]);
   const pages = Math.max(1, Math.ceil(journal.total / JOURNAL_PAGE_SIZE));
+  const page = Math.min(pageParam(sp), pages);
   const href = (p: number) => {
     const q = new URLSearchParams({ from: filter.from, to: filter.to, page: String(p) });
     if (filter.siteId !== null) q.set("site", String(filter.siteId));

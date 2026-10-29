@@ -51,8 +51,11 @@ export async function getJournal(
     .where(where)
     .orderBy(asc(vouchers.date), asc(vouchers.no))
     .$dynamic();
+  const lastPage = Math.max(1, Math.ceil(Number(sums.total) / JOURNAL_PAGE_SIZE));
   const heads =
-    page === null ? await base : await base.limit(JOURNAL_PAGE_SIZE).offset((Math.max(1, page) - 1) * JOURNAL_PAGE_SIZE);
+    page === null
+      ? await base
+      : await base.limit(JOURNAL_PAGE_SIZE).offset((Math.min(Math.max(1, page), lastPage) - 1) * JOURNAL_PAGE_SIZE);
 
   const entries: JournalEntry[] = heads.map((h) => ({
     voucherId: h.id,

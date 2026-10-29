@@ -145,3 +145,16 @@ export async function getEntryOptions(db: Db): Promise<{
   ]);
   return { sites: s, departments: d, showSite: s.length > 1, showDepartment: d.length > 0 };
 }
+
+/** Report filters: every site/department (inactive ones labelled) so history stays filterable. */
+export async function getReportFilterOptions(db: Db): Promise<{
+  sites: SiteRow[];
+  departments: DepartmentRow[];
+  showSite: boolean;
+  showDepartment: boolean;
+}> {
+  const [s, d] = await Promise.all([listSites(db), listDepartments(db)]);
+  const label = <T extends { name: string; isActive: boolean }>(r: T): T =>
+    r.isActive ? r : { ...r, name: `${r.name} (사용 안 함)` };
+  return { sites: s.map(label), departments: d.map(label), showSite: s.length > 1, showDepartment: d.length > 0 };
+}

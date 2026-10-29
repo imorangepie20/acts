@@ -6,14 +6,14 @@ import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
 import { getIncomeStatement } from "@/server/reports/service";
-import { getEntryOptions } from "@/server/sites/service";
+import { getReportFilterOptions } from "@/server/sites/service";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
   await requirePermission("ledger:view");
   const sp = await searchParams;
   const company = await getCompany(db);
   const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
-  const [is, options] = await Promise.all([getIncomeStatement(db, filter), getEntryOptions(db)]);
+  const [is, options] = await Promise.all([getIncomeStatement(db, filter), getReportFilterOptions(db)]);
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">손익계산서</h1>

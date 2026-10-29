@@ -9,6 +9,8 @@ import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
 import { priorYearPeriod } from "@/lib/reports/fiscal";
 import type { StatementLine } from "@/lib/reports/statements";
 import { updateAccount } from "@/server/accounts/service";
+import { partners } from "@/server/db/schema";
+import { getAccountLedger, getPartnerSummary } from "./ledgers";
 import { getBalanceSheet, getIncomeStatement, getTrialBalance } from "./service";
 
 const db = getTestDb();
@@ -186,5 +188,67 @@ describe("getBalanceSheet", () => {
     expect(row(bs.lines, "331")).toMatchObject({ amount: 10000, prior: 10000 });
     expect(key(bs.lines, "total_assets")).toMatchObject({ amount: 10000, prior: 10000 });
     expect(key(bs.lines, "total_liabilities_equity")).toMatchObject({ amount: 10000, prior: 10000 });
+  });
+});
+
+describe("cross-report consistency", () => {
+  it("trial balance, income statement, balance sheet and ledgers agree", async () => {
+    const [{ id: pa }, { id: pb }] = await db
+      .insert(partners)
+      .values([{ name: "가거래처" }, { name: "나거래처" }])
+      .returning({ id: partners.id });
+    const withP = (l: LineInput, partnerId: number): LineInput => ({ ...l, partnerId });
+    await create("2025-03-01", [line("101", "debit", 10_000_000), line("331", "credit", 10_000_000)]); // capital
+    await create("2025-06-01", [
+      withP(line("108", "debit", 1_100_000), pa),
+      line("401", "credit", 1_000_000),
+      line("255", "credit", 100_000),
+    ]); // prior-year credit sale
+    await create("2026-01-15", [line("103", "debit", 2_000_000), line("101", "credit", 2_000_000)]);
+    await create("2026-02-01", [
+      withP(line("108", "debit", 550_000), pb),
+      line("401", "credit", 500_000),
+      line("255", "credit", 50_000),
+    ]); // credit sale with VAT
+    await create("2026-03-01", [line("811", "debit", 200_000), line("101", "credit", 200_000)]); // expense
+    await create("2026-04-01", [
+      withP(line("108", "credit", 300_000), pa),
+      line("101", "debit", 300_000),
+    ]); // collection
+    await create("2026-05-01", [
+      line("401", "debit", 50_000),
+      line("255", "debit", 5_000),
+      withP(line("108", "credit", 55_000), pb),
+    ]); // contra (sales return)
+
+    const asOf = "2026-06-30";
+    const fiscalStart = "2026-01-01";
+    const tb = await getTrialBalance(db, f(asOf));
+    const is = await getIncomeStatement(db, { from: fiscalStart, to: asOf, siteId: null, departmentId: null });
+    const bs = await getBalanceSheet(db, f(asOf));
+
+    expect(tb.balanced).toBe(true);
+    const net = key(is.lines, "net");
+    expect(net).toMatchObject({ amount: 250_000 });
+    expect(row(bs.lines, "당기순이익")?.amount).toBe(net?.amount);
+    expect(key(bs.lines, "total_assets")?.amount).toBe(key(bs.lines, "total_liabilities_equity")?.amount);
+
+    const auto = tb.rows.find((r) => r.kind === "auto");
+    if (!auto || auto.kind !== "auto") throw new Error("no auto row");
+    expect(auto.creditBalance - auto.debitBalance).toBe(1_000_000);
+    expect(row(bs.lines, "이월이익잉여금(전기 손익)")?.amount).toBe(auto.creditBalance - auto.debitBalance);
+
+    const period = { from: fiscalStart, to: asOf, siteId: null, departmentId: null };
+    const l103 = await getAccountLedger(db, acc["103"], period);
+    const t103 = acct(tb, "103");
+    if (!t103 || t103.kind !== "account") throw new Error("no 103");
+    expect(l103!.closing).toBe(t103.debitBalance - t103.creditBalance);
+    expect(l103!.closing).toBe(2_000_000);
+
+    const l108 = await getAccountLedger(db, acc["108"], period);
+    const sum = await getPartnerSummary(db, acc["108"], period);
+    expect(sum.length).toBe(2);
+    expect(sum.reduce((a, r) => a + r.closing, 0)).toBe(l108!.closing);
+    expect(l108!.closing).toBe(1_100_000 + 550_000 - 300_000 - 55_000);
   });
 });

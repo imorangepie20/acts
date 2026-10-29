@@ -12,7 +12,7 @@ import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
 import { listPartnersByIds } from "@/server/partners/service";
 import { getAccountLedger, getPartnerSummary } from "@/server/reports/ledgers";
-import { getEntryOptions } from "@/server/sites/service";
+import { getReportFilterOptions } from "@/server/sites/service";
 
 const toId = (v: string | undefined) => (v && /^\d+$/.test(v) ? Number(v) : null);
 
@@ -21,7 +21,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const sp = await searchParams;
   const company = await getCompany(db);
   const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
-  const [allAccounts, options] = await Promise.all([listAccounts(db), getEntryOptions(db)]);
+  const [allAccounts, options] = await Promise.all([listAccounts(db), getReportFilterOptions(db)]);
   const accounts = allAccounts;
   const requested = toId(first(sp.account));
   const account =

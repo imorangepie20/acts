@@ -472,3 +472,10 @@ Targets (spec §7: "수 초 안에"):
   - One Architecture bullet: the report core (`src/server/reports/`, pure builders in `src/lib/reports/`), the fiscal-year and prior-years profit rule, and the export route.
   - Commit: `git commit -m "docs: update CLAUDE.md for phase 1C"`.
 - [ ] **Step 3 (confirm with the user first):** `git push`, then on the server (Windows `ssh.exe` + agent, see 1B Task 10): `cd ~/acts && git pull && docker compose --profile prod up -d --build`. Verify `/login` returns 200 locally on the server. The user checks the reports through Cloudflare Access.
+
+## Notes for Phase 1D (from the 1C final review)
+
+- Reports compute prior-years profit on the fly, so year-end 결산 vouchers (kind `closing`) must be ordinary adjusting entries (감가상각, 대손, 미지급비용, 법인세) and must stay in the income statement.
+- Do NOT post a P&L-zeroing "집합손익 대체" voucher. It would make that year's 손익계산서 show 0 and turn the year-end trial balance into a post-closing one. If one is ever needed, mark it distinctly and exclude it from the income statement only.
+- Balance-sheet accounts accumulate from the beginning of time. 연도 이월 must therefore NOT post next-year opening-balance vouchers for balances already in the system, which would double-count. Opening-balance entry is only for history from before the system was introduced.
+- A P&L account ledger whose period spans a fiscal-year boundary does not reset at the boundary. Decide in 1D whether to reset at each fiscal start or restrict the period.

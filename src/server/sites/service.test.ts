@@ -6,6 +6,7 @@ import {
   createSite,
   ensureMainSite,
   getEntryOptions,
+  getReportFilterOptions,
   listDepartments,
   listSites,
   updateDepartment,
@@ -107,5 +108,17 @@ describe("ensureMainSite / getEntryOptions", () => {
     await updateSite(db, a.value.id, { name: "지점A", businessNumber: null, isActive: false });
     await updateDepartment(db, d.value.id, { name: "영업", isActive: false });
     expect(await getEntryOptions(db)).toMatchObject({ showSite: false, showDepartment: false });
+  });
+  it("report filter options include inactive rows, labelled", async () => {
+    await ensureMainSite(db);
+    const a = await createSite(db, { name: "지점A", businessNumber: null });
+    const d = await createDepartment(db, { name: "영업" });
+    if (!a.ok || !d.ok) throw new Error("setup");
+    await updateSite(db, a.value.id, { name: "지점A", businessNumber: null, isActive: false });
+    await updateDepartment(db, d.value.id, { name: "영업", isActive: false });
+    const o = await getReportFilterOptions(db);
+    expect(o).toMatchObject({ showSite: true, showDepartment: true });
+    expect(o.sites.map((s) => s.name)).toEqual(["본점", "지점A (사용 안 함)"]);
+    expect(o.departments.map((x) => x.name)).toEqual(["영업 (사용 안 함)"]);
   });
 });
