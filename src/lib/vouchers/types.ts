@@ -68,3 +68,24 @@ export type VoucherHeaderInput = {
 };
 
 export type VoucherInput = VoucherHeaderInput & { lines: LineInput[] };
+
+export type VoucherAction =
+  | "created"
+  | "updated"
+  | "deleted"
+  | "approved"
+  | "rejected"
+  | "attached"
+  | "detached";
+
+/** Voucher state stored in a history row; `attachments` holds file names. */
+export type VoucherSnapshot = VoucherInput & {
+  no: number;
+  status: VoucherStatus;
+  attachments: string[];
+};
+
+/** "2026-10-30", 1 → "20261030-0001" */
+export function formatVoucherNo(date: string, no: number): string {
+  return `${date.replaceAll("-", "")}-${String(no).padStart(4, "0")}`;
+}

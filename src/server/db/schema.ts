@@ -1,9 +1,13 @@
 import { sql } from "drizzle-orm";
+import type { VoucherSnapshot } from "@/lib/vouchers/types";
 import {
+  bigint,
   boolean,
   check,
+  date,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -138,3 +142,106 @@ export const departments = pgTable("departments", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const voucherKind = pgEnum("voucher_kind", ["general", "closing"]);
+export const voucherStatus = pgEnum("voucher_status", ["pending", "approved", "rejected"]);
+export const entryType = pgEnum("entry_type", ["purchase", "sale", "transfer", "general"]);
+export const evidenceType = pgEnum("evidence_type", [
+  "tax_invoice",
+  "invoice",
+  "card",
+  "cash_receipt",
+  "simple_receipt",
+  "none",
+]);
+export const vatType = pgEnum("vat_type", ["taxable", "zero_rated", "exempt"]);
+export const lineSide = pgEnum("line_side", ["debit", "credit"]);
+export const voucherAction = pgEnum("voucher_action", [
+  "created",
+  "updated",
+  "deleted",
+  "approved",
+  "rejected",
+  "attached",
+  "detached",
+]);
+
+export const vouchers = pgTable(
+  "vouchers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    date: date("date", { mode: "string" }).notNull(),
+    no: integer("no").notNull(),
+    kind: voucherKind("kind").notNull().default("general"),
+    entryType: entryType("entry_type").notNull(),
+    description: text("description").notNull().default(""),
+    partnerId: integer("partner_id").references(() => partners.id),
+    evidenceType: evidenceType("evidence_type").notNull().default("none"),
+    vatType: vatType("vat_type"),
+    vatDeductible: boolean("vat_deductible"),
+    supplyAmount: bigint("supply_amount", { mode: "number" }),
+    vatAmount: bigint("vat_amount", { mode: "number" }),
+    status: voucherStatus("status").notNull(),
+    rejectReason: text("reject_reason"),
+    version: integer("version").notNull().default(1),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    updatedBy: uuid("updated_by")
+      .notNull()
+      .references(() => users.id),
+    approvedBy: uuid("approved_by").references(() => users.id),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("vouchers_date_no_uq").on(t.date, t.no),
+    index("vouchers_date_idx").on(t.date),
+  ],
+);
+
+export const voucherLines = pgTable(
+  "voucher_lines",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    voucherId: uuid("voucher_id")
+      .notNull()
+      .references(() => vouchers.id, { onDelete: "cascade" }),
+    lineNo: integer("line_no").notNull(),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id),
+    side: lineSide("side").notNull(),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    partnerId: integer("partner_id").references(() => partners.id),
+    siteId: integer("site_id")
+      .notNull()
+      .references(() => sites.id),
+    departmentId: integer("department_id").references(() => departments.id),
+    description: text("description").notNull().default(""),
+  },
+  (t) => [
+    check("voucher_lines_amount_positive", sql`${t.amount} > 0`),
+    index("voucher_lines_voucher_id_idx").on(t.voucherId),
+    index("voucher_lines_account_id_idx").on(t.accountId),
+    index("voucher_lines_partner_id_idx").on(t.partnerId),
+  ],
+);
+
+// No FK to vouchers: history outlives a deleted voucher.
+export const voucherHistory = pgTable(
+  "voucher_history",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    voucherId: uuid("voucher_id").notNull(),
+    action: voucherAction("action").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
+    snapshot: jsonb("snapshot").$type<VoucherSnapshot>().notNull(),
+    note: text("note"),
+  },
+  (t) => [index("voucher_history_voucher_id_idx").on(t.voucherId)],
+);
