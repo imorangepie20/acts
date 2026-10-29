@@ -80,7 +80,7 @@ export async function uploadAttachmentAction(voucherId: string, fd: FormData): P
   if (typeof voucherId !== "string" || !(fd instanceof FormData)) return fail(INVALID);
   const file = fd.get("file");
   if (!(file instanceof File)) return fail(INVALID);
-  // Size before reading: the service re-checks the bytes.
+  // Fail fast with the size message before copying the file into memory; the service re-checks.
   if (file.size > MAX_ATTACHMENT_BYTES) return fail("파일은 10MB 이하여야 합니다.");
   const r = await addAttachment(db, user, voucherId, {
     name: file.name,

@@ -72,3 +72,17 @@ test("증빙 첨부: 업로드 → 미리보기 → 로그아웃 시 차단 → 
   await expect(page.getByText("첨부 삭제")).toBeVisible();
   expect((await page.request.get(href)).status()).toBe(404);
 });
+
+test("증빙 첨부: 10MB에 가까운 파일도 업로드된다", async ({ page }) => {
+  await openNewVoucher(page, `E2E 큰 증빙 ${Date.now()}`);
+  // PNG signature + padding at exactly the 10MB cap (allowed), so the multipart body is over 10MB.
+  const buffer = Buffer.alloc(10 * 1024 * 1024);
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer);
+  await page.getByLabel("증빙 파일 첨부").setInputFiles({ name: "big-photo.png", mimeType: "image/png", buffer });
+  await expect(page.getByText("첨부되었습니다.")).toBeVisible({ timeout: 20_000 });
+  const files = page.getByRole("list", { name: "증빙" });
+  await expect(files.getByRole("listitem")).toContainText("big-photo.png");
+
+  await files.getByRole("button", { name: "big-photo.png 삭제" }).click();
+  await expect(page.getByText("첨부된 증빙이 없습니다.")).toBeVisible();
+});

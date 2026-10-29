@@ -12,6 +12,8 @@ import type { AttachmentRow } from "@/server/attachments/service";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 const MAX_BYTES = 10 * 1024 * 1024;
+const ERR_UPLOAD = "업로드에 실패했습니다. 다시 시도하세요.";
+const ERR_REMOVE = "삭제에 실패했습니다. 다시 시도하세요.";
 
 function formatSize(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -41,12 +43,17 @@ export function VoucherAttachments({
       } else {
         const fd = new FormData();
         fd.set("file", file);
-        const r = await uploadAttachmentAction(voucherId, fd);
-        if (r.ok) {
-          toast.success("첨부되었습니다.");
-          router.refresh();
-        } else {
-          toast.error(r.error);
+        try {
+          const r = await uploadAttachmentAction(voucherId, fd);
+          if (r.ok) {
+            toast.success("첨부되었습니다.");
+            router.refresh();
+          } else {
+            toast.error(r.error);
+          }
+        } catch {
+          // Network failure, a rejected request body, or a server error.
+          toast.error(ERR_UPLOAD);
         }
       }
       if (input.current) input.current.value = "";
@@ -54,7 +61,12 @@ export function VoucherAttachments({
 
   const remove = (id: string) =>
     startTransition(async () => {
-      const r = await removeAttachmentAction(id);
+      let r: Awaited<ReturnType<typeof removeAttachmentAction>>;
+      try {
+        r = await removeAttachmentAction(id);
+      } catch {
+        return void toast.error(ERR_REMOVE);
+      }
       if (!r.ok) return void toast.error(r.error);
       toast.success("첨부파일이 삭제되었습니다.");
       router.refresh();

@@ -44,7 +44,13 @@ export async function writeStored(bytes: Uint8Array, type: AttachmentType, now =
   const rel = `${yyyy}/${mm}/${randomUUID()}.${EXT[type]}`;
   const abs = path.join(/*turbopackIgnore: true*/ uploadRoot(), rel);
   await fs.mkdir(path.dirname(abs), { recursive: true });
-  await fs.writeFile(abs, bytes, { flag: "wx", mode: 0o640 });
+  try {
+    await fs.writeFile(abs, bytes, { flag: "wx", mode: 0o640 });
+  } catch (e) {
+    // Don't leave a partial file behind (e.g. disk full); `wx` means it can only be ours.
+    if ((e as NodeJS.ErrnoException).code !== "EEXIST") await fs.rm(abs, { force: true }).catch(() => {});
+    throw e;
+  }
   return rel;
 }
 
