@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Command } from "lucide-react";
 import { navGroups } from "@/lib/nav";
+import type { SessionUser } from "@/server/auth/service";
 import {
   Sidebar,
   SidebarContent,
@@ -16,7 +17,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-export function AppSidebar() {
+// `user` will drive role-based nav filtering (Task 5).
+export function AppSidebar(_props: { user: SessionUser }) {
   const pathname = usePathname();
   return (
     <Sidebar collapsible="icon">

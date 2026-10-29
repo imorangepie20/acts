@@ -4,9 +4,10 @@ import { Breadcrumbs } from "@/components/layout/breadcrumbs";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { Notifications } from "@/components/layout/notifications";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserMenu } from "@/components/layout/user-menu";
+import type { SessionUser } from "@/server/auth/service";
 
-export function AppHeader() {
+export function AppHeader({ user }: { user: SessionUser }) {
   return (
     <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
       <SidebarTrigger className="-ml-1" />
@@ -16,9 +17,7 @@ export function AppHeader() {
         <CommandPalette />
         <ThemeToggle />
         <Notifications />
-        <Avatar className="size-8">
-          <AvatarFallback>TB</AvatarFallback>
-        </Avatar>
+        <UserMenu user={user} />
       </div>
     </header>
   );
