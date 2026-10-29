@@ -245,3 +245,24 @@ export const voucherHistory = pgTable(
   },
   (t) => [index("voucher_history_voucher_id_idx").on(t.voucherId)],
 );
+
+export const voucherAttachments = pgTable(
+  "voucher_attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    voucherId: uuid("voucher_id")
+      .notNull()
+      .references(() => vouchers.id, { onDelete: "cascade" }),
+    /** Original name, for display only; never part of the filesystem path. */
+    fileName: text("file_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    size: integer("size").notNull(),
+    /** Relative to the upload root: `yyyy/mm/<uuid>.<ext>`. */
+    storagePath: text("storage_path").notNull(),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("voucher_attachments_voucher_id_idx").on(t.voucherId)],
+);

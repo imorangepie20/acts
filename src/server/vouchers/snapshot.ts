@@ -1,7 +1,7 @@
 import { asc, eq, sql } from "drizzle-orm";
 import type { VoucherAction, VoucherHeaderInput, VoucherSnapshot } from "@/lib/vouchers/types";
 import type { Db } from "@/server/db/client";
-import { voucherHistory, voucherLines, vouchers } from "@/server/db/schema";
+import { voucherAttachments, voucherHistory, voucherLines, vouchers } from "@/server/db/schema";
 
 export type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export type Conn = Db | Tx;
@@ -39,7 +39,12 @@ export async function loadSnapshot(tx: Conn, id: string): Promise<VoucherSnapsho
     .from(voucherLines)
     .where(eq(voucherLines.voucherId, id))
     .orderBy(asc(voucherLines.lineNo));
-  return { ...header(v), no: v.no, status: v.status, attachments: [], lines };
+  const files = await tx
+    .select({ fileName: voucherAttachments.fileName })
+    .from(voucherAttachments)
+    .where(eq(voucherAttachments.voucherId, id))
+    .orderBy(asc(voucherAttachments.createdAt), asc(voucherAttachments.id));
+  return { ...header(v), no: v.no, status: v.status, attachments: files.map((f) => f.fileName), lines };
 }
 
 export async function addHistory(

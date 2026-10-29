@@ -67,6 +67,14 @@ git pull && docker compose --profile prod up -d --build
 0 3 * * * cd /home/approid/acts && mkdir -p backups && bash scripts/backup.sh >> backups/backup.log 2>&1
 ```
 
+증빙 첨부파일(영수증 사진·PDF)은 DB가 아니라 Docker 볼륨 `acts_uploads`(컨테이너의 `/app/uploads`)에 저장되므로 DB 덤프와 함께 따로 백업해야 합니다. `scripts/backup.sh` 가 다음 명령으로 `backups/uploads-YYYY-MM-DD.tgz` 를 만들고, 30일 지난 파일은 함께 삭제합니다.
+
+```bash
+docker run --rm -v acts_uploads:/u -v "$PWD/backups":/b alpine tar czf /b/uploads-$(date +%F).tgz -C /u .
+```
+
+첨부파일 복구: `docker run --rm -v acts_uploads:/u -v "$PWD/backups":/b alpine tar xzf /b/uploads-2026-01-01.tgz -C /u` (DB 덤프와 같은 날짜의 파일을 사용하세요).
+
 백업 파일은 같은 서버에 있으므로 주기적으로 다른 장비로도 복사해 두세요.
 
 ## 6. 복구

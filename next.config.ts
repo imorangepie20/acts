@@ -2,6 +2,10 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  experimental: {
+    // Evidence uploads (phone photos) go through a Server Action; the attachment service caps files at 10MB.
+    serverActions: { bodySizeLimit: "11mb" },
+  },
   async headers() {
     return [
       {

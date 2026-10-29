@@ -5,6 +5,8 @@ import { z } from "zod";
 import { buildSimpleVoucher } from "@/lib/vouchers/simple";
 import type { VoucherInput } from "@/lib/vouchers/types";
 import { getVatAccountIds } from "@/server/accounts/service";
+import { addAttachment, removeAttachment } from "@/server/attachments/service";
+import { MAX_ATTACHMENT_BYTES } from "@/server/attachments/storage";
 import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
 import { searchPartners } from "@/server/partners/service";
@@ -70,6 +72,29 @@ export async function rejectVoucherAction(id: string, ver: number, reason: strin
   }
   const r = await rejectVoucher(db, user, id, ver, reason.slice(0, 500));
   if (r.ok) revalidate(id);
+  return r;
+}
+
+export async function uploadAttachmentAction(voucherId: string, fd: FormData): Promise<Result<{ id: string }>> {
+  const user = await requirePermission("voucher:create");
+  if (typeof voucherId !== "string" || !(fd instanceof FormData)) return fail(INVALID);
+  const file = fd.get("file");
+  if (!(file instanceof File)) return fail(INVALID);
+  // Size before reading: the service re-checks the bytes.
+  if (file.size > MAX_ATTACHMENT_BYTES) return fail("파일은 10MB 이하여야 합니다.");
+  const r = await addAttachment(db, user, voucherId, {
+    name: file.name,
+    bytes: new Uint8Array(await file.arrayBuffer()),
+  });
+  if (r.ok) revalidatePath(`/vouchers/${voucherId}`);
+  return r;
+}
+
+export async function removeAttachmentAction(id: string): Promise<Result> {
+  const user = await requirePermission("voucher:create");
+  if (typeof id !== "string") return fail(INVALID);
+  const r = await removeAttachment(db, user, id);
+  if (r.ok) revalidatePath("/vouchers/[id]", "page");
   return r;
 }
 

@@ -14,6 +14,7 @@ import type {
   VoucherStatus,
 } from "@/lib/vouchers/types";
 import { getVatAccountIds } from "@/server/accounts/service";
+import { removeStored } from "@/server/attachments/storage";
 import type { SessionUser } from "@/server/auth/service";
 import type { Db } from "@/server/db/client";
 import {
@@ -23,6 +24,7 @@ import {
   partners,
   sites,
   users,
+  voucherAttachments,
   voucherHistory,
   voucherLines,
   vouchers,
@@ -362,18 +364,26 @@ export async function updateVoucher(
 }
 
 export async function deleteVoucher(db: Db, actor: SessionUser, id: string, version: number): Promise<Result> {
-  return db.transaction(async (tx) => {
+  const r = await db.transaction(async (tx): Promise<Result<string[]>> => {
     const locked = await lockForWrite(tx, actor, id, version);
     if (!locked.ok) return locked;
     const snapshot = (await loadSnapshot(tx, id))!;
+    // Attachment rows go with the voucher (ON DELETE CASCADE); their files are unlinked after commit.
+    const files = await tx
+      .select({ storagePath: voucherAttachments.storagePath })
+      .from(voucherAttachments)
+      .where(eq(voucherAttachments.voucherId, id));
     const deleted = await tx
       .delete(vouchers)
       .where(and(eq(vouchers.id, id), eq(vouchers.version, version)))
       .returning({ id: vouchers.id });
     if (deleted.length === 0) return fail(ERR_CONFLICT);
     await addHistory(tx, id, "deleted", actor.id, snapshot);
-    return ok();
+    return ok(files.map((f) => f.storagePath));
   });
+  if (!r.ok) return r;
+  await Promise.all(r.value.map(removeStored));
+  return ok();
 }
 
 const creator = alias(users, "creator");

@@ -36,7 +36,11 @@ export function VoucherHistory({ entries, accountNames, partnerNames }: Props) {
                   ))}
                 </ul>
               )}
-              {e.note && <p className="mt-2 text-muted-foreground">사유: {e.note}</p>}
+              {e.note && (
+                <p className="mt-2 text-muted-foreground">
+                  {e.action === "attached" || e.action === "detached" ? "파일" : "사유"}: {e.note}
+                </p>
+              )}
             </li>
           );
         })}
