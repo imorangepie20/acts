@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_WON } from "@/lib/money";
 import type { SimpleInput } from "@/lib/vouchers/simple";
 import type { VoucherInput } from "@/lib/vouchers/types";
 
@@ -7,6 +8,8 @@ export type Parsed<T> = { ok: true; data: T } | { ok: false };
 // Shapes only; amounts, dates and references are validated by the service.
 const id = z.number().int().positive();
 const amount = z.number().finite();
+/** Header supply/VAT: never a float, so nothing non-integer can reach a bigint column. */
+const headerAmount = z.number().int().min(0).max(MAX_WON);
 const evidenceType = z.enum(["tax_invoice", "invoice", "card", "cash_receipt", "simple_receipt", "none"]);
 const vatType = z.enum(["taxable", "zero_rated", "exempt"]);
 const dims = {
@@ -31,8 +34,8 @@ export const voucherInputSchema = z.object({
   evidenceType,
   vatType: vatType.nullable(),
   vatDeductible: z.boolean().nullable(),
-  supplyAmount: amount.nullable(),
-  vatAmount: amount.nullable(),
+  supplyAmount: headerAmount.nullable(),
+  vatAmount: headerAmount.nullable(),
   lines: z.array(lineSchema).max(500),
 }) satisfies z.ZodType<VoucherInput>;
 

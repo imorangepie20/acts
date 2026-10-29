@@ -46,6 +46,9 @@ describe("parseVoucherPayload", () => {
   it("rejects bad shapes", () => {
     expect(parseVoucherPayload({ mode: "general", voucher: { ...voucher, entryType: "x" } }).ok).toBe(false);
     expect(parseVoucherPayload({ mode: "general", voucher: { ...voucher, lines: [{ accountId: "1" }] } }).ok).toBe(false);
+    expect(parseVoucherPayload({ mode: "general", voucher: { ...voucher, supplyAmount: 1.5 } }).ok).toBe(false);
+    expect(parseVoucherPayload({ mode: "general", voucher: { ...voucher, vatAmount: -1 } }).ok).toBe(false);
+    expect(parseVoucherPayload({ mode: "general", voucher: { ...voucher, supplyAmount: 1e15 } }).ok).toBe(false);
     expect(parseVoucherPayload({ mode: "other" }).ok).toBe(false);
     expect(parseVoucherPayload(null).ok).toBe(false);
   });

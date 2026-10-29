@@ -218,6 +218,13 @@ describe("validation", () => {
     );
   });
 
+  it("rejects VAT header fields on a general voucher", async () => {
+    await expectFail(general({ vatType: "taxable" }), MSG.invalid);
+    await expectFail(general({ supplyAmount: 1.5 }), MSG.invalid);
+    await expectFail(general({ vatAmount: -5 }), MSG.invalid);
+    await expectFail(general({ vatDeductible: false }), MSG.invalid);
+  });
+
   it("rejects a non-general voucher that is not the builder's shape", async () => {
     await expectFail(
       general({

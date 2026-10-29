@@ -174,7 +174,17 @@ async function validate(tx: Conn, ctx: Context, input: VoucherInput, allowed: Al
     return ERR_REF;
   }
 
-  if (input.entryType !== "general") {
+  if (input.entryType === "general") {
+    // General vouchers carry no VAT metadata; VAT goes through the purchase/sale forms.
+    if (
+      input.vatType !== null ||
+      input.vatDeductible !== null ||
+      input.supplyAmount !== null ||
+      input.vatAmount !== null
+    ) {
+      return ERR_INVALID;
+    }
+  } else {
     const s = toSimpleInput(input, ctx.vat);
     if (s === null) return ERR_INVALID;
     const b = buildSimpleVoucher(s, ctx.vat);
