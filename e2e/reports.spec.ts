@@ -63,3 +63,27 @@ test("재무상태표: 자산총계와 부채와자본총계가 같다", async (
   }
   await expect(page.getByText("차액")).toHaveCount(0);
 });
+
+test("분개장·계정별 원장: 전표가 분개장에 보이고 103 원장에 이월·월계가 보인다", async ({ page }) => {
+  const desc = `E2E 원장 ${Date.now()}`;
+  await page.goto("/vouchers/new");
+  await page.getByLabel("적요").fill(desc);
+  await pick(page, "계정", "811");
+  await pick(page, "결제 계정", "103");
+  await page.getByLabel("합계").fill("3000");
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.goto("/ledgers/journal");
+  await expect(page.getByRole("heading", { name: "분개장" })).toBeVisible();
+  await expect(page.getByRole("cell", { name: desc, exact: true }).first()).toBeVisible();
+  await expect(rowNamed(page, "합계")).toBeVisible();
+
+  await page.goto("/ledgers/accounts");
+  await expect(page.getByText("계정과목을 선택하세요.")).toBeVisible();
+  await pick(page, "계정과목", "103");
+  await expect(page).toHaveURL(/account=\d+/);
+  await expect(page.getByRole("cell", { name: "이월", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: /^월계/ }).first()).toBeVisible();
+  await expect(page.getByRole("cell", { name: "누계", exact: true }).first()).toBeVisible();
+});
