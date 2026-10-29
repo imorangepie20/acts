@@ -1,0 +1,26 @@
+import { test, expect, type Page } from "@playwright/test";
+
+async function pick(page: Page, label: string, query: string) {
+  await page.getByRole("combobox", { name: label, exact: true }).click();
+  const search = page.getByPlaceholder("코드 또는 이름으로 검색");
+  await search.fill(query);
+  await search.press("Enter");
+  await expect(page.getByRole("combobox", { name: label, exact: true })).toContainText(query);
+  await expect(search).toHaveCount(0);
+}
+
+test("합계잔액시산표: 전표 입력 후 합계 행이 보이고 차액 안내가 없다", async ({ page }) => {
+  const desc = `E2E 시산표 ${Date.now()}`;
+  await page.goto("/vouchers/new");
+  await page.getByLabel("적요").fill(desc);
+  await pick(page, "계정", "811");
+  await pick(page, "결제 계정", "101");
+  await page.getByLabel("합계").fill("5000");
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.goto("/reports/trial-balance");
+  await expect(page.getByRole("heading", { name: "합계잔액시산표" })).toBeVisible();
+  await expect(page.getByRole("row").filter({ has: page.getByRole("cell", { name: "합계", exact: true }) })).toBeVisible();
+  await expect(page.getByText("차액")).toHaveCount(0);
+});
