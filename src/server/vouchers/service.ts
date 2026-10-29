@@ -28,6 +28,7 @@ import {
   vouchers,
 } from "@/server/db/schema";
 import { fail, ok, type Result } from "@/server/result";
+import { addHistory, header, lineColumns, loadSnapshot, type Conn, type Tx } from "./snapshot";
 
 export type VoucherDetail = VoucherHeaderInput & {
   id: string;
@@ -81,14 +82,15 @@ const ERR_INVALID = "입력값이 올바르지 않습니다.";
 const ERR_CONFLICT = "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.";
 const ERR_NOT_FOUND = "전표를 찾을 수 없습니다.";
 const ERR_FORBIDDEN = "이 전표를 수정할 권한이 없습니다.";
+const ERR_NOT_PENDING = "승인 대기 중인 전표가 아닙니다.";
+const ERR_REASON = "반려 사유를 입력하세요.";
+const ERR_NO_APPROVE = "승인 권한이 없습니다.";
 
 export const PAGE_SIZE = 50;
 /** First key of the two-key advisory lock taken while numbering vouchers (second key: the date). */
 const NUMBERING_LOCK = 0x76_6f_75_63; // "vouc"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
-type Conn = Db | Tx;
 
 export function canModify(actor: SessionUser, v: { createdBy: string }): boolean {
   return can(actor.role, "voucher:create") && (v.createdBy === actor.id || can(actor.role, "voucher:approve"));
@@ -230,18 +232,6 @@ function statusFields(ctx: Context, actor: SessionUser) {
     : { status: "approved" as const, approvedBy: actor.id, approvedAt: new Date() };
 }
 
-const header = (input: VoucherHeaderInput): VoucherHeaderInput => ({
-  date: input.date,
-  entryType: input.entryType,
-  description: input.description,
-  partnerId: input.partnerId,
-  evidenceType: input.evidenceType,
-  vatType: input.vatType,
-  vatDeductible: input.vatDeductible,
-  supplyAmount: input.supplyAmount,
-  vatAmount: input.vatAmount,
-});
-
 async function insertLines(tx: Tx, voucherId: string, lines: LineInput[]): Promise<void> {
   await tx.insert(voucherLines).values(
     lines.map((l, i) => ({
@@ -256,32 +246,6 @@ async function insertLines(tx: Tx, voucherId: string, lines: LineInput[]): Promi
       description: l.description,
     })),
   );
-}
-
-const lineColumns = {
-  accountId: voucherLines.accountId,
-  side: voucherLines.side,
-  amount: voucherLines.amount,
-  partnerId: voucherLines.partnerId,
-  siteId: voucherLines.siteId,
-  departmentId: voucherLines.departmentId,
-  description: voucherLines.description,
-};
-
-/** The stored voucher as a history snapshot (null if it does not exist). */
-async function loadSnapshot(tx: Conn, id: string): Promise<VoucherSnapshot | null> {
-  const [v] = await tx.select().from(vouchers).where(eq(vouchers.id, id));
-  if (!v) return null;
-  const lines = await tx
-    .select(lineColumns)
-    .from(voucherLines)
-    .where(eq(voucherLines.voucherId, id))
-    .orderBy(asc(voucherLines.lineNo));
-  return { ...header(v), no: v.no, status: v.status, attachments: [], lines };
-}
-
-async function addHistory(tx: Tx, voucherId: string, action: VoucherAction, actor: SessionUser, snapshot: VoucherSnapshot) {
-  await tx.insert(voucherHistory).values({ voucherId, action, userId: actor.id, snapshot });
 }
 
 export async function createVoucher(
@@ -305,28 +269,35 @@ export async function createVoucher(
       })
       .returning({ id: vouchers.id });
     await insertLines(tx, id, input.lines);
-    await addHistory(tx, id, "created", actor, (await loadSnapshot(tx, id))!);
+    await addHistory(tx, id, "created", actor.id, (await loadSnapshot(tx, id))!);
     return ok({ id });
   });
 }
 
-/** Locks the stored voucher and checks existence, permission and version. */
+/** Locks the stored voucher and checks existence, permission (default: may modify) and version. */
 async function lockForWrite(
   tx: Tx,
   actor: SessionUser,
   id: string,
   version: number,
-): Promise<Result<{ date: string }>> {
+  permitted: (v: { createdBy: string }) => Result = (v) => (canModify(actor, v) ? ok() : fail(ERR_FORBIDDEN)),
+): Promise<Result<{ date: string; status: VoucherStatus }>> {
   if (!UUID_RE.test(id)) return fail(ERR_NOT_FOUND);
   const [v] = await tx
-    .select({ date: vouchers.date, version: vouchers.version, createdBy: vouchers.createdBy })
+    .select({
+      date: vouchers.date,
+      version: vouchers.version,
+      createdBy: vouchers.createdBy,
+      status: vouchers.status,
+    })
     .from(vouchers)
     .where(eq(vouchers.id, id))
     .for("update");
   if (!v) return fail(ERR_NOT_FOUND);
-  if (!canModify(actor, v)) return fail(ERR_FORBIDDEN);
+  const allowed = permitted(v);
+  if (!allowed.ok) return allowed;
   if (v.version !== version) return fail(ERR_CONFLICT);
-  return ok({ date: v.date });
+  return ok({ date: v.date, status: v.status });
 }
 
 export async function updateVoucher(
@@ -369,7 +340,7 @@ export async function updateVoucher(
 
     await tx.delete(voucherLines).where(eq(voucherLines.voucherId, id));
     await insertLines(tx, id, input.lines);
-    await addHistory(tx, id, "updated", actor, (await loadSnapshot(tx, id))!);
+    await addHistory(tx, id, "updated", actor.id, (await loadSnapshot(tx, id))!);
     return ok();
   });
 }
@@ -384,7 +355,7 @@ export async function deleteVoucher(db: Db, actor: SessionUser, id: string, vers
       .where(and(eq(vouchers.id, id), eq(vouchers.version, version)))
       .returning({ id: vouchers.id });
     if (deleted.length === 0) return fail(ERR_CONFLICT);
-    await addHistory(tx, id, "deleted", actor, snapshot);
+    await addHistory(tx, id, "deleted", actor.id, snapshot);
     return ok();
   });
 }
@@ -504,4 +475,65 @@ export async function listHistory(db: Db, voucherId: string): Promise<HistoryEnt
     .innerJoin(users, eq(users.id, voucherHistory.userId))
     .where(eq(voucherHistory.voucherId, voucherId))
     .orderBy(asc(voucherHistory.id));
+}
+
+/** Shared by approve and reject: lock, require `pending`, apply `set`, bump the version, write history. */
+async function decide(
+  db: Db,
+  actor: SessionUser,
+  id: string,
+  version: number,
+  action: "approved" | "rejected",
+  set: Partial<typeof vouchers.$inferInsert>,
+  note: string | null,
+): Promise<Result> {
+  if (!can(actor.role, "voucher:approve")) return fail(ERR_NO_APPROVE);
+  return db.transaction(async (tx) => {
+    const locked = await lockForWrite(tx, actor, id, version, () => ok());
+    if (!locked.ok) return locked;
+    if (locked.value.status !== "pending") return fail(ERR_NOT_PENDING);
+    const updated = await tx
+      .update(vouchers)
+      .set({ ...set, version: sql`${vouchers.version} + 1`, updatedAt: new Date() })
+      .where(and(eq(vouchers.id, id), eq(vouchers.version, version)))
+      .returning({ id: vouchers.id });
+    if (updated.length === 0) return fail(ERR_CONFLICT);
+    await addHistory(tx, id, action, actor.id, (await loadSnapshot(tx, id))!, note);
+    return ok();
+  });
+}
+
+export function approveVoucher(db: Db, actor: SessionUser, id: string, version: number): Promise<Result> {
+  return decide(db, actor, id, version, "approved", {
+    status: "approved",
+    approvedBy: actor.id,
+    approvedAt: new Date(),
+    rejectReason: null,
+  }, null);
+}
+
+export async function rejectVoucher(
+  db: Db,
+  actor: SessionUser,
+  id: string,
+  version: number,
+  reason: string,
+): Promise<Result> {
+  if (!can(actor.role, "voucher:approve")) return fail(ERR_NO_APPROVE);
+  const trimmed = reason.trim();
+  if (!trimmed) return fail(ERR_REASON);
+  return decide(db, actor, id, version, "rejected", {
+    status: "rejected",
+    rejectReason: trimmed,
+    approvedBy: null,
+    approvedAt: null,
+  }, trimmed);
+}
+
+export async function countPending(db: Db): Promise<number> {
+  const [{ n }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(vouchers)
+    .where(eq(vouchers.status, "pending"));
+  return n;
 }

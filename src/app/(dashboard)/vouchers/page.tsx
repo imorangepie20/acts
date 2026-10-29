@@ -2,9 +2,11 @@ import { VoucherList, type VoucherFilters } from "@/components/vouchers/voucher-
 import { can } from "@/lib/permissions";
 import { isIsoDate, monthRange, todayInSeoul } from "@/lib/vouchers/dates";
 import { VOUCHER_STATUS_LABELS, type VoucherStatus } from "@/lib/vouchers/types";
+import Link from "next/link";
+import { getCompany } from "@/server/company/service";
 import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
-import { listVouchers, PAGE_SIZE } from "@/server/vouchers/service";
+import { countPending, listVouchers, PAGE_SIZE } from "@/server/vouchers/service";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -30,6 +32,8 @@ function parseFilters(sp: SearchParams): VoucherFilters & { page: number } {
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const user = await requirePermission("ledger:view");
   const filters = parseFilters(await searchParams);
+  const showPending = can(user.role, "voucher:approve") && (await getCompany(db)).approvalRequired;
+  const pendingCount = showPending ? await countPending(db) : 0;
   const { rows, total } = await listVouchers(db, {
     from: filters.from,
     to: filters.to,
@@ -41,6 +45,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">전표 목록</h1>
+      {pendingCount > 0 && (
+        <Link
+          href="/vouchers?status=pending&from=2000-01-01&to=2099-12-31"
+          className="w-fit rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium hover:bg-amber-500/20"
+        >
+          승인 대기 {pendingCount}건
+        </Link>
+      )}
       <VoucherList
         rows={rows}
         total={total}

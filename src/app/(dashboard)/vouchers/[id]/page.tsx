@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { VoucherDetail } from "@/components/vouchers/voucher-detail";
 import { VoucherHistory } from "@/components/vouchers/voucher-history";
+import { can } from "@/lib/permissions";
 import { listAccounts } from "@/server/accounts/service";
 import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
@@ -21,7 +22,9 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   ]);
   if (!voucher) notFound();
   return (
-    <VoucherDetail voucher={voucher} canModify={canModify(user, { createdBy: voucher.createdBy.id })}>
+    <VoucherDetail voucher={voucher} canModify={canModify(user, { createdBy: voucher.createdBy.id })}
+      canApprove={can(user.role, "voucher:approve")}
+    >
       <VoucherHistory
         entries={history}
         accountNames={Object.fromEntries(accounts.map((a) => [a.id, `${a.code} ${a.name}`]))}

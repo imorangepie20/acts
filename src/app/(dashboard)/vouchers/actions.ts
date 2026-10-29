@@ -10,7 +10,7 @@ import { db } from "@/server/db";
 import { searchPartners } from "@/server/partners/service";
 import { fail, type Result } from "@/server/result";
 import { parseVoucherPayload } from "@/server/vouchers/form";
-import { createVoucher, deleteVoucher, updateVoucher } from "@/server/vouchers/service";
+import { approveVoucher, createVoucher, deleteVoucher, rejectVoucher, updateVoucher } from "@/server/vouchers/service";
 
 const INVALID = "입력값이 올바르지 않습니다.";
 const version = z.number().int().nonnegative();
@@ -51,6 +51,24 @@ export async function deleteVoucherAction(id: string, ver: number): Promise<Resu
   const user = await requirePermission("voucher:create");
   if (typeof id !== "string" || !version.safeParse(ver).success) return fail(INVALID);
   const r = await deleteVoucher(db, user, id, ver);
+  if (r.ok) revalidate(id);
+  return r;
+}
+
+export async function approveVoucherAction(id: string, ver: number): Promise<Result> {
+  const user = await requirePermission("voucher:approve");
+  if (typeof id !== "string" || !version.safeParse(ver).success) return fail(INVALID);
+  const r = await approveVoucher(db, user, id, ver);
+  if (r.ok) revalidate(id);
+  return r;
+}
+
+export async function rejectVoucherAction(id: string, ver: number, reason: string): Promise<Result> {
+  const user = await requirePermission("voucher:approve");
+  if (typeof id !== "string" || typeof reason !== "string" || !version.safeParse(ver).success) {
+    return fail(INVALID);
+  }
+  const r = await rejectVoucher(db, user, id, ver, reason.slice(0, 500));
   if (r.ok) revalidate(id);
   return r;
 }

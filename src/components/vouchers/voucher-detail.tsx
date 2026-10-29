@@ -15,7 +15,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -33,7 +45,7 @@ import {
   formatVoucherNo,
 } from "@/lib/vouchers/types";
 import type { VoucherDetail as Detail } from "@/server/vouchers/service";
-import { deleteVoucherAction } from "@/app/(dashboard)/vouchers/actions";
+import { approveVoucherAction, deleteVoucherAction, rejectVoucherAction } from "@/app/(dashboard)/vouchers/actions";
 import { StatusBadge } from "./shared";
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
@@ -48,16 +60,20 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 export function VoucherDetail({
   voucher: v,
   canModify,
+  canApprove = false,
   children,
 }: {
   voucher: Detail;
   canModify: boolean;
+  canApprove?: boolean;
   /** History section, rendered on the server. */
   children?: React.ReactNode;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [reason, setReason] = useState("");
   const total = (side: "debit" | "credit") =>
     v.lines.filter((l) => l.side === side).reduce((s, l) => s + l.amount, 0);
 
@@ -73,6 +89,24 @@ export function VoucherDetail({
       router.push("/vouchers");
     });
 
+  const approve = () =>
+    startTransition(async () => {
+      const r = await approveVoucherAction(v.id, v.version);
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("승인되었습니다.");
+      router.refresh();
+    });
+
+  const reject = () =>
+    startTransition(async () => {
+      const r = await rejectVoucherAction(v.id, v.version, reason);
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("반려되었습니다.");
+      setRejectOpen(false);
+      setReason("");
+      router.refresh();
+    });
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -80,8 +114,39 @@ export function VoucherDetail({
           <h1 className="text-2xl font-semibold tabular-nums">전표 {formatVoucherNo(v.date, v.no)}</h1>
           <StatusBadge status={v.status} />
         </div>
-        {canModify && (
-          <div className="flex gap-2">
+        <div className="flex gap-2">
+          {canApprove && v.status === "pending" && (
+            <>
+              <Button disabled={pending} onClick={approve}>
+                승인
+              </Button>
+              <Dialog open={rejectOpen} onOpenChange={setRejectOpen}>
+                <DialogTrigger render={<Button variant="outline" />}>반려</DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>전표 반려</DialogTitle>
+                    <DialogDescription>반려 사유는 작성자에게 표시됩니다.</DialogDescription>
+                  </DialogHeader>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="reject-reason">사유</Label>
+                    <Textarea
+                      id="reject-reason"
+                      value={reason}
+                      maxLength={500}
+                      onChange={(e) => setReason(e.target.value)}
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button variant="destructive" disabled={pending || !reason.trim()} onClick={reject}>
+                      반려하기
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
+          {canModify && (
+          <>
             <Button variant="outline" nativeButton={false} render={<Link href={`/vouchers/${v.id}/edit`} />}>
               수정
             </Button>
@@ -102,9 +167,17 @@ export function VoucherDetail({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-          </div>
-        )}
+          </>
+          )}
+        </div>
       </div>
+
+      {v.status === "rejected" && v.rejectReason && (
+        <Alert variant="destructive">
+          <AlertTitle>반려된 전표입니다</AlertTitle>
+          <AlertDescription>{v.rejectReason}</AlertDescription>
+        </Alert>
+      )}
 
       <dl className="grid grid-cols-2 gap-4 rounded-md border p-4 sm:grid-cols-3 lg:grid-cols-5">
         <Fact label="번호">{formatVoucherNo(v.date, v.no)}</Fact>
@@ -123,7 +196,6 @@ export function VoucherDetail({
         </Fact>
         <Fact label="작성자">{v.createdBy.name}</Fact>
         <Fact label="승인자">{v.approvedBy?.name ?? "-"}</Fact>
-        {v.status === "rejected" && v.rejectReason && <Fact label="반려 사유">{v.rejectReason}</Fact>}
       </dl>
 
       <div className="rounded-md border">

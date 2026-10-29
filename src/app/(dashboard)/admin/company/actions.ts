@@ -30,7 +30,7 @@ export async function updateCompanyAction(
   _prev: CompanyActionState,
   fd: FormData,
 ): Promise<CompanyActionState> {
-  await requirePermission("settings:manage");
+  const user = await requirePermission("settings:manage");
   const fail = (error: string): CompanyActionState => ({
     error,
     values: {
@@ -61,7 +61,7 @@ export async function updateCompanyAction(
     representative,
     fiscalYearStartMonth: Number(monthRaw.trim()),
     approvalRequired: approval === "true",
-  });
+  }, user.id);
   if (!r.ok) return fail(r.error);
   revalidatePath("/admin/company");
   return { success: true };

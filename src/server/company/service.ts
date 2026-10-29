@@ -6,6 +6,7 @@ import {
 import type { Db } from "@/server/db/client";
 import { company } from "@/server/db/schema";
 import { fail, ok, type Result } from "@/server/result";
+import { approveAllPending } from "@/server/vouchers/snapshot";
 
 export type Company = {
   name: string;
@@ -35,7 +36,11 @@ export async function getCompany(db: Db): Promise<Company> {
   return row;
 }
 
-export async function updateCompany(db: Db, input: Company): Promise<Result> {
+/**
+ * Switching approval off approves every pending voucher in the same transaction, so the
+ * "posted" rule stays a single `status = 'approved'` check. `actorId` is the approver of record.
+ */
+export async function updateCompany(db: Db, input: Company, actorId?: string): Promise<Result> {
   const name = input.name.trim();
   if (!name) return fail(ERR_NAME);
   if (
@@ -50,18 +55,28 @@ export async function updateCompany(db: Db, input: Company): Promise<Result> {
   if (bnDigits && !isValidBusinessNumber(bnDigits)) return fail(ERR_BN);
   const representative = input.representative?.trim() || null;
 
-  const updated = await db
-    .update(company)
-    .set({
-      name,
-      businessNumber: bnDigits || null,
-      representative,
-      fiscalYearStartMonth: input.fiscalYearStartMonth,
-      approvalRequired: input.approvalRequired,
-      updatedAt: new Date(),
-    })
-    .where(eq(company.id, 1))
-    .returning({ id: company.id });
-  if (updated.length === 0) throw new Error(MISSING);
-  return ok();
+  return db.transaction(async (tx) => {
+    const [before] = await tx
+      .select({ approvalRequired: company.approvalRequired })
+      .from(company)
+      .where(eq(company.id, 1))
+      .for("update");
+    if (!before) throw new Error(MISSING);
+    await tx
+      .update(company)
+      .set({
+        name,
+        businessNumber: bnDigits || null,
+        representative,
+        fiscalYearStartMonth: input.fiscalYearStartMonth,
+        approvalRequired: input.approvalRequired,
+        updatedAt: new Date(),
+      })
+      .where(eq(company.id, 1));
+    if (before.approvalRequired && !input.approvalRequired) {
+      if (!actorId) throw new Error("approval switched off without an actor");
+      await approveAllPending(tx, actorId);
+    }
+    return ok();
+  });
 }
