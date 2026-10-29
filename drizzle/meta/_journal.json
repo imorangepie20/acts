@@ -15,6 +15,13 @@
       "when": 1793299306729,
       "tag": "0001_thin_speed_demon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793299841332,
+      "tag": "0002_silent_sharon_ventura",
+      "breakpoints": true
     }
   ]
 }

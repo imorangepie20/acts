@@ -13,5 +13,5 @@ export function getTestDb(): Db {
 }
 
 export async function resetDb(db: Db): Promise<void> {
-  await db.execute(sql`TRUNCATE sessions, users, company, accounts RESTART IDENTITY CASCADE`);
+  await db.execute(sql`TRUNCATE sessions, users, company, accounts, partners RESTART IDENTITY CASCADE`);
 }

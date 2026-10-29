@@ -1,6 +1,7 @@
 import { asc, eq, inArray } from "drizzle-orm";
 import { type AccountGroup, VAT_INPUT_CODE, VAT_OUTPUT_CODE } from "@/lib/accounts";
 import type { Db } from "@/server/db/client";
+import { isUniqueViolation } from "@/server/db/errors";
 import { accounts } from "@/server/db/schema";
 import { fail, ok, type Result } from "@/server/result";
 import { STANDARD_ACCOUNTS } from "./standard-chart";
@@ -30,13 +31,6 @@ const ERR_DUP = "이미 사용 중인 계정코드입니다.";
 const ERR_NAME = "계정명을 입력하세요.";
 const ERR_VAT = "부가세 계정은 숨길 수 없습니다.";
 const ERR_NOT_FOUND = "계정과목을 찾을 수 없습니다.";
-
-function isUniqueViolation(e: unknown): boolean {
-  for (let cur = e as { code?: string; cause?: unknown } | undefined; cur; cur = cur.cause as typeof cur) {
-    if (cur.code === "23505") return true;
-  }
-  return false;
-}
 
 export async function listAccounts(
   db: Db,
