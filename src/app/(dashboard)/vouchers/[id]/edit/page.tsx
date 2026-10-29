@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { VoucherEntry, type EditTarget } from "@/components/vouchers/voucher-entry";
+import { isUuid } from "@/lib/uuid";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { toSimpleInput, type VatAccounts } from "@/lib/vouchers/simple";
 import type { VoucherInput } from "@/lib/vouchers/types";
@@ -8,8 +9,6 @@ import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
 import { getEntryOptions, listDepartments, listSites } from "@/server/sites/service";
 import { canModify, getVoucher, type VoucherDetail } from "@/server/vouchers/service";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Prefills the entry form: simple types through toSimpleInput, anything else as general lines. */
 function editTarget(v: VoucherDetail, vat: VatAccounts): EditTarget {
@@ -66,7 +65,7 @@ function editTarget(v: VoucherDetail, vat: VatAccounts): EditTarget {
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("voucher:create");
   const { id } = await params;
-  if (!UUID_RE.test(id)) notFound();
+  if (!isUuid(id)) notFound();
   const voucher = await getVoucher(db, id);
   if (!voucher) notFound();
   if (!canModify(user, { createdBy: voucher.createdBy.id })) redirect(`/vouchers/${id}`);

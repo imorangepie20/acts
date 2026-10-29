@@ -6,6 +6,7 @@ import { fail, ok, type Result } from "@/server/result";
 import { canModify } from "@/server/vouchers/service";
 import { addHistory, loadSnapshot, type Conn } from "@/server/vouchers/snapshot";
 import { MAX_ATTACHMENT_BYTES, removeStored, resolveStored, sniffType, writeStored } from "./storage";
+import { isUuid } from "@/lib/uuid";
 
 const ERR_SIZE = "파일은 10MB 이하여야 합니다.";
 const ERR_TYPE = "JPG, PNG, WEBP, PDF 파일만 첨부할 수 있습니다.";
@@ -13,7 +14,6 @@ const ERR_FORBIDDEN = "이 전표를 수정할 권한이 없습니다.";
 const ERR_VOUCHER = "전표를 찾을 수 없습니다.";
 const ERR_NOT_FOUND = "첨부파일을 찾을 수 없습니다.";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_NAME = 200;
 
 export type AttachmentRow = { id: string; fileName: string; mimeType: string; size: number; createdAt: Date };
@@ -45,7 +45,7 @@ export async function addAttachment(
   if (file.bytes.length > MAX_ATTACHMENT_BYTES) return fail(ERR_SIZE);
   const type = sniffType(file.bytes);
   if (!type) return fail(ERR_TYPE);
-  if (!UUID_RE.test(voucherId)) return fail(ERR_VOUCHER);
+  if (!isUuid(voucherId)) return fail(ERR_VOUCHER);
   // Cheap pre-check so a refused upload never touches the disk; re-checked under the lock below.
   const pre = await checkVoucher(db, actor, voucherId, false);
   if (!pre.ok) return pre;
@@ -80,7 +80,7 @@ export async function addAttachment(
 }
 
 export async function removeAttachment(db: Db, actor: SessionUser, attachmentId: string): Promise<Result> {
-  if (!UUID_RE.test(attachmentId)) return fail(ERR_NOT_FOUND);
+  if (!isUuid(attachmentId)) return fail(ERR_NOT_FOUND);
   const r = await db.transaction(async (tx): Promise<Result<string>> => {
     const [a] = await tx
       .select({ voucherId: voucherAttachments.voucherId })
@@ -104,7 +104,7 @@ export async function removeAttachment(db: Db, actor: SessionUser, attachmentId:
 }
 
 export async function listAttachments(db: Conn, voucherId: string): Promise<AttachmentRow[]> {
-  if (!UUID_RE.test(voucherId)) return [];
+  if (!isUuid(voucherId)) return [];
   return db
     .select({
       id: voucherAttachments.id,
@@ -122,7 +122,7 @@ export async function getAttachmentFile(
   db: Db,
   id: string,
 ): Promise<{ fileName: string; mimeType: string; absolutePath: string } | null> {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [a] = await db
     .select({
       fileName: voucherAttachments.fileName,

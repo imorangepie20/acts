@@ -2,6 +2,8 @@ import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from 
 import { alias } from "drizzle-orm/pg-core";
 import { MAX_WON } from "@/lib/money";
 import { can } from "@/lib/permissions";
+import { isUuid } from "@/lib/uuid";
+import { todayInSeoul } from "@/lib/vouchers/dates";
 import { buildSimpleVoucher, toSimpleInput, type VatAccounts } from "@/lib/vouchers/simple";
 import type {
   EntryType,
@@ -91,18 +93,19 @@ const ERR_NO_APPROVE = "승인 권한이 없습니다.";
 export const PAGE_SIZE = 50;
 /** First key of the two-key advisory lock taken while numbering vouchers (second key: the date). */
 const NUMBERING_LOCK = 0x76_6f_75_63; // "vouc"
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 
 export function canModify(actor: SessionUser, v: { createdBy: string }): boolean {
   return can(actor.role, "voucher:create") && (v.createdBy === actor.id || can(actor.role, "voucher:approve"));
 }
 
-/** Days since 1970-01-01 for a valid YYYY-MM-DD, else null. */
+const MIN_YEAR = 2000;
+
+/** Days since 1970-01-01 for a valid YYYY-MM-DD within 2000..(Seoul year + 1), else null. */
 function epochDay(date: string): number | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (!m) return null;
   const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (y < MIN_YEAR || y > Number(todayInSeoul().slice(0, 4)) + 1) return null;
   const t = Date.UTC(y, mo - 1, d);
   const back = new Date(t);
   if (back.getUTCFullYear() !== y || back.getUTCMonth() !== mo - 1 || back.getUTCDate() !== d) return null;
@@ -299,7 +302,7 @@ async function lockForWrite(
   version: number,
   permitted: (v: { createdBy: string }) => Result = (v) => (canModify(actor, v) ? ok() : fail(ERR_FORBIDDEN)),
 ): Promise<Result<{ date: string; status: VoucherStatus }>> {
-  if (!UUID_RE.test(id)) return fail(ERR_NOT_FOUND);
+  if (!isUuid(id)) return fail(ERR_NOT_FOUND);
   const [v] = await tx
     .select({
       date: vouchers.date,
@@ -390,7 +393,7 @@ const creator = alias(users, "creator");
 const approver = alias(users, "approver");
 
 export async function getVoucher(db: Db, id: string): Promise<VoucherDetail | null> {
-  if (!UUID_RE.test(id)) return null;
+  if (!isUuid(id)) return null;
   const [row] = await db
     .select({
       v: vouchers,
@@ -487,7 +490,7 @@ export async function listVouchers(
 }
 
 export async function listHistory(db: Db, voucherId: string): Promise<HistoryEntry[]> {
-  if (!UUID_RE.test(voucherId)) return [];
+  if (!isUuid(voucherId)) return [];
   return db
     .select({
       id: voucherHistory.id,

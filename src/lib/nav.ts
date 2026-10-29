@@ -5,6 +5,7 @@ import {
   Building2, ListTree, Handshake, MapPin, UserCog,
 } from "lucide-react";
 import { can, type Permission, type Role } from "@/lib/permissions";
+import { isUuid } from "@/lib/uuid";
 
 export type NavItem = { title: string; href: string; icon?: LucideIcon; permission: Permission };
 export type NavGroup = { label: string; items: NavItem[] };
@@ -67,8 +68,6 @@ export function navGroupsFor(role: Role): NavGroup[] {
     .filter((g) => g.items.length > 0);
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 export function breadcrumbTrail(pathname: string): { href: string; label: string }[] {
   const segments = pathname.split("/").filter(Boolean);
   const trail: { href: string; label: string }[] = [];
@@ -76,7 +75,7 @@ export function breadcrumbTrail(pathname: string): { href: string; label: string
     const href = "/" + segments.slice(0, i + 1).join("/");
     const item = allNavItems.find((n) => n.href === href);
     if (item) trail.push({ href, label: item.title });
-    else if (segments[0] === "vouchers" && i === 1 && UUID_RE.test(seg)) trail.push({ href, label: "전표 상세" });
+    else if (segments[0] === "vouchers" && i === 1 && isUuid(seg)) trail.push({ href, label: "전표 상세" });
     else if (seg === "edit" && i > 0) trail.push({ href, label: "수정" });
   });
   return trail;

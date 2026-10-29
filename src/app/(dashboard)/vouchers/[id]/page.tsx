@@ -7,23 +7,26 @@ import { listAccounts } from "@/server/accounts/service";
 import { listAttachments } from "@/server/attachments/service";
 import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
-import { listPartners } from "@/server/partners/service";
+import { listPartnersByIds } from "@/server/partners/service";
 import { canModify, getVoucher, listHistory } from "@/server/vouchers/service";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { isUuid } from "@/lib/uuid";
 
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("ledger:view");
   const { id } = await params;
-  if (!UUID_RE.test(id)) notFound();
-  const [voucher, attachments, history, accounts, partners] = await Promise.all([
+  if (!isUuid(id)) notFound();
+  const [voucher, attachments, history, accounts] = await Promise.all([
     getVoucher(db, id),
     listAttachments(db, id),
     listHistory(db, id),
     listAccounts(db),
-    listPartners(db),
   ]);
   if (!voucher) notFound();
+  // Only partners named in this voucher's history snapshots, not the whole partner list.
+  const partnerIds = history.flatMap((h) =>
+    [h.snapshot.partnerId, ...h.snapshot.lines.map((l) => l.partnerId)].filter((p): p is number => p !== null),
+  );
+  const partners = await listPartnersByIds(db, partnerIds);
   const modifiable = canModify(user, { createdBy: voucher.createdBy.id });
   return (
     <VoucherDetail voucher={voucher} canModify={modifiable} canApprove={can(user.role, "voucher:approve")}>

@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { MAX_WON } from "@/lib/money";
+import { todayInSeoul } from "@/lib/vouchers/dates";
 import { buildSimpleVoucher } from "@/lib/vouchers/simple";
 import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
 import { getVatAccountIds } from "@/server/accounts/service";
@@ -166,6 +167,14 @@ describe("validation", () => {
   it("rejects a bad date", async () => {
     await expectFail(general({ date: "2026-02-30" }), MSG.date);
     await expectFail(general({ date: "20261030" }), MSG.date);
+  });
+
+  it("limits the date to 2000 through next year (Seoul)", async () => {
+    const nextYear = Number(todayInSeoul().slice(0, 4)) + 1;
+    await expectFail(general({ date: "1999-12-31" }), MSG.date);
+    await expectFail(general({ date: `${nextYear + 1}-01-01` }), MSG.date);
+    expect((await createVoucher(db, staff, general({ date: "2000-01-01" }))).ok).toBe(true);
+    expect((await createVoucher(db, staff, general({ date: `${nextYear}-12-31` }))).ok).toBe(true);
   });
 
   it("requires two lines", async () => {

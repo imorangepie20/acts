@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, or, type SQL } from "drizzle-orm";
 import { cleanBusinessNumber, normalizeBusinessNumber } from "@/lib/business-number";
 import type { Db } from "@/server/db/client";
 import { isUniqueViolation } from "@/server/db/errors";
@@ -72,6 +72,12 @@ export async function listPartners(
     .from(partners)
     .where(and(opts.activeOnly ? eq(partners.isActive, true) : undefined, matches(opts.q ?? "")))
     .orderBy(asc(partners.name), asc(partners.id));
+}
+
+/** Partners with these ids (any active state); an empty list skips the query. */
+export async function listPartnersByIds(db: Db, ids: number[]): Promise<PartnerRow[]> {
+  if (ids.length === 0) return [];
+  return db.select(columns).from(partners).where(inArray(partners.id, [...new Set(ids)]));
 }
 
 export async function searchPartners(db: Db, q: string, limit = 20): Promise<PartnerRow[]> {
