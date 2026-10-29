@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`acts` — a Korean accounting system (Phase 1A foundation + auth + admin; Phase 1B chart of accounts, partners, sites/departments, vouchers with VAT, approval, history, evidence attachments) on Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui using the **Base UI** primitives (`@base-ui/react`, shadcn style `base-nova`), not Radix. Postgres via Drizzle ORM. The dashboard/apps pages inherited from the shadcnuikit.com template are still mock data.
+`acts` — a Korean accounting system (Phase 1A foundation + auth + admin; Phase 1B chart of accounts, partners, sites/departments, vouchers with VAT, approval, history, evidence attachments; Phase 1C ledgers and statements: 분개장, 계정별/거래처별 원장, 합계잔액시산표, 손익계산서, 재무상태표, Excel export) on Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui using the **Base UI** primitives (`@base-ui/react`, shadcn style `base-nova`), not Radix. Postgres via Drizzle ORM. The dashboard/apps pages inherited from the shadcnuikit.com template are still mock data.
 
 ## Commands
 
@@ -46,6 +46,7 @@ Deploy: `docker compose --profile prod up -d --build` (db, migrate, app, cloudfl
   - `src/components/layout/` — sidebar, header, breadcrumbs, command palette, notifications, theme
   - `src/components/ui/` — shadcn/ui primitives (generated; add via the shadcn CLI per `components.json`)
 - **Vouchers** (`src/server/vouchers/`, `src/lib/vouchers/`): a voucher is a header plus >= 2 lines. The three transaction-type forms go through the pure builder `src/lib/vouchers/simple.ts` (`buildSimpleVoucher` / `toSimpleInput`); the service re-validates non-general vouchers by rebuilding them. **Posted rule:** only `status = 'approved'` counts (`POSTED_STATUSES`); turning approval off auto-approves pending vouchers. Every voucher write adds a `voucher_history` row in the same transaction (`snapshot.ts`). Numbering is per date under an advisory lock; updates use an optimistic `version`.
+- **Reports** (`src/server/reports/`: `totals.ts`, `service.ts`, `ledgers.ts` run the SQL aggregation of posted lines; pure builders live in `src/lib/reports/`). Balance-sheet groups accumulate from the beginning of time, P&L groups from the fiscal-year start (`company.fiscalYearStartMonth`); profit from earlier fiscal years shows as the computed equity row `이월이익잉여금(전기 손익)` until 1D posts closing vouchers. Site and department filters apply per line. Report URLs use `from`/`to`/`site`/`dept` (plus `account`/`partner`/`page`), parsed by `parseReportParams`; Excel files come from `GET /api/exports/[report]` (exceljs).
 - **Uploads:** evidence files live under `UPLOAD_DIR` (default `./uploads`, Docker volume `acts_uploads`), the type is sniffed from content, and they are served by `src/app/api/attachments/[id]/route.ts`. `next.config.ts` raises `serverActions.bodySizeLimit` and `proxyClientMaxBodySize` to 11mb (`proxy.ts` runs on Server Action POSTs and would truncate at 10MB).
 - Global mock data/types: `src/lib/data.ts`. Theme: `next-themes` with class strategy (light/dark/system); tokens in `src/app/globals.css`.
 
