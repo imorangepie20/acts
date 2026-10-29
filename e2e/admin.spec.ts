@@ -27,3 +27,31 @@ test("관리자가 실무자를 만들고, 실무자는 설정 메뉴에 접근�
   await expect(staff).toHaveURL(/\/vouchers/);
   await ctx.close();
 });
+
+test("회사 정보: 사업자등록번호와 전표 승인 사용이 저장된다", async ({ page }) => {
+  await page.goto("/admin/company");
+  await page.getByLabel("사업자등록번호").fill("220-81-62517");
+  const sw = page.getByRole("switch", { name: "전표 승인 사용" });
+  await expect(sw).not.toBeChecked();
+  await sw.click();
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel("사업자등록번호")).toHaveValue("220-81-62517");
+  await expect(page.getByRole("switch", { name: "전표 승인 사용" })).toBeChecked();
+
+  // restore the switch so other runs are unaffected
+  await page.getByRole("switch", { name: "전표 승인 사용" }).click();
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByText("저장되었습니다.").first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("switch", { name: "전표 승인 사용" })).not.toBeChecked();
+
+  // invalid checksum is rejected
+  await page.getByLabel("사업자등록번호").fill("220-81-62518");
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "사업자등록번호" })).toHaveText(
+    "사업자등록번호가 올바르지 않습니다.",
+  );
+});
