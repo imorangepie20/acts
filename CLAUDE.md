@@ -6,23 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`sdtpl-adm` — a faithful clone of shadcnuikit.com (admin dashboard template) on Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui using the **Base UI** primitives (`@base-ui/react`, shadcn style `base-nova`), not Radix. All data is mock; there is no backend.
+`acts` — a Korean accounting system (Phase 1A: foundation + auth + admin) on Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui using the **Base UI** primitives (`@base-ui/react`, shadcn style `base-nova`), not Radix. Postgres via Drizzle ORM. The dashboard/apps pages inherited from the shadcnuikit.com template are still mock data.
 
 ## Commands
 
-Package manager is **pnpm**.
+Package manager is **pnpm**. Ports: app 3710, Postgres 5710 (override with `APP_PORT` / `DB_PORT` in `.env`).
 
 ```bash
-pnpm dev                 # dev server at http://localhost:3000
+docker compose up -d db  # dev database only (prod services are under profile `prod`)
+pnpm db:migrate          # apply Drizzle migrations (drizzle/)
+pnpm db:seed             # idempotent; creates admin from ADMIN_EMAIL / ADMIN_PASSWORD
+pnpm dev                 # dev server at http://localhost:3710
 pnpm build               # production build (does NOT run lint)
 pnpm lint                # eslint — run separately from build
+pnpm test                # vitest (needs the db up)
 pnpm test:e2e            # Playwright, all specs
 
-pnpm exec playwright test e2e/components-button.spec.ts   # single spec file
-pnpm exec playwright test -g "renders /apps/kanban"        # single test by title
+pnpm exec playwright test e2e/auth.spec.ts      # single spec file
+pnpm exec playwright test -g "title fragment"   # single test by title
 ```
 
-Playwright's `webServer` runs `pnpm build && pnpm start -p 3000`, so tests hit a **production build**. Locally it reuses a server already on :3000 — if `pnpm dev` is running, tests run against dev instead (and a stale server means stale code).
+Playwright's `webServer` runs `pnpm db:migrate && pnpm db:seed && pnpm build && pnpm start` on :3710, so tests hit a **production build**. Locally it reuses a server already on :3710 — if `pnpm dev` is running, tests run against dev instead (and a stale server means stale code).
+
+Deploy: `docker compose --profile prod up -d --build` (db, migrate, app, cloudflared) on the server; `scripts/backup.sh` for Postgres dumps. See `docs/deploy.md` (Korean). `next.config.ts` uses `output: "standalone"`.
 
 ## Architecture
 
