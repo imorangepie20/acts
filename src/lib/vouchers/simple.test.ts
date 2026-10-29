@@ -165,6 +165,14 @@ describe("toSimpleInput", () => {
       expect(toSimpleInput(built(c), vat)).toEqual(c);
     }
   });
+  it("stays structural so VAT rule messages surface from the builder", () => {
+    const v = { ...built(purchase), evidenceType: "simple_receipt" as const };
+    const s = toSimpleInput(v, vat);
+    expect(s).not.toBeNull();
+    expect(err(s!)).toBe(
+      "간이영수증·증빙 없음은 부가세를 공제받을 수 없습니다. 합계를 공급가액으로 입력하세요.",
+    );
+  });
   it("returns null for general vouchers", () => {
     expect(toSimpleInput({ ...built(transfer), entryType: "general" }, vat)).toBeNull();
   });

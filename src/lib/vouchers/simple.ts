@@ -69,7 +69,23 @@ function validateTrade(i: TradeInput): string | null {
   return null;
 }
 
+function validateSimple(input: SimpleInput): string | null {
+  if (input.type === "transfer") {
+    return !Number.isInteger(input.amount) || input.amount < 1 || input.amount > MAX_WON
+      ? "금액을 입력하세요."
+      : null;
+  }
+  return validateTrade(input);
+}
+
 export function buildSimpleVoucher(input: SimpleInput, vat: VatAccounts): Result<VoucherInput> {
+  const message = validateSimple(input);
+  if (message) return fail(message);
+  return ok(emitSimple(input, vat));
+}
+
+/** Emits the voucher for an input without validating it. */
+function emitSimple(input: SimpleInput, vat: VatAccounts): VoucherInput {
   const dims = {
     partnerId: input.partnerId,
     siteId: input.siteId,
@@ -84,10 +100,7 @@ export function buildSimpleVoucher(input: SimpleInput, vat: VatAccounts): Result
   });
 
   if (input.type === "transfer") {
-    if (!Number.isInteger(input.amount) || input.amount < 1 || input.amount > MAX_WON) {
-      return fail("금액을 입력하세요.");
-    }
-    return ok({
+    return {
       date: input.date,
       description: input.description,
       entryType: "transfer",
@@ -101,11 +114,8 @@ export function buildSimpleVoucher(input: SimpleInput, vat: VatAccounts): Result
         line(input.debitAccountId, "debit", input.amount),
         line(input.creditAccountId, "credit", input.amount),
       ],
-    });
+    };
   }
-
-  const message = validateTrade(input);
-  if (message) return fail(message);
 
   const { supplyAmount: supply, vatAmount: tax } = input;
   const lines: LineInput[] = [];
@@ -123,7 +133,7 @@ export function buildSimpleVoucher(input: SimpleInput, vat: VatAccounts): Result
     if (tax > 0) lines.push(line(vat.outputAccountId, "credit", tax));
   }
 
-  return ok({
+  return {
     date: input.date,
     description: input.description,
     entryType: input.type,
@@ -134,7 +144,7 @@ export function buildSimpleVoucher(input: SimpleInput, vat: VatAccounts): Result
     supplyAmount: supply,
     vatAmount: tax,
     lines,
-  });
+  };
 }
 
 function sameLines(a: LineInput[], b: LineInput[]): boolean {
@@ -157,7 +167,7 @@ function sameLines(a: LineInput[], b: LineInput[]): boolean {
 
 /**
  * Inverse of buildSimpleVoucher for the edit form. Returns null unless the voucher
- * is exactly what the builder would emit for the recovered input (so `general`
+ * has exactly the shape the builder would emit for the recovered input (so `general`
  * vouchers and tampered payloads are rejected). A sale's null vatDeductible maps
  * back to false.
  */
@@ -207,9 +217,8 @@ export function toSimpleInput(v: VoucherInput, vat: VatAccounts): SimpleInput | 
     return null;
   }
 
-  const rebuilt = buildSimpleVoucher(candidate, vat);
-  if (!rebuilt.ok) return null;
-  const r = rebuilt.value;
+  // Structural only: VAT-rule violations are left for buildSimpleVoucher to report.
+  const r = emitSimple(candidate, vat);
   const headerSame =
     r.entryType === v.entryType &&
     r.partnerId === v.partnerId &&
