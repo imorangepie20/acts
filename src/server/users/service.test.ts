@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getTestDb, resetDb } from "../../../tests/helpers/db";
-import { users } from "@/server/db/schema";
+import { sessions, users } from "@/server/db/schema";
 import { createSession, getSessionUser, authenticate } from "@/server/auth/service";
 import { hashPassword } from "@/server/auth/password";
 import {
@@ -117,6 +117,9 @@ describe("updateUser", () => {
     expect(await getSessionUser(db, token)).not.toBeNull();
     await updateUser(db, s.id, { isActive: false });
     expect(await getSessionUser(db, token)).toBeNull();
+    expect(await db.select().from(sessions).where(eq(sessions.userId, s.id))).toHaveLength(0);
+    await updateUser(db, s.id, { isActive: true });
+    expect(await getSessionUser(db, token)).toBeNull();
   });
 });
 
@@ -130,6 +133,7 @@ describe("resetPassword", () => {
     const { token } = await createSession(db, s.id);
     expect((await resetPassword(db, s.id, "brand-new-pass")).ok).toBe(true);
     expect(await getSessionUser(db, token)).toBeNull();
+    expect(await db.select().from(sessions).where(eq(sessions.userId, s.id))).toHaveLength(0);
     expect((await authenticate(db, s.email, "brand-new-pass")).ok).toBe(true);
     expect((await authenticate(db, s.email, "staff-pass-1")).ok).toBe(false);
   });
