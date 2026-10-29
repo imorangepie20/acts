@@ -1,13 +1,19 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import type { Role } from "@/lib/permissions";
 import type { Db } from "@/server/db/client";
 import { sessions, users } from "@/server/db/schema";
-import { verifyPassword } from "./password";
+import { hashPassword, verifyPassword } from "./password";
 import { generateSessionToken, hashSessionToken } from "./token";
 
 export const MAX_FAILED_LOGINS = 5;
 export const LOCK_MINUTES = 15;
 export const SESSION_HOURS = 12;
+
+let dummyHash: Promise<string> | undefined;
+function getDummyHash(): Promise<string> {
+  dummyHash ??= hashPassword("dummy-password-for-timing");
+  return dummyHash;
+}
 
 export type SessionUser = { id: string; email: string; name: string; role: Role };
 
@@ -19,36 +25,38 @@ export async function authenticate(
 ): Promise<{ ok: true; user: SessionUser } | { ok: false; reason: "invalid" | "locked" }> {
   const normalized = email.trim().toLowerCase();
   const [u] = await db.select().from(users).where(eq(users.email, normalized));
-  if (!u || !u.isActive) return { ok: false, reason: "invalid" };
-  if (u.lockedUntil && u.lockedUntil > now) return { ok: false, reason: "locked" };
-
-  const valid = await verifyPassword(password, u.passwordHash);
-  if (!valid) {
-    const count = u.failedLoginCount + 1;
-    if (count >= MAX_FAILED_LOGINS) {
-      await db
-        .update(users)
-        .set({
-          failedLoginCount: 0,
-          lockedUntil: new Date(now.getTime() + LOCK_MINUTES * 60_000),
-          updatedAt: now,
-        })
-        .where(eq(users.id, u.id));
-    } else {
-      await db
-        .update(users)
-        .set({ failedLoginCount: count, updatedAt: now })
-        .where(eq(users.id, u.id));
-    }
+  if (!u || !u.isActive) {
+    // Equalize timing with the real-user path (no user enumeration).
+    await verifyPassword(password, await getDummyHash());
     return { ok: false, reason: "invalid" };
   }
+  if (u.lockedUntil && u.lockedUntil > now) return { ok: false, reason: "locked" };
 
-  if (u.failedLoginCount !== 0 || u.lockedUntil) {
-    await db
+  const unlocked = or(isNull(users.lockedUntil), lte(users.lockedUntil, now));
+  const valid = await verifyPassword(password, u.passwordHash);
+  if (!valid) {
+    // Atomic increment; refuses to touch the row if a lock was set meanwhile.
+    const nextCount = sql`${users.failedLoginCount} + 1`;
+    const reached = sql`${nextCount} >= ${MAX_FAILED_LOGINS}`;
+    const lockAt = new Date(now.getTime() + LOCK_MINUTES * 60_000);
+    const updated = await db
       .update(users)
-      .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: now })
-      .where(eq(users.id, u.id));
+      .set({
+        failedLoginCount: sql`CASE WHEN ${reached} THEN 0 ELSE ${nextCount} END`,
+        lockedUntil: sql`CASE WHEN ${reached} THEN ${lockAt.toISOString()}::timestamptz ELSE ${users.lockedUntil} END`,
+        updatedAt: now,
+      })
+      .where(and(eq(users.id, u.id), unlocked))
+      .returning({ id: users.id });
+    return { ok: false, reason: updated.length === 0 ? "locked" : "invalid" };
   }
+
+  const cleared = await db
+    .update(users)
+    .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: now })
+    .where(and(eq(users.id, u.id), unlocked))
+    .returning({ id: users.id });
+  if (cleared.length === 0) return { ok: false, reason: "locked" };
   return { ok: true, user: { id: u.id, email: u.email, name: u.name, role: u.role } };
 }
 

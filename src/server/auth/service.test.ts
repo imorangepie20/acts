@@ -1,8 +1,13 @@
 import { eq } from "drizzle-orm";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestDb, resetDb } from "../../../tests/helpers/db";
 import { sessions, users } from "@/server/db/schema";
-import { hashPassword } from "./password";
+import { hashPassword, verifyPassword } from "./password";
+
+vi.mock("./password", async (orig) => {
+  const m = await orig<typeof import("./password")>();
+  return { ...m, verifyPassword: vi.fn(m.verifyPassword) };
+});
 import { hashSessionToken } from "./token";
 import {
   authenticate,
@@ -56,6 +61,37 @@ describe("authenticate", () => {
     const r = await authenticate(db, EMAIL, PW, later);
     expect(r.ok).toBe(true);
     expect((await row()).failedLoginCount).toBe(0);
+  });
+
+  it("concurrent wrong attempts still lock the account", async () => {
+    const now = new Date("2026-01-01T00:00:00Z");
+    const rs = await Promise.all(
+      Array.from({ length: 10 }, () => authenticate(db, EMAIL, "bad", now)),
+    );
+    expect(rs.every((r) => !r.ok)).toBe(true);
+    expect((await row()).lockedUntil).not.toBeNull();
+    expect(await authenticate(db, EMAIL, PW, now)).toEqual({ ok: false, reason: "locked" });
+  });
+
+  it("attempt while locked leaves failedLoginCount unchanged", async () => {
+    const now = new Date("2026-01-01T00:00:00Z");
+    for (let i = 0; i < 5; i++) await authenticate(db, EMAIL, "bad", now);
+    const before = await row();
+    await authenticate(db, EMAIL, "bad", now);
+    await authenticate(db, EMAIL, PW, now);
+    const after = await row();
+    expect(after.failedLoginCount).toBe(before.failedLoginCount);
+    expect(after.lockedUntil).toEqual(before.lockedUntil);
+  });
+
+  it("unknown and inactive users still run a password verification", async () => {
+    const spy = vi.mocked(verifyPassword);
+    spy.mockClear();
+    await authenticate(db, "nobody@acts.kr", PW);
+    expect(spy).toHaveBeenCalledTimes(1);
+    await db.update(users).set({ isActive: false }).where(eq(users.email, EMAIL));
+    await authenticate(db, EMAIL, PW);
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 
   it("successful login resets failed count", async () => {
