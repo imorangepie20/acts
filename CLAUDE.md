@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`acts` — a Korean accounting system (Phase 1A: foundation + auth + admin) on Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui using the **Base UI** primitives (`@base-ui/react`, shadcn style `base-nova`), not Radix. Postgres via Drizzle ORM. The dashboard/apps pages inherited from the shadcnuikit.com template are still mock data.
+`acts` — a Korean accounting system (Phase 1A foundation + auth + admin; Phase 1B chart of accounts, partners, sites/departments, vouchers with VAT, approval, history, evidence attachments) on Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui using the **Base UI** primitives (`@base-ui/react`, shadcn style `base-nova`), not Radix. Postgres via Drizzle ORM. The dashboard/apps pages inherited from the shadcnuikit.com template are still mock data.
 
 ## Commands
 
@@ -15,7 +15,7 @@ Package manager is **pnpm**. Ports: app 3710, Postgres 5710 (override with `APP_
 ```bash
 docker compose up -d db  # dev database only (prod services are under profile `prod`)
 pnpm db:migrate          # apply Drizzle migrations (drizzle/)
-pnpm db:seed             # idempotent; creates admin from ADMIN_EMAIL / ADMIN_PASSWORD (refuses empty / "change-me-now")
+pnpm db:seed             # idempotent; creates admin from ADMIN_EMAIL / ADMIN_PASSWORD (refuses empty / "change-me-now"), the Douzone-style standard chart and the `본점` site (runs on every deploy via the `migrate` service)
 NEW_PASSWORD=... pnpm admin:reset-password <email>  # reset password, clear lock, drop sessions
 pnpm dev                 # dev server at http://localhost:3710
 pnpm build               # production build (does NOT run lint)
@@ -37,13 +37,15 @@ Deploy: `docker compose --profile prod up -d --build` (db, migrate, app, cloudfl
 
 - **Route groups:** `src/app/(dashboard)` wraps pages in the app shell (`SidebarProvider` + `AppSidebar` + `AppHeader`); `src/app/(auth)` uses a bare centered layout. `/` redirects to the role's home (staff → `/vouchers`, others → `/overview`).
 - **`src/lib/nav.ts` is the sitemap.** `navGroupsFor(role)` (items carry a `permission`) drives the sidebar *and* the ⌘K command palette, and `allNavItems` drives `e2e/smoke.spec.ts`, which renders every route and fails on HTTP ≥400 or uncaught page errors. Adding a route means adding it here.
-- **Server layering.** Domain services in `src/server/<area>/service.ts` take `db` first and return a `Result` (`src/server/result.ts`). Pages and actions go through `src/server/auth/dal.ts` (`verifySession`, `requirePermission`); `src/proxy.ts` is only an optimistic cookie check. The permission matrix is `src/lib/permissions.ts`. Tests: Vitest runs against the real `acts_test` DB (`tests/helpers/db.ts`); e2e uses a stored admin session from `e2e/auth.setup.ts`.
+- **Server layering.** Domain services in `src/server/<area>/service.ts` take `db` first and return a `Result` (`src/server/result.ts`). Pages and actions go through `src/server/auth/dal.ts` (`verifySession`, `requirePermission`); `src/proxy.ts` is only an optimistic cookie check. The permission matrix is `src/lib/permissions.ts`. Tests: Vitest runs against the real `acts_test` DB (`tests/helpers/db.ts`); e2e uses a stored admin session from `e2e/auth.setup.ts`. Vitest tests get reference data from `seedReference(db)`; Playwright projects `settings-serial` → `settings-serial-approval` run the specs that toggle company settings after `chromium` (which has `retries: 1` for flaky template specs).
 - **Thin pages, fat feature folders.** `page.tsx` files only compose components. Each feature lives in a folder mirroring its route:
   - `src/components/dashboards/<name>/` (shared bits in `dashboards/shared/`)
   - `src/components/apps/<name>/` — usually a client component plus a co-located `data.ts` with mock data and types
   - `src/components/pages/<name>/` — the `/components/*` showcase pages (`components-<name>/variants.tsx`) and misc pages (settings, profile, pricing, …)
   - `src/components/layout/` — sidebar, header, breadcrumbs, command palette, notifications, theme
   - `src/components/ui/` — shadcn/ui primitives (generated; add via the shadcn CLI per `components.json`)
+- **Vouchers** (`src/server/vouchers/`, `src/lib/vouchers/`): a voucher is a header plus >= 2 lines. The three transaction-type forms go through the pure builder `src/lib/vouchers/simple.ts` (`buildSimpleVoucher` / `toSimpleInput`); the service re-validates non-general vouchers by rebuilding them. **Posted rule:** only `status = 'approved'` counts (`POSTED_STATUSES`); turning approval off auto-approves pending vouchers. Every voucher write adds a `voucher_history` row in the same transaction (`snapshot.ts`). Numbering is per date under an advisory lock; updates use an optimistic `version`.
+- **Uploads:** evidence files live under `UPLOAD_DIR` (default `./uploads`, Docker volume `acts_uploads`), the type is sniffed from content, and they are served by `src/app/api/attachments/[id]/route.ts`. `next.config.ts` raises `serverActions.bodySizeLimit` and `proxyClientMaxBodySize` to 11mb (`proxy.ts` runs on Server Action POSTs and would truncate at 10MB).
 - Global mock data/types: `src/lib/data.ts`. Theme: `next-themes` with class strategy (light/dark/system); tokens in `src/app/globals.css`.
 
 ## Gotchas
