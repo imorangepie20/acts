@@ -1,0 +1,1 @@
+CREATE INDEX "vouchers_status_date_idx" ON "vouchers" USING btree ("status","date");

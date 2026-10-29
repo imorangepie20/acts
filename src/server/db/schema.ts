@@ -198,6 +198,7 @@ export const vouchers = pgTable(
   (t) => [
     uniqueIndex("vouchers_date_no_uq").on(t.date, t.no),
     index("vouchers_date_idx").on(t.date),
+    index("vouchers_status_date_idx").on(t.status, t.date),
   ],
 );
 
