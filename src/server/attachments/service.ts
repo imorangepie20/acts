@@ -4,7 +4,7 @@ import { assertMonthsOpen, closedMonthMessage, isMonthClosed, monthOf } from "@/
 import type { Db } from "@/server/db/client";
 import { voucherAttachments, vouchers } from "@/server/db/schema";
 import { fail, ok, type Result } from "@/server/result";
-import { canModify } from "@/server/vouchers/service";
+import { canModify, ERR_CONFLICT } from "@/server/vouchers/service";
 import { addHistory, loadSnapshot, type Conn } from "@/server/vouchers/snapshot";
 import { MAX_ATTACHMENT_BYTES, removeStored, resolveStored, sniffType, writeStored } from "./storage";
 import { isUuid } from "@/lib/uuid";
@@ -14,7 +14,6 @@ const ERR_TYPE = "JPG, PNG, WEBP, PDF 파일만 첨부할 수 있습니다.";
 const ERR_FORBIDDEN = "이 전표를 수정할 권한이 없습니다.";
 const ERR_VOUCHER = "전표를 찾을 수 없습니다.";
 const ERR_NOT_FOUND = "첨부파일을 찾을 수 없습니다.";
-const ERR_CONFLICT = "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.";
 
 const MAX_NAME = 200;
 

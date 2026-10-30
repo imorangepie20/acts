@@ -20,6 +20,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ f
       <MonthCloseTable
         months={months}
         fiscalStart={start}
+        currentMonth={todayInSeoul().slice(0, 7)}
         prevHref={`/closing?fy=${shiftYear(start, -1)}`}
         nextHref={`/closing?fy=${shiftYear(start, 1)}`}
       />

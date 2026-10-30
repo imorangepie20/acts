@@ -84,7 +84,7 @@ const ERR_ACCOUNT = "사용할 수 없는 계정과목입니다.";
 const errPartnerRequired = (code: string, name: string) => `${code} ${name} 계정은 거래처를 입력해야 합니다.`;
 const ERR_REF = "사용할 수 없는 거래처, 사업장 또는 부서입니다.";
 const ERR_INVALID = "입력값이 올바르지 않습니다.";
-const ERR_CONFLICT = "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.";
+export const ERR_CONFLICT = "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.";
 const ERR_NOT_FOUND = "전표를 찾을 수 없습니다.";
 const ERR_FORBIDDEN = "이 전표를 수정할 권한이 없습니다.";
 const ERR_NOT_PENDING = "승인 대기 중인 전표가 아닙니다.";

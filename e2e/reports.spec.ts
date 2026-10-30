@@ -74,9 +74,19 @@ test("분개장·계정별 원장: 전표가 분개장에 보이고 103 원장�
   await page.getByRole("button", { name: "저장" }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
 
-  await page.goto("/ledgers/journal");
+  // The journal pages 100 vouchers at a time in ascending order, and re-runs pile up vouchers
+  // dated today, so filter to today and walk back from the last page until this one shows up.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date());
+  const journal = (p: number) => `/ledgers/journal?from=${today}&to=${today}&page=${p}`;
+  await page.goto(journal(1_000_000)); // clamped to the last page
   await expect(page.getByRole("heading", { name: "분개장" })).toBeVisible();
-  await expect(page.getByRole("cell", { name: desc, exact: true }).first()).toBeVisible();
+  const pager = await page.getByText(/^\d+ \/ \d+$/).innerText();
+  const pages = Number(pager.split("/")[1].trim());
+  const cell = page.getByRole("cell", { name: desc, exact: true }).first();
+  for (let p = pages; p >= 1 && (await cell.count()) === 0; p--) {
+    if (p !== pages) await page.goto(journal(p));
+  }
+  await expect(cell).toBeVisible();
   await expect(rowNamed(page, "합계")).toBeVisible();
 
   await page.goto("/ledgers/accounts");

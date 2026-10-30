@@ -160,6 +160,8 @@ describe("closeMonth rules", () => {
   it("refuses an already closed month", async () => {
     await mustClose("2024-03");
     expect(await closeMonth(db, admin, "2024-03")).toEqual({ ok: false, error: MSG.already });
+    // an empty earlier month is closed through the watermark
+    expect(await closeMonth(db, admin, "2024-02")).toEqual({ ok: false, error: MSG.already });
   });
   it("requires the earliest open month with vouchers to be closed first", async () => {
     await mkVoucher("2024-01-10");
@@ -206,6 +208,12 @@ describe("reopenMonth rules", () => {
   });
   it("refuses a month that is not closed", async () => {
     expect(await reopenMonth(db, admin, "2024-05")).toEqual({ ok: false, error: MSG.notClosed });
+    await mustClose("2024-03");
+    expect(await reopenMonth(db, admin, "2024-05")).toEqual({ ok: false, error: MSG.notClosed });
+  });
+  it("refuses an empty month closed only through the watermark", async () => {
+    await mustClose("2024-03");
+    expect(await reopenMonth(db, admin, "2024-02")).toEqual({ ok: false, error: MSG.notLatest });
   });
 });
 
@@ -218,24 +226,40 @@ describe("listMonthStatus", () => {
     const b = await mkVoucher("2024-02-06");
     await approveVoucher(db, admin, b, 1);
     await mustClose("2024-01");
-    await mkVoucher("2023-12-31"); // outside the fiscal year
     await mkVoucher("2025-01-01"); // outside the fiscal year
     const rows = await listMonthStatus(db, "2024-01-01");
     expect(rows.map((r) => r.month)).toEqual([
       "2024-01", "2024-02", "2024-03", "2024-04", "2024-05", "2024-06",
       "2024-07", "2024-08", "2024-09", "2024-10", "2024-11", "2024-12",
     ]);
-    expect(rows[0]).toMatchObject({ closed: true, closedByName: "관리자", voucherCount: 1, pendingCount: 0 });
+    expect(rows[0]).toMatchObject({
+      closed: true,
+      reopenable: true,
+      closedByName: "관리자",
+      voucherCount: 1,
+      pendingCount: 0,
+    });
     expect(rows[0].closedAt).toBeInstanceOf(Date);
     expect(rows[1]).toEqual({
       month: "2024-02",
       closed: false,
+      reopenable: false,
       closedAt: null,
       closedByName: null,
       voucherCount: 2,
       pendingCount: 1,
     });
     expect(rows[2]).toMatchObject({ closed: false, voucherCount: 0, pendingCount: 0 });
+  });
+  it("shows months through the watermark as closed; only the latest explicit close is reopenable", async () => {
+    await mustClose("2024-03");
+    const rows = await listMonthStatus(db, "2024-01-01");
+    expect(rows.slice(0, 4).map((r) => [r.month, r.closed, r.reopenable, r.closedByName])).toEqual([
+      ["2024-01", true, false, null],
+      ["2024-02", true, false, null],
+      ["2024-03", true, true, "관리자"],
+      ["2024-04", false, false, null],
+    ]);
   });
   it("starts at the fiscal start month across the calendar year", async () => {
     const rows = await listMonthStatus(db, "2024-04-01");
@@ -246,13 +270,12 @@ describe("listMonthStatus", () => {
 
 describe("assertMonthsOpen", () => {
   it("returns the message for the first closed month, else null", async () => {
-    await mustClose("2024-01");
     await mustClose("2024-03");
     const r = await db.transaction(async (tx) => ({
-      open: await assertMonthsOpen(tx, ["2024-02-01", "2024-02-28"]),
-      closed: await assertMonthsOpen(tx, ["2024-03-31", "2024-02-01", "2024-01-15"]),
+      open: await assertMonthsOpen(tx, ["2024-04-01", "2024-05-31"]),
+      closed: await assertMonthsOpen(tx, ["2024-04-01", "2024-03-31", "2024-02-01"]),
     }));
-    expect(r).toEqual({ open: null, closed: MSG.closed("2024-01") });
+    expect(r).toEqual({ open: null, closed: MSG.closed("2024-02") });
   });
 });
 
@@ -305,6 +328,21 @@ describe("every write path respects month close", () => {
     expect(await updateVoucher(db, admin, outside, 1, input("2024-04-20"))).toEqual({ ok: true });
   });
 
+  it("refuses a write into an empty earlier month once a later month is closed", async () => {
+    await mustClose("2024-03");
+    const before = await dbState();
+    expect(await createVoucher(db, admin, input("2024-02-10"))).toEqual({ ok: false, error: MSG.closed("2024-02") });
+    const later = await mkVoucher("2024-04-10");
+    expect(await updateVoucher(db, admin, later, 1, input("2023-12-01"))).toEqual({
+      ok: false,
+      error: MSG.closed("2023-12"),
+    });
+    expect(await isMonthClosed(db, "2024-02")).toBe(true);
+    expect(await isMonthClosed(db, "2024-04")).toBe(false);
+    await deleteVoucher(db, admin, later, 1);
+    expect((await dbState()).vs).toEqual(before.vs);
+  });
+
   it("allows writes again after reopening", async () => {
     const id = await mkVoucher("2024-03-10");
     await mustClose("2024-03");
@@ -324,14 +362,12 @@ describe("close races a write", () => {
     // committed first refuses the write: exactly one side must win, every time.
     await setApproval(true);
     const m = "2024-05";
-    const wins: string[] = [];
     for (let i = 0; i < 10; i++) {
       await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, vouchers`);
       const [close, write] = await Promise.all([
         after(i * 2, () => closeMonth(db, admin, m)),
         createVoucher(db, admin, input("2024-05-15", `race ${i}`)),
       ]);
-      wins.push(close.ok ? "close" : "write");
       const [{ n }] = await db
         .select({ n: sql<number>`count(*)::int` })
         .from(vouchers)
@@ -348,13 +384,34 @@ describe("close races a write", () => {
         expect(closedNow).toBe(false);
       }
     }
-    console.info("create race winners:", wins.join(","));
+  });
+
+  it("a write into an empty earlier month: exactly one of close and write wins", async () => {
+    // Write first: a pending voucher in 2024-02 makes the close fail (earlier month not closed).
+    // Close first: 2024-02 is closed through the watermark and the write is refused.
+    await setApproval(true);
+    for (let i = 0; i < 10; i++) {
+      await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, vouchers`);
+      const [close, write] = await Promise.all([
+        after(i * 2, () => closeMonth(db, admin, "2024-03")),
+        createVoucher(db, admin, input("2024-02-10", `race ${i}`)),
+      ]);
+      const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(vouchers);
+      if (close.ok) {
+        expect(write).toEqual({ ok: false, error: MSG.closed("2024-02") });
+        expect(n).toBe(0);
+      } else {
+        expect(close).toEqual({ ok: false, error: MSG.earlier("2024-02") });
+        expect(write.ok).toBe(true);
+        expect(n).toBe(1);
+        expect(await isMonthClosed(db, "2024-03")).toBe(false);
+      }
+    }
   });
 
   it("an update moving a voucher into the month: exactly one of close and update wins", async () => {
     // With approval on the update leaves the voucher pending, which blocks the close.
     await setApproval(true);
-    const wins: string[] = [];
     for (let i = 0; i < 10; i++) {
       await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, vouchers`);
       const id = await mkVoucher("2024-06-10");
@@ -363,7 +420,6 @@ describe("close races a write", () => {
         after(i * 2, () => closeMonth(db, admin, "2024-05")),
         updateVoucher(db, admin, id, 2, input("2024-05-20", `race ${i}`)),
       ]);
-      wins.push(close.ok ? "close" : "write");
       const [v] = await db.select({ date: vouchers.date, version: vouchers.version }).from(vouchers);
       if (close.ok) {
         expect(write).toEqual({ ok: false, error: MSG.closed("2024-05") });
@@ -374,6 +430,5 @@ describe("close races a write", () => {
         expect(v).toEqual({ date: "2024-05-20", version: 3 });
       }
     }
-    console.info("update race winners:", wins.join(","));
   });
 });

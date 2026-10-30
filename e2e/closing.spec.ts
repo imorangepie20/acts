@@ -76,10 +76,10 @@ test("월 마감: 2000-01 → 2000-02 마감, 마감된 월의 전표는 수정�
   await expect(feb.getByRole("button", { name: "마감 해제", exact: true })).toBeVisible();
   await expect(feb.getByText("마감", { exact: true })).toBeVisible();
 
-  // only the latest closed month can be reopened
-  await monthRow(page, "2000-01").getByRole("button", { name: "마감 해제", exact: true }).click();
-  await page.getByRole("alertdialog").getByRole("button", { name: "마감 해제", exact: true }).click();
-  await expect(page.getByText("가장 최근에 마감한 월부터 해제할 수 있습니다.")).toBeVisible();
+  // only the latest explicit close offers 마감 해제; 2000-01 stays 마감 without a button
+  const jan = monthRow(page, "2000-01");
+  await expect(jan.getByText("마감", { exact: true })).toBeVisible();
+  await expect(jan.getByRole("button")).toHaveCount(0);
 
   // the voucher is read-only now
   await page.goto(detailUrl);

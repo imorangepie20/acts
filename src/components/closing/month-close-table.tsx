@@ -39,7 +39,7 @@ const COPY: Record<Mode, { button: string; title: (m: string) => string; body: s
   },
 };
 
-function MonthAction({ month, mode }: { month: string; mode: Mode }) {
+function MonthAction({ month, mode, disabled = false }: { month: string; mode: Mode; disabled?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -54,7 +54,10 @@ function MonthAction({ month, mode }: { month: string; mode: Mode }) {
     });
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger render={<Button size="sm" variant={mode === "close" ? "default" : "outline"} />}>
+      <AlertDialogTrigger
+        disabled={disabled}
+        render={<Button size="sm" variant={mode === "close" ? "default" : "outline"} />}
+      >
         {copy.button}
       </AlertDialogTrigger>
       <AlertDialogContent>
@@ -76,11 +79,14 @@ function MonthAction({ month, mode }: { month: string; mode: Mode }) {
 export function MonthCloseTable({
   months,
   fiscalStart,
+  currentMonth,
   prevHref,
   nextHref,
 }: {
   months: MonthStatus[];
   fiscalStart: string;
+  /** YYYY-MM of today (Seoul): it and later months cannot be closed yet. */
+  currentMonth: string;
   prevHref: string;
   nextHref: string;
 }) {
@@ -126,7 +132,11 @@ export function MonthCloseTable({
                   {m.closedAt ? `${formatDateTime(m.closedAt)} · ${m.closedByName ?? ""}` : "-"}
                 </TableCell>
                 <TableCell className="text-right">
-                  <MonthAction month={m.month} mode={m.closed ? "reopen" : "close"} />
+                  {m.reopenable ? (
+                    <MonthAction month={m.month} mode="reopen" />
+                  ) : m.closed ? null : (
+                    <MonthAction month={m.month} mode="close" disabled={m.month >= currentMonth} />
+                  )}
                 </TableCell>
               </TableRow>
             ))}
