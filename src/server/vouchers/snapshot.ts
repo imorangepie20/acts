@@ -11,6 +11,7 @@ export const AUTO_APPROVE_NOTE = "전표 승인 기능 해제로 자동 승인";
 export const header = (input: VoucherHeaderInput): VoucherHeaderInput => ({
   date: input.date,
   entryType: input.entryType,
+  kind: input.kind,
   description: input.description,
   partnerId: input.partnerId,
   evidenceType: input.evidenceType,

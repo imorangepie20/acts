@@ -3,6 +3,7 @@
 import Form from "next/form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,14 +17,16 @@ import {
 import { formatWon } from "@/lib/money";
 import {
   ENTRY_TYPE_LABELS,
+  VOUCHER_KIND_LABELS,
   VOUCHER_STATUS_LABELS,
   formatVoucherNo,
+  type VoucherKind,
   type VoucherStatus,
 } from "@/lib/vouchers/types";
 import type { VoucherListRow } from "@/server/vouchers/service";
 import { Field, StatusBadge, selectClass } from "./shared";
 
-export type VoucherFilters = { from: string; to: string; status: VoucherStatus | null; q: string };
+export type VoucherFilters = { from: string; to: string; status: VoucherStatus | null; kind: VoucherKind | null; q: string };
 
 type Props = {
   rows: VoucherListRow[];
@@ -37,6 +40,7 @@ type Props = {
 function pageHref(f: VoucherFilters, page: number): string {
   const sp = new URLSearchParams({ from: f.from, to: f.to });
   if (f.status) sp.set("status", f.status);
+  if (f.kind) sp.set("kind", f.kind);
   if (f.q) sp.set("q", f.q);
   if (page > 1) sp.set("page", String(page));
   return `/vouchers?${sp}`;
@@ -62,6 +66,16 @@ export function VoucherList({ rows, total, page, pageSize, filters, canCreate }:
               {(Object.keys(VOUCHER_STATUS_LABELS) as VoucherStatus[]).map((s) => (
                 <option key={s} value={s}>
                   {VOUCHER_STATUS_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="구분" htmlFor="filter-kind">
+            <select id="filter-kind" name="kind" defaultValue={filters.kind ?? ""} className={selectClass}>
+              <option value="">전체</option>
+              {(Object.keys(VOUCHER_KIND_LABELS) as VoucherKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {VOUCHER_KIND_LABELS[k]}
                 </option>
               ))}
             </select>
@@ -110,7 +124,14 @@ export function VoucherList({ rows, total, page, pageSize, filters, canCreate }:
                     {formatVoucherNo(r.date, r.no)}
                   </Link>
                 </TableCell>
-                <TableCell>{ENTRY_TYPE_LABELS[r.entryType]}</TableCell>
+                <TableCell>
+                  {ENTRY_TYPE_LABELS[r.entryType]}
+                  {r.kind !== "general" && (
+                    <Badge variant="secondary" className="ml-2">
+                      {VOUCHER_KIND_LABELS[r.kind]}
+                    </Badge>
+                  )}
+                </TableCell>
                 <TableCell className="max-w-72 truncate">{r.description}</TableCell>
                 <TableCell>{r.partnerName ?? ""}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatWon(r.amount)}</TableCell>

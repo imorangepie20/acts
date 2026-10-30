@@ -69,7 +69,7 @@ export async function addAttachment(
   let result: Result<{ id: string }>;
   try {
     result = await db.transaction(async (tx) => {
-      // Lock order: month lock (for the pre-read date) → voucher row; then confirm the date held.
+      // Lock order: global period lock (PERIOD_LOCK, 0) first (assertMonthsOpen) → voucher row; then confirm the date held.
       const closed = await assertMonthsOpen(tx, [pre.value.date]);
       if (closed) return fail(closed);
       const allowed = await checkVoucher(tx, actor, voucherId, true);

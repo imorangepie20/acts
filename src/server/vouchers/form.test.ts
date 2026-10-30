@@ -18,6 +18,17 @@ const voucher = {
 };
 
 describe("parseVoucherPayload", () => {
+  it("defaults kind to general and accepts closing", () => {
+    const r = parseVoucherPayload({ mode: "general", voucher });
+    expect(r.ok && r.data.mode === "general" && r.data.voucher.kind).toBe("general");
+    const c = parseVoucherPayload({ mode: "general", voucher: { ...voucher, kind: "closing" } });
+    expect(c.ok && c.data.mode === "general" && c.data.voucher.kind).toBe("closing");
+  });
+
+  it("rejects kind opening", () => {
+    expect(parseVoucherPayload({ mode: "general", voucher: { ...voucher, kind: "opening" } }).ok).toBe(false);
+  });
+
   it("accepts a general voucher and trims descriptions", () => {
     const r = parseVoucherPayload({ mode: "general", voucher });
     expect(r.ok).toBe(true);

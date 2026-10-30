@@ -16,6 +16,7 @@ const base: VoucherSnapshot = {
   date: "2026-10-30",
   description: "점심",
   entryType: "transfer",
+  kind: "general",
   partnerId: null,
   evidenceType: "card",
   vatType: null,
@@ -36,6 +37,16 @@ const names = {
 describe("describeChanges", () => {
   it("returns [] for identical snapshots", () => {
     expect(describeChanges(base, structuredClone(base), names)).toEqual([]);
+  });
+
+  it("reports a kind change", () => {
+    expect(describeChanges(base, { ...base, kind: "closing" }, names)).toEqual(["구분: 일반 → 결산"]);
+  });
+
+  it("treats a snapshot without kind as general", () => {
+    const old: Partial<VoucherSnapshot> = { ...base };
+    delete old.kind;
+    expect(describeChanges(old as VoucherSnapshot, base, names)).toEqual([]);
   });
 
   it("reports a date change", () => {

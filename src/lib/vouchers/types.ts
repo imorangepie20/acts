@@ -59,6 +59,8 @@ export type VoucherHeaderInput = {
   date: string;
   description: string;
   entryType: EntryType;
+  /** 결산 vouchers are ordinary posted entries; 기초 (opening) is never entered through a form. */
+  kind: "general" | "closing";
   partnerId: number | null;
   evidenceType: EvidenceType;
   vatType: VatType | null;

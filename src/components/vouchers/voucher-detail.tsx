@@ -41,6 +41,7 @@ import {
 import { formatWon } from "@/lib/money";
 import {
   ENTRY_TYPE_LABELS,
+  VOUCHER_KIND_LABELS,
   EVIDENCE_TYPE_LABELS,
   VAT_TYPE_LABELS,
   formatVoucherNo,
@@ -188,6 +189,7 @@ export function VoucherDetail({
         <Fact label="번호">{formatVoucherNo(v.date, v.no)}</Fact>
         <Fact label="일자">{v.date}</Fact>
         <Fact label="유형">{ENTRY_TYPE_LABELS[v.entryType]}</Fact>
+        <Fact label="구분">{VOUCHER_KIND_LABELS[v.kind]}</Fact>
         <Fact label="적요">{v.description || "-"}</Fact>
         <Fact label="증빙">{EVIDENCE_TYPE_LABELS[v.evidenceType]}</Fact>
         <Fact label="과세 구분">

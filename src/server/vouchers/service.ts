@@ -59,6 +59,7 @@ export type VoucherListRow = {
   date: string;
   no: number;
   entryType: EntryType;
+  kind: VoucherKind;
   description: string;
   partnerName: string | null;
   /** debit total */
@@ -84,6 +85,7 @@ const ERR_ACCOUNT = "사용할 수 없는 계정과목입니다.";
 const errPartnerRequired = (code: string, name: string) => `${code} ${name} 계정은 거래처를 입력해야 합니다.`;
 const ERR_REF = "사용할 수 없는 거래처, 사업장 또는 부서입니다.";
 const ERR_INVALID = "입력값이 올바르지 않습니다.";
+const ERR_CLOSING_TYPE = "결산 전표는 일반 전표로만 입력합니다.";
 export const ERR_CONFLICT = "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.";
 const ERR_NOT_FOUND = "전표를 찾을 수 없습니다.";
 const ERR_FORBIDDEN = "이 전표를 수정할 권한이 없습니다.";
@@ -196,6 +198,7 @@ async function validate(tx: Conn, ctx: Context, input: VoucherInput, allowed: Al
     return ERR_REF;
   }
 
+  if (input.kind === "closing" && input.entryType !== "general") return ERR_CLOSING_TYPE;
   if (input.entryType === "general") {
     // General vouchers carry no VAT metadata; VAT goes through the purchase/sale forms.
     if (
@@ -221,6 +224,7 @@ function sameVoucher(a: VoucherInput, b: VoucherInput): boolean {
     "date",
     "description",
     "entryType",
+    "kind",
     "partnerId",
     "evidenceType",
     "vatType",
@@ -285,7 +289,7 @@ export async function createVoucher(
 ): Promise<Result<{ id: string }>> {
   const vat = await loadVat(db);
   return db.transaction(async (tx) => {
-    // Lock order (every voucher write): month locks → company FOR SHARE → voucher row → numbering.
+    // Lock order (every voucher write): global period lock (PERIOD_LOCK, 0) → company FOR SHARE → voucher row → numbering.
     const closed = await assertMonthsOpen(tx, [input.date]);
     if (closed) return fail(closed);
     const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
@@ -470,12 +474,13 @@ const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export async function listVouchers(
   db: Db,
-  f: { from?: string; to?: string; status?: VoucherStatus; q?: string; page?: number },
+  f: { from?: string; to?: string; status?: VoucherStatus; kind?: VoucherKind; q?: string; page?: number },
 ): Promise<{ rows: VoucherListRow[]; total: number }> {
   const conds: (SQL | undefined)[] = [];
   if (f.from) conds.push(gte(vouchers.date, f.from));
   if (f.to) conds.push(lte(vouchers.date, f.to));
   if (f.status) conds.push(eq(vouchers.status, f.status));
+  if (f.kind) conds.push(eq(vouchers.kind, f.kind));
   const q = f.q?.trim();
   if (q) {
     const pattern = `%${escapeLike(q)}%`;
@@ -491,6 +496,7 @@ export async function listVouchers(
         date: vouchers.date,
         no: vouchers.no,
         entryType: vouchers.entryType,
+        kind: vouchers.kind,
         description: vouchers.description,
         partnerName: partners.name,
         amount: sql<number>`(select coalesce(sum(${voucherLines.amount}), 0) from ${voucherLines}

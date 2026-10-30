@@ -31,7 +31,7 @@ const line = (code: string, side: LineInput["side"], amount: number, sid = siteI
   accountId: acc[code], side, amount, partnerId: null, siteId: sid, departmentId: null, description: "",
 });
 const voucher = (date: string, lines: LineInput[]): VoucherInput => ({
-  date, description: "t", entryType: "general", partnerId: null, evidenceType: "none",
+  date, description: "t", entryType: "general", kind: "general", partnerId: null, evidenceType: "none",
   vatType: null, vatDeductible: null, supplyAmount: null, vatAmount: null, lines,
 });
 async function create(input: VoucherInput): Promise<string> {

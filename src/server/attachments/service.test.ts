@@ -63,7 +63,7 @@ async function mkVoucher(actor: SessionUser): Promise<string> {
   const input: VoucherInput = {
     date: "2026-10-30",
     description: "회식비",
-    entryType: "general",
+    entryType: "general", kind: "general",
     partnerId: null,
     evidenceType: "none",
     vatType: null,

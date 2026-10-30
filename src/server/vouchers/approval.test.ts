@@ -67,7 +67,7 @@ const line = (code: string, side: LineInput["side"], amount: number): LineInput 
 const input = (description = "회식비"): VoucherInput => ({
   date: "2026-10-30",
   description,
-  entryType: "general",
+  entryType: "general", kind: "general",
   partnerId: null,
   evidenceType: "none",
   vatType: null,

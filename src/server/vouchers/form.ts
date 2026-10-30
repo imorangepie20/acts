@@ -31,6 +31,7 @@ const lineSchema = z.object({
 export const voucherInputSchema = z.object({
   ...dims,
   entryType: z.enum(["purchase", "sale", "transfer", "general"]),
+  kind: z.enum(["general", "closing"]).default("general"),
   evidenceType,
   vatType: vatType.nullable(),
   vatDeductible: z.boolean().nullable(),

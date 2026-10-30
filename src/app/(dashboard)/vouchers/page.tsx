@@ -1,7 +1,7 @@
 import { VoucherList, type VoucherFilters } from "@/components/vouchers/voucher-list";
 import { can } from "@/lib/permissions";
 import { isIsoDate, monthRange, todayInSeoul } from "@/lib/vouchers/dates";
-import { VOUCHER_STATUS_LABELS, type VoucherStatus } from "@/lib/vouchers/types";
+import { VOUCHER_KIND_LABELS, VOUCHER_STATUS_LABELS, type VoucherKind, type VoucherStatus } from "@/lib/vouchers/types";
 import Link from "next/link";
 import { getCompany } from "@/server/company/service";
 import { requirePermission } from "@/server/auth/dal";
@@ -12,6 +12,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
 const isStatus = (v: string | undefined): v is VoucherStatus => v !== undefined && Object.hasOwn(VOUCHER_STATUS_LABELS, v);
+const isKind = (v: string | undefined): v is VoucherKind => v !== undefined && Object.hasOwn(VOUCHER_KIND_LABELS, v);
 
 /** Validates the query string; anything malformed falls back to the default. */
 function parseFilters(sp: SearchParams): VoucherFilters & { page: number } {
@@ -19,11 +20,13 @@ function parseFilters(sp: SearchParams): VoucherFilters & { page: number } {
   const from = one(sp.from);
   const to = one(sp.to);
   const status = one(sp.status);
+  const kind = one(sp.kind);
   const page = Number(one(sp.page));
   return {
     from: isIsoDate(from) ? from : month.from,
     to: isIsoDate(to) ? to : month.to,
     status: isStatus(status) ? status : null,
+    kind: isKind(kind) ? kind : null,
     q: (one(sp.q) ?? "").trim().slice(0, 100),
     page: Number.isSafeInteger(page) && page >= 1 ? page : 1,
   };
@@ -38,6 +41,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
     from: filters.from,
     to: filters.to,
     status: filters.status ?? undefined,
+    kind: filters.kind ?? undefined,
     q: filters.q,
     page: filters.page,
   });

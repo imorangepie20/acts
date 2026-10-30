@@ -28,7 +28,7 @@ const line = (code: string, side: LineInput["side"], amount: number): LineInput 
 });
 async function create() {
   const input: VoucherInput = {
-    date: "2026-10-01", description: "t", entryType: "general", partnerId: null, evidenceType: "none",
+    date: "2026-10-01", description: "t", entryType: "general", kind: "general", partnerId: null, evidenceType: "none",
     vatType: null, vatDeductible: null, supplyAmount: null, vatAmount: null,
     lines: [line("811", "debit", 3000), line("101", "credit", 3000)],
   };

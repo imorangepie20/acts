@@ -2,6 +2,7 @@ import { formatWon } from "@/lib/money";
 import {
   EVIDENCE_TYPE_LABELS,
   VAT_TYPE_LABELS,
+  VOUCHER_KIND_LABELS,
   VOUCHER_STATUS_LABELS,
   type LineInput,
   type VoucherAction,
@@ -52,6 +53,8 @@ export function describeChanges(
   };
 
   diff("날짜", prev.date, next.date);
+  // Snapshots written before 결산 existed carry no kind.
+  diff("구분", VOUCHER_KIND_LABELS[prev.kind ?? "general"], VOUCHER_KIND_LABELS[next.kind ?? "general"]);
   diff("적요", orNone(prev.description), orNone(next.description));
   if (prev.partnerId !== next.partnerId) diff("거래처", names.partner(prev.partnerId), names.partner(next.partnerId));
   const [ta, tb] = [debitTotal(prev), debitTotal(next)];

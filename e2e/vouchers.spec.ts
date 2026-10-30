@@ -87,3 +87,36 @@ test("일반 전표: 차액이 있으면 저장할 수 없다", async ({ page })
   await expect(page.getByLabel("차액")).toHaveText("100");
   await expect(page.getByRole("button", { name: "저장" })).toBeDisabled();
 });
+
+test("결산 전표: 입력 후 구분 필터로 조회", async ({ page }) => {
+  const desc = `E2E 감가상각 ${Date.now()}`;
+  await page.goto("/vouchers/new");
+  await page.getByRole("tab", { name: "일반 전표" }).click();
+  await page.getByLabel("적요", { exact: true }).fill(desc);
+  await pick(page, "1행 계정", "818");
+  await page.getByLabel("1행 차변").fill("50000");
+  await pick(page, "2행 계정", "213");
+  await page.getByLabel("2행 대변").fill("50000");
+  await expect(page.getByText("세무사 결산 수정 내역(감가상각·대손·미지급비용·법인세 등)을 입력할 때 켭니다.")).toBeVisible();
+  await page.getByRole("switch", { name: "결산 전표" }).click();
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.goto("/vouchers");
+  await page.getByLabel("구분").selectOption("closing");
+  await page.getByLabel("검색").fill(desc);
+  await page.getByRole("button", { name: "조회" }).click();
+  const row = page.getByRole("row", { name: new RegExp(desc) });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("결산");
+
+  await page.getByLabel("구분").selectOption("general");
+  await page.getByRole("button", { name: "조회" }).click();
+  await expect(page.getByRole("row", { name: new RegExp(desc) })).toHaveCount(0);
+
+  await page.goto(`/vouchers?kind=closing&q=${encodeURIComponent(desc)}`);
+  await page.getByRole("row", { name: new RegExp(desc) }).click();
+  await expect(page).toHaveURL(/\/vouchers\/[0-9a-f-]{36}$/);
+  await expect(page.getByText("구분", { exact: true })).toBeVisible();
+  await expect(page.getByText("결산", { exact: true })).toBeVisible();
+});

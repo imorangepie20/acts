@@ -40,7 +40,7 @@ const line = (code: string, side: LineInput["side"], amount: number, sid = siteI
 });
 async function create(date: string, lines: LineInput[]) {
   const input: VoucherInput = {
-    date, description: "t", entryType: "general", partnerId: null, evidenceType: "none",
+    date, description: "t", entryType: "general", kind: "general", partnerId: null, evidenceType: "none",
     vatType: null, vatDeductible: null, supplyAmount: null, vatAmount: null, lines,
   };
   const r = await createVoucher(db, staff, input);

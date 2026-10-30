@@ -7,6 +7,7 @@ import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
 import { getVatAccountIds } from "@/server/accounts/service";
 import type { SessionUser } from "@/server/auth/service";
 import { getCompany, updateCompany } from "@/server/company/service";
+import { getIncomeStatement } from "@/server/reports/service";
 import { accounts, departments, partners, sites, users, voucherLines, vouchers } from "@/server/db/schema";
 import { createPartner } from "@/server/partners/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
@@ -87,6 +88,7 @@ const general = (over: Partial<VoucherInput> = {}): VoucherInput => ({
   date: "2026-10-30",
   description: "회식비",
   entryType: "general",
+  kind: "general",
   partnerId: null,
   evidenceType: "none",
   vatType: null,
@@ -282,6 +284,7 @@ describe("simple entry types", () => {
       date: "2026-10-30",
       description: "간식",
       entryType: "purchase",
+      kind: "general",
       partnerId: null,
       evidenceType: "simple_receipt",
       vatType: "taxable",
@@ -496,5 +499,54 @@ describe("listVouchers", () => {
     const p2 = await listVouchers(db, { page: 2 });
     expect(p2.rows).toHaveLength(3);
     expect(p2.rows.at(-1)).toMatchObject({ date: "2026-09-01", no: 1 });
+  });
+});
+
+describe("결산 (closing) vouchers", () => {
+  const closing = (over: Partial<VoucherInput> = {}) =>
+    general({
+      kind: "closing",
+      description: "감가상각",
+      lines: [line("818", "debit", 500_000), line("213", "credit", 500_000)],
+      ...over,
+    });
+
+  it("rejects a closing purchase voucher", async () => {
+    const r = await createVoucher(db, staff, closing({ entryType: "purchase" }));
+    expect(r).toEqual({ ok: false, error: "결산 전표는 일반 전표로만 입력합니다." });
+  });
+
+  it("saves a closing general voucher and keeps it in the income statement", async () => {
+    const f = { from: "2026-01-01", to: "2026-12-31", siteId: null, departmentId: null };
+    const operating = async () =>
+      (await getIncomeStatement(db, f)).lines.find((l) => l.kind === "computed" && l.key === "operating")!.amount;
+    const before = await operating();
+    const id = await create(closing());
+    const v = await getVoucher(db, id);
+    expect(v).toMatchObject({ kind: "closing", status: "approved" });
+    expect(await operating()).toBe(before - 500_000);
+  });
+
+  it("filters the list by kind", async () => {
+    await create(general({ description: "일반" }));
+    await create(closing());
+    expect((await listVouchers(db, { kind: "closing" })).rows.map((r) => r.description)).toEqual(["감가상각"]);
+    expect((await listVouchers(db, { kind: "closing" })).rows[0].kind).toBe("closing");
+    expect((await listVouchers(db, { kind: "general" })).rows.map((r) => r.description)).toEqual(["일반"]);
+    expect((await listVouchers(db, {})).total).toBe(2);
+  });
+
+  it("switches kind on update, writes history with kind, and still requires a general entry type", async () => {
+    const id = await create(general());
+    const v = await getVoucher(db, id);
+    const r = await updateVoucher(db, staff, id, v!.version, closing({ description: "회식비" }));
+    expect(r.ok).toBe(true);
+    expect((await getVoucher(db, id))!.kind).toBe("closing");
+    const h = await listHistory(db, id);
+    expect(h.map((x) => x.snapshot.kind)).toEqual(["general", "closing"]);
+    const v2 = await getVoucher(db, id);
+    const back = await updateVoucher(db, staff, id, v2!.version, general());
+    expect(back.ok).toBe(true);
+    expect((await getVoucher(db, id))!.kind).toBe("general");
   });
 });

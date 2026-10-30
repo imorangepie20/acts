@@ -31,6 +31,7 @@ export type EditTarget = {
   trade?: TradeInitial;
   transfer?: TransferInitial;
   general?: GeneralRow[];
+  closing?: boolean;
 };
 
 type Props = {
@@ -172,7 +173,7 @@ export function VoucherEntry({ accounts, vat, options, today, edit }: Props) {
         <TransferForm key={formKey} ctx={ctx} initial={edit?.transfer} />
       </TabsContent>
       <TabsContent value="general">
-        <GeneralForm key={formKey} ctx={ctx} initial={edit?.general} />
+        <GeneralForm key={formKey} ctx={ctx} initial={edit?.general} initialClosing={edit?.closing} />
       </TabsContent>
     </Tabs>
   );

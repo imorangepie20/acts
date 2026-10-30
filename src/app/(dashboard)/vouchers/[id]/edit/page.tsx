@@ -17,6 +17,7 @@ function editTarget(v: VoucherDetail, vat: VatAccounts): EditTarget {
     date: v.date,
     description: v.description,
     entryType: v.entryType,
+    kind: v.kind,
     partnerId: v.partnerId,
     evidenceType: v.evidenceType,
     vatType: v.vatType,
@@ -53,6 +54,7 @@ function editTarget(v: VoucherDetail, vat: VatAccounts): EditTarget {
   return {
     ...base,
     tab: "general",
+    closing: v.kind === "closing",
     general: v.lines.map((l) => ({
       accountId: l.accountId,
       debit: l.side === "debit" ? l.amount : null,

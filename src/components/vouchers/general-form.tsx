@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { formatWon } from "@/lib/money";
 import type { LineInput } from "@/lib/vouchers/types";
 import { AccountPicker } from "./account-picker";
@@ -26,7 +27,16 @@ const isBlank = (r: GeneralRow) =>
   r.accountId === null && r.debit === null && r.credit === null && r.partner === null && !r.description.trim();
 const isFilled = (r: GeneralRow) => r.accountId !== null && (r.debit !== null || r.credit !== null);
 
-export function GeneralForm({ ctx, initial }: { ctx: FormContext; initial?: GeneralRow[] }) {
+export function GeneralForm({
+  ctx,
+  initial,
+  initialClosing = false,
+}: {
+  ctx: FormContext;
+  initial?: GeneralRow[];
+  initialClosing?: boolean;
+}) {
+  const [closing, setClosing] = useState(initialClosing);
   const start = initial && initial.length >= 2 ? initial : [emptyRow(), emptyRow()];
   const nextKey = useRef(start.length);
   const [rows, setRows] = useState<KeyedRow[]>(() => start.map((r, i) => ({ ...r, key: i })));
@@ -65,6 +75,7 @@ export function GeneralForm({ ctx, initial }: { ctx: FormContext; initial?: Gene
             date: header.date,
             description: header.description,
             entryType: "general",
+            kind: closing ? "closing" : "general",
             partnerId: lines.find((l) => l.partnerId !== null)?.partnerId ?? null,
             evidenceType: "none",
             vatType: null,
@@ -173,6 +184,18 @@ export function GeneralForm({ ctx, initial }: { ctx: FormContext; initial?: Gene
             </tr>
           </tfoot>
         </table>
+      </div>
+
+      <div className="flex items-start gap-3">
+        <Switch id="voucher-closing" checked={closing} onCheckedChange={setClosing} className="mt-0.5" />
+        <div className="flex flex-col gap-0.5">
+          <label htmlFor="voucher-closing" className="text-sm font-medium">
+            결산 전표
+          </label>
+          <p className="text-xs text-muted-foreground">
+            세무사 결산 수정 내역(감가상각·대손·미지급비용·법인세 등)을 입력할 때 켭니다.
+          </p>
+        </div>
       </div>
 
       <SaveBar error={ctx.error} pending={ctx.pending} disabled={!canSave} />
