@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
+import { recommendAccountsAction } from "@/app/(dashboard)/vouchers/actions";
 import { Switch } from "@/components/ui/switch";
 import type { AccountGroup } from "@/lib/accounts";
+import type { Recommendation } from "@/lib/recommend";
 import {
   buildSimpleVoucher,
   defaultVat,
@@ -74,6 +76,38 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
       : { total: null, supply: null, vat: null },
   );
 
+  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const partnerId = partner?.id ?? null;
+  const text = ctx.common.description;
+  const hasQuery = partnerId !== null || text.trim() !== "";
+  const lastPartner = useRef(partnerId);
+  useEffect(() => {
+    if (!hasQuery) return;
+    // A partner pick fetches at once; typing waits for 400 ms of idle.
+    const delay = lastPartner.current !== partnerId ? 0 : 400;
+    lastPartner.current = partnerId;
+    let stale = false;
+    const t = setTimeout(() => {
+      recommendAccountsAction({ entryType: kind, partnerId, text })
+        .then((r) => {
+          if (!stale) setRecs(r.ok ? r.value : []);
+        })
+        .catch(() => {
+          if (!stale) setRecs([]);
+        });
+    }, delay);
+    return () => {
+      stale = true;
+      clearTimeout(t);
+    };
+  }, [kind, partnerId, text, hasQuery]);
+  const chips = hasQuery
+    ? recs.flatMap((r) => {
+        const a = ctx.accounts.find((x) => x.id === r.accountId);
+        return a && a.id !== mainId ? [{ a, reason: r.reason }] : [];
+      })
+    : [];
+
   const p = kind;
   const noVatEvidence = kind === "purchase" && (evidence === "simple_receipt" || evidence === "none");
   const effectiveVatType: VatType = evidence === "invoice" ? "exempt" : vatType;
@@ -119,6 +153,21 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
             value={mainId}
             onChange={setMainId}
           />
+          {chips.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="추천 계정">
+              {chips.map(({ a, reason }) => (
+                <button
+                  key={a.id}
+                  type="button"
+                  title={reason}
+                  className="rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                  onClick={() => setMainId(a.id)}
+                >
+                  {a.code} {a.name}
+                </button>
+              ))}
+            </div>
+          )}
         </Field>
         <Field label={setup.counterLabel} htmlFor={`${p}-counter`}>
           <AccountPicker

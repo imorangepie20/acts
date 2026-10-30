@@ -120,3 +120,31 @@ test("결산 전표: 입력 후 구분 필터로 조회", async ({ page }) => {
   await expect(page.getByText("구분", { exact: true })).toBeVisible();
   await expect(page.getByText("결산", { exact: true })).toBeVisible();
 });
+
+test("계정 추천: 같은 거래처의 이전 계정이 칩으로 나온다", async ({ page }) => {
+  const partner = `E2E추천 ${Date.now()}`;
+
+  await page.goto("/vouchers/new");
+  await pick(page, "계정", "811");
+  await pick(page, "결제 계정", "253");
+  await page.getByRole("combobox", { name: "거래처" }).click();
+  await page.getByPlaceholder("거래처명 또는 사업자등록번호").fill(partner);
+  await page.getByRole("option", { name: /새 거래처 추가/ }).click();
+  await page.getByRole("dialog", { name: "새 거래처 추가" }).getByRole("button", { name: "추가" }).click();
+  await expect(page.getByRole("combobox", { name: "거래처" })).toContainText(partner);
+  await page.getByLabel("합계").fill("10000");
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  // a fresh purchase: picking the same partner suggests the account used before
+  await page.goto("/vouchers/new");
+  await page.getByRole("combobox", { name: "거래처" }).click();
+  await page.getByPlaceholder("거래처명 또는 사업자등록번호").fill(partner);
+  await page.getByRole("option").filter({ hasText: partner }).filter({ hasNotText: "새 거래처 추가" }).click();
+  await expect(page.getByRole("combobox", { name: "거래처" })).toContainText(partner);
+  const chip = page.getByRole("group", { name: "추천 계정" }).getByRole("button", { name: "811 복리후생비" });
+  await expect(chip).toBeVisible();
+  await chip.click();
+  await expect(page.getByRole("combobox", { name: "계정", exact: true })).toContainText("811 복리후생비");
+  await expect(chip).toHaveCount(0);
+});

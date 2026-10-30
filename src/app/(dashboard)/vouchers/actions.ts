@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import type { Recommendation } from "@/lib/recommend";
 import { buildSimpleVoucher } from "@/lib/vouchers/simple";
 import type { VoucherInput } from "@/lib/vouchers/types";
 import { getVatAccountIds } from "@/server/accounts/service";
@@ -10,6 +11,7 @@ import { MAX_ATTACHMENT_BYTES } from "@/server/attachments/storage";
 import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
 import { searchPartners } from "@/server/partners/service";
+import { recommendAccounts } from "@/server/recommend/service";
 import { fail, type Result } from "@/server/result";
 import { parseVoucherPayload } from "@/server/vouchers/form";
 import { approveVoucher, createVoucher, deleteVoucher, rejectVoucher, updateVoucher } from "@/server/vouchers/service";
@@ -106,4 +108,17 @@ export async function searchPartnersAction(q: string): Promise<PartnerOption[]> 
   const text = typeof q === "string" ? q.slice(0, 100) : "";
   const rows = await searchPartners(db, text);
   return rows.map(({ id, name, businessNumber }) => ({ id, name, businessNumber }));
+}
+
+const recommendSchema = z.object({
+  entryType: z.enum(["purchase", "sale"]),
+  partnerId: z.number().int().positive().nullable(),
+  text: z.string().max(200),
+});
+
+export async function recommendAccountsAction(input: unknown): Promise<Result<Recommendation[]>> {
+  await requirePermission("voucher:create");
+  const p = recommendSchema.safeParse(input);
+  if (!p.success) return fail(INVALID);
+  return { ok: true, value: await recommendAccounts(db, p.data) };
 }
