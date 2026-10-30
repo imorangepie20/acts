@@ -49,6 +49,9 @@ async function watermark(conn: Conn): Promise<string | null> {
   return row?.month ?? null;
 }
 
+/** Latest closed month (`YYYY-MM`) for display, or null. */
+export const latestClosedMonth = (db: Conn): Promise<string | null> => watermark(db);
+
 /**
  * Month close is a watermark: a month is closed when any `period_closes` row is at or after it
  * ("closed through M"), so a write into an earlier empty month cannot move figures as of M.

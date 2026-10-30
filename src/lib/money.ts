@@ -19,3 +19,14 @@ export function parseSignedWon(input: string): number | null {
 export function formatWon(n: number): string {
   return n.toLocaleString("en-US");
 }
+
+/** Short Korean amount for headline figures: "11억 4,000만", "6,200만", "9,999원" (sub-만 remainder is truncated). */
+export function formatKoreanShort(n: number): string {
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  const eok = Math.floor(abs / 100_000_000);
+  const man = Math.floor((abs % 100_000_000) / 10_000);
+  if (eok > 0) return `${sign}${formatWon(eok)}억${man > 0 ? ` ${formatWon(man)}만` : ""}`;
+  if (man > 0) return `${sign}${formatWon(man)}만`;
+  return `${sign}${formatWon(abs)}원`;
+}

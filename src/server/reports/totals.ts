@@ -46,3 +46,37 @@ export async function profitBetween(db: Db, f: TotalsFilter): Promise<number> {
   const pnl = new Set(groups.filter((a) => isPnlGroup(a.group)).map((a) => a.id));
   return totals.reduce((s, t) => (pnl.has(t.accountId) ? s + t.credit - t.debit : s), 0);
 }
+
+/** Like `accountTotals` over [from, to], but one SQL query grouped by `YYYY-MM` and account. */
+export async function accountTotalsByMonth(
+  db: Db,
+  f: { from: string; to: string; siteId: number | null; departmentId: number | null },
+): Promise<Map<string, AccountTotal[]>> {
+  const debit = sql<number>`coalesce(sum(case when ${voucherLines.side} = 'debit' then ${voucherLines.amount} else 0 end), 0)::bigint`;
+  const credit = sql<number>`coalesce(sum(case when ${voucherLines.side} = 'credit' then ${voucherLines.amount} else 0 end), 0)::bigint`;
+  const month = sql<string>`to_char(${vouchers.date}, 'YYYY-MM')`;
+  const rows = await db
+    .select({ month, accountId: voucherLines.accountId, debit, credit })
+    .from(voucherLines)
+    .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
+    .where(
+      and(
+        inArray(vouchers.status, [...POSTED_STATUSES]),
+        gte(vouchers.date, f.from),
+        lte(vouchers.date, f.to),
+        f.siteId === null ? undefined : eq(voucherLines.siteId, f.siteId),
+        f.departmentId === null ? undefined : eq(voucherLines.departmentId, f.departmentId),
+      ),
+    )
+    .groupBy(month, voucherLines.accountId)
+    .orderBy(month, voucherLines.accountId);
+  const out = new Map<string, AccountTotal[]>();
+  for (const r of rows) {
+    const t = { accountId: r.accountId, debit: Number(r.debit), credit: Number(r.credit) };
+    if (t.debit === 0 && t.credit === 0) continue;
+    const list = out.get(r.month);
+    if (list) list.push(t);
+    else out.set(r.month, [t]);
+  }
+  return out;
+}
