@@ -18,6 +18,7 @@ import type {
 import { getVatAccountIds } from "@/server/accounts/service";
 import { removeStored } from "@/server/attachments/storage";
 import type { SessionUser } from "@/server/auth/service";
+import { assertMonthsOpen } from "@/server/closing/periods";
 import type { Db } from "@/server/db/client";
 import {
   accounts,
@@ -235,6 +236,16 @@ function sameVoucher(a: VoucherInput, b: VoucherInput): boolean {
   );
 }
 
+/**
+ * Stored date read before the transaction, so the month lock can be taken first. Callers re-check
+ * it against the row locked by `lockForWrite` and return the conflict message if it moved.
+ */
+async function storedDate(db: Db, id: string): Promise<string | null> {
+  if (!isUuid(id)) return null;
+  const [v] = await db.select({ date: vouchers.date }).from(vouchers).where(eq(vouchers.id, id));
+  return v?.date ?? null;
+}
+
 /** Next number for the date, serialised per date by a transaction-scoped advisory lock. */
 async function nextNo(tx: Tx, date: string): Promise<number> {
   await tx.execute(sql`select pg_advisory_xact_lock(${NUMBERING_LOCK}::int, ${epochDay(date)!}::int)`);
@@ -274,6 +285,9 @@ export async function createVoucher(
 ): Promise<Result<{ id: string }>> {
   const vat = await loadVat(db);
   return db.transaction(async (tx) => {
+    // Lock order (every voucher write): month locks → company FOR SHARE → voucher row → numbering.
+    const closed = await assertMonthsOpen(tx, [input.date]);
+    if (closed) return fail(closed);
     const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
     const error = await validate(tx, ctx, input, NONE_ALLOWED);
     if (error) return fail(error);
@@ -294,12 +308,16 @@ export async function createVoucher(
   });
 }
 
-/** Locks the stored voucher and checks existence, permission (default: may modify) and version. */
+/**
+ * Locks the stored voucher and checks existence, permission (default: may modify), version, and
+ * that its date is still `expectedDate` (the pre-transaction read the month locks were taken for).
+ */
 async function lockForWrite(
   tx: Tx,
   actor: SessionUser,
   id: string,
   version: number,
+  expectedDate: string | null,
   permitted: (v: { createdBy: string }) => Result = (v) => (canModify(actor, v) ? ok() : fail(ERR_FORBIDDEN)),
 ): Promise<Result<{ date: string; status: VoucherStatus }>> {
   if (!isUuid(id)) return fail(ERR_NOT_FOUND);
@@ -316,7 +334,7 @@ async function lockForWrite(
   if (!v) return fail(ERR_NOT_FOUND);
   const allowed = permitted(v);
   if (!allowed.ok) return allowed;
-  if (v.version !== version) return fail(ERR_CONFLICT);
+  if (v.version !== version || v.date !== expectedDate) return fail(ERR_CONFLICT);
   return ok({ date: v.date, status: v.status });
 }
 
@@ -328,9 +346,13 @@ export async function updateVoucher(
   input: VoucherInput,
 ): Promise<Result> {
   const vat = await loadVat(db);
+  const oldDate = await storedDate(db, id);
   return db.transaction(async (tx) => {
+    // Both the stored month (moving out) and the new one (moving in) must be open.
+    const closed = await assertMonthsOpen(tx, oldDate === null ? [input.date] : [oldDate, input.date]);
+    if (closed) return fail(closed);
     const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
-    const locked = await lockForWrite(tx, actor, id, version);
+    const locked = await lockForWrite(tx, actor, id, version, oldDate);
     if (!locked.ok) return locked;
 
     const stored = await tx.select(lineColumns).from(voucherLines).where(eq(voucherLines.voucherId, id));
@@ -367,8 +389,11 @@ export async function updateVoucher(
 }
 
 export async function deleteVoucher(db: Db, actor: SessionUser, id: string, version: number): Promise<Result> {
+  const oldDate = await storedDate(db, id);
   const r = await db.transaction(async (tx): Promise<Result<string[]>> => {
-    const locked = await lockForWrite(tx, actor, id, version);
+    const closed = await assertMonthsOpen(tx, oldDate === null ? [] : [oldDate]);
+    if (closed) return fail(closed);
+    const locked = await lockForWrite(tx, actor, id, version, oldDate);
     if (!locked.ok) return locked;
     const snapshot = (await loadSnapshot(tx, id))!;
     // Attachment rows go with the voucher (ON DELETE CASCADE); their files are unlinked after commit.
@@ -517,8 +542,11 @@ async function decide(
   note: string | null,
 ): Promise<Result> {
   if (!can(actor.role, "voucher:approve")) return fail(ERR_NO_APPROVE);
+  const oldDate = await storedDate(db, id);
   return db.transaction(async (tx) => {
-    const locked = await lockForWrite(tx, actor, id, version, () => ok());
+    const closed = await assertMonthsOpen(tx, oldDate === null ? [] : [oldDate]);
+    if (closed) return fail(closed);
+    const locked = await lockForWrite(tx, actor, id, version, oldDate, () => ok());
     if (!locked.ok) return locked;
     if (locked.value.status !== "pending") return fail(ERR_NOT_PENDING);
     const updated = await tx

@@ -6,6 +6,7 @@ import { toSimpleInput, type VatAccounts } from "@/lib/vouchers/simple";
 import type { VoucherInput } from "@/lib/vouchers/types";
 import { getVatAccountIds, listAccounts } from "@/server/accounts/service";
 import { requirePermission } from "@/server/auth/dal";
+import { isMonthClosed, monthOf } from "@/server/closing/periods";
 import { db } from "@/server/db";
 import { getEntryOptions, listDepartments, listSites } from "@/server/sites/service";
 import { canModify, getVoucher, type VoucherDetail } from "@/server/vouchers/service";
@@ -69,6 +70,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const voucher = await getVoucher(db, id);
   if (!voucher) notFound();
   if (!canModify(user, { createdBy: voucher.createdBy.id })) redirect(`/vouchers/${id}`);
+  if (await isMonthClosed(db, monthOf(voucher.date))) redirect(`/vouchers/${id}`);
 
   const [allAccounts, vat, activeOptions, allSites, allDepartments] = await Promise.all([
     listAccounts(db),

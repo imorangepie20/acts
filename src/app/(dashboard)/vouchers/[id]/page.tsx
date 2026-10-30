@@ -6,6 +6,7 @@ import { can } from "@/lib/permissions";
 import { listAccounts } from "@/server/accounts/service";
 import { listAttachments } from "@/server/attachments/service";
 import { requirePermission } from "@/server/auth/dal";
+import { isMonthClosed, monthOf } from "@/server/closing/periods";
 import { db } from "@/server/db";
 import { listPartnersByIds } from "@/server/partners/service";
 import { canModify, getVoucher, listHistory } from "@/server/vouchers/service";
@@ -26,10 +27,18 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const partnerIds = history.flatMap((h) =>
     [h.snapshot.partnerId, ...h.snapshot.lines.map((l) => l.partnerId)].filter((p): p is number => p !== null),
   );
-  const partners = await listPartnersByIds(db, partnerIds);
-  const modifiable = canModify(user, { createdBy: voucher.createdBy.id });
+  const [partners, closed] = await Promise.all([
+    listPartnersByIds(db, partnerIds),
+    isMonthClosed(db, monthOf(voucher.date)),
+  ]);
+  const modifiable = !closed && canModify(user, { createdBy: voucher.createdBy.id });
   return (
-    <VoucherDetail voucher={voucher} canModify={modifiable} canApprove={can(user.role, "voucher:approve")}>
+    <VoucherDetail
+      voucher={voucher}
+      canModify={modifiable}
+      canApprove={can(user.role, "voucher:approve")}
+      closed={closed}
+    >
       <VoucherAttachments voucherId={voucher.id} attachments={attachments} canModify={modifiable} />
       <VoucherHistory
         entries={history}

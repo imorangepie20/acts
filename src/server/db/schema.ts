@@ -270,3 +270,16 @@ export const voucherAttachments = pgTable(
   },
   (t) => [index("voucher_attachments_voucher_id_idx").on(t.voucherId)],
 );
+
+/** A closed month (`YYYY-MM`): its vouchers can no longer be added, changed or deleted. */
+export const periodCloses = pgTable(
+  "period_closes",
+  {
+    month: text("month").primaryKey(),
+    closedBy: uuid("closed_by")
+      .notNull()
+      .references(() => users.id),
+    closedAt: timestamp("closed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("period_closes_month_format", sql`${t.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`)],
+);

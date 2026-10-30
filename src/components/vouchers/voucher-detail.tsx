@@ -16,6 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,11 +62,14 @@ export function VoucherDetail({
   voucher: v,
   canModify,
   canApprove = false,
+  closed = false,
   children,
 }: {
   voucher: Detail;
   canModify: boolean;
   canApprove?: boolean;
+  /** The voucher's month is closed: show 마감됨 and no actions (the service refuses them anyway). */
+  closed?: boolean;
   /** History section, rendered on the server. */
   children?: React.ReactNode;
 }) {
@@ -113,9 +117,10 @@ export function VoucherDetail({
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-semibold tabular-nums">전표 {formatVoucherNo(v.date, v.no)}</h1>
           <StatusBadge status={v.status} />
+          {closed && <Badge variant="outline">마감됨</Badge>}
         </div>
         <div className="flex gap-2">
-          {canApprove && v.status === "pending" && (
+          {!closed && canApprove && v.status === "pending" && (
             <>
               <Button disabled={pending} onClick={approve}>
                 승인
@@ -145,7 +150,7 @@ export function VoucherDetail({
               </Dialog>
             </>
           )}
-          {canModify && (
+          {!closed && canModify && (
           <>
             <Button variant="outline" nativeButton={false} render={<Link href={`/vouchers/${v.id}/edit`} />}>
               수정

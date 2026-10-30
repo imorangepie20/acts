@@ -58,7 +58,14 @@ export async function addHistory(
   await tx.insert(voucherHistory).values({ voucherId, action, userId, snapshot, note });
 }
 
-/** Approves every pending voucher (approval switched off). Call inside the settings transaction. */
+/**
+ * Approves every pending voucher (approval switched off). Call inside the settings transaction.
+ *
+ * Takes no month lock, on purpose: closing a month requires zero pending vouchers in it, and every
+ * write that could leave one pending holds that month's lock, so no pending voucher is ever in a
+ * closed month and this cannot touch one. Locking months here would also put month locks after the
+ * company row lock, inverting the voucher-write order (month → company → voucher → numbering).
+ */
 export async function approveAllPending(tx: Tx, actorId: string): Promise<void> {
   const rows = await tx
     .update(vouchers)
