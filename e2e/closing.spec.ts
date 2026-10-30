@@ -78,6 +78,9 @@ test("기초잔액: 2000-01-01 기준 101·331 1,000,000 저장, 다시 저장�
   await expect(row).toContainText("기초");
   await row.click();
   await expect(page).toHaveURL(/\/vouchers\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("link", { name: "기초잔액 화면에서 수정" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "수정" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "삭제" })).toHaveCount(0);
   await page.goto(`${page.url()}/edit`);
   await expect(page).toHaveURL(/\/closing\/opening$/);
 });
@@ -135,4 +138,31 @@ test("월 마감: 2000-01 → 2000-02 마감, 마감된 월의 전표는 수정�
   await expect(page.getByLabel("증빙 파일 첨부")).toHaveCount(0);
   await page.goto(`${detailUrl}/edit`);
   await expect(page).toHaveURL(detailUrl);
+});
+
+test("연도 이월: 세무사 금액을 저장하면 시스템과의 차이가 표시된다 (연도 마감은 하지 않는다)", async ({ page }) => {
+  await page.goto("/closing/opening?fy=2000-01-01");
+  await expect(page.getByRole("tab", { name: "연도 이월" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("회계연도 2000-01-01 ~ 2000-12-31")).toBeVisible();
+  await expect(page.getByText("별도의 이월 전표는 만들지 않습니다.")).toBeVisible();
+
+  // far from any real 2000 figure, so the 차이 is non-zero on every re-run
+  await fillWon(page, "세무사 자산총계", "123456789", "123,456,789");
+  await fillWon(page, "세무사 부채총계", "1000", "1,000");
+  await fillWon(page, "세무사 자본총계", "123455789", "123,455,789");
+  await fillWon(page, "세무사 당기순이익", "777", "777");
+  await page.getByRole("button", { name: "세무사 금액 저장", exact: true }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel("세무사 자산총계", { exact: true })).toHaveValue("123,456,789");
+  const yearRow = (label: string) => page.getByRole("row").filter({ hasText: label });
+  for (const label of ["자산총계", "부채총계", "자본총계", "당기순이익"]) {
+    const diff = yearRow(label).getByRole("cell").last();
+    await expect(diff).not.toHaveText(/^(0|-)$/);
+    await expect(diff).toHaveClass(/text-destructive/);
+  }
+
+  // not all 12 months are closed, so the year cannot be closed
+  await expect(page.getByRole("button", { name: "회계연도 마감", exact: true })).toBeDisabled();
 });

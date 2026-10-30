@@ -285,3 +285,19 @@ export const periodCloses = pgTable(
   },
   (t) => [check("period_closes_month_format", sql`${t.month} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`)],
 );
+
+/**
+ * A fiscal year's 세무사 reconciliation. `taxFigures` (what the 세무사 filed) may be saved while the
+ * year is open; `closedAt` / `closedBy` are set once the year is closed (all 12 months closed).
+ */
+export const fiscalYearCloses = pgTable("fiscal_year_closes", {
+  fiscalStart: date("fiscal_start").primaryKey(),
+  closedBy: uuid("closed_by").references(() => users.id),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  taxFigures: jsonb("tax_figures").$type<{
+    totalAssets: number;
+    totalLiabilities: number;
+    totalEquity: number;
+    netIncome: number;
+  }>(),
+});

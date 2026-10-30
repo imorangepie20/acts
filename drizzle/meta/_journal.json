@@ -78,6 +78,13 @@
       "when": 1793324658532,
       "tag": "0010_opening_voucher",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793326601521,
+      "tag": "0011_magenta_swordsman",
+      "breakpoints": true
     }
   ]
 }

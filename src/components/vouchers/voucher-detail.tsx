@@ -151,7 +151,12 @@ export function VoucherDetail({
               </Dialog>
             </>
           )}
-          {!closed && canModify && (
+          {!closed && v.kind === "opening" && canModify && (
+            <Link href="/closing/opening" className="self-center text-sm text-muted-foreground underline underline-offset-4">
+              기초잔액 화면에서 수정
+            </Link>
+          )}
+          {!closed && v.kind !== "opening" && canModify && (
           <>
             <Button variant="outline" nativeButton={false} render={<Link href={`/vouchers/${v.id}/edit`} />}>
               수정

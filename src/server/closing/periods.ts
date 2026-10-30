@@ -1,9 +1,9 @@
-import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import { can } from "@/lib/permissions";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import type { SessionUser } from "@/server/auth/service";
 import type { Db } from "@/server/db/client";
-import { periodCloses, users, vouchers } from "@/server/db/schema";
+import { fiscalYearCloses, periodCloses, users, vouchers } from "@/server/db/schema";
 import { fail, ok, type Result } from "@/server/result";
 import type { Conn, Tx } from "@/server/vouchers/snapshot";
 
@@ -24,6 +24,7 @@ const errEarlier = (month: string) => `이전 월(${month})을 먼저 마감하�
 const errPending = (n: number) => `승인 대기 전표가 ${n}건 있어 마감할 수 없습니다.`;
 const ERR_NOT_LATEST = "가장 최근에 마감한 월부터 해제할 수 있습니다.";
 const ERR_NOT_CLOSED = "마감되지 않은 월입니다.";
+const ERR_YEAR_CLOSED = "회계연도 마감을 먼저 해제하세요.";
 export const closedMonthMessage = (month: string) => `마감된 월(${month})의 전표는 추가·수정·삭제할 수 없습니다.`;
 
 const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
@@ -183,6 +184,18 @@ export async function reopenMonth(db: Db, actor: SessionUser, month: string): Pr
     await lockPeriodsExclusive(tx);
     const through = await watermark(tx);
     if (through === null || month > through) return fail(ERR_NOT_CLOSED);
+    const [inClosedYear] = await tx
+      .select({ start: fiscalYearCloses.fiscalStart })
+      .from(fiscalYearCloses)
+      .where(
+        and(
+          isNotNull(fiscalYearCloses.closedAt),
+          sql`${fiscalYearCloses.fiscalStart} <= ${firstDay(month)}::date`,
+          sql`${firstDay(month)}::date < ${fiscalYearCloses.fiscalStart} + interval '1 year'`,
+        ),
+      )
+      .limit(1);
+    if (inClosedYear) return fail(ERR_YEAR_CLOSED);
     if (month < through) return fail(ERR_NOT_LATEST);
     await tx.delete(periodCloses).where(eq(periodCloses.month, month));
     return ok();
