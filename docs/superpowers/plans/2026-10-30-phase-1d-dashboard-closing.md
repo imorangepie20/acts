@@ -184,10 +184,10 @@ Standard chart values (data, set in `STANDARD_ACCOUNTS`):
     - `closedAt timestamptz not null default now()`
   - `PERIOD_LOCK`, `monthOf(date: string): string`, `monthKey(month: string): number`
   - `assertMonthsOpen(tx, dates: string[]): Promise<string | null>`
-    - Locks every distinct month shared, in ascending key order.
+    - Takes the global period lock `(PERIOD_LOCK, 0)` shared, then refuses any date whose month is at or before the watermark (latest `period_closes.month`).
     - Returns the closed-month message for the first closed month, else `null`.
   - `isMonthClosed(db, month: string): Promise<boolean>`
-  - `type MonthStatus = { month: string; closed: boolean; closedAt: Date | null; closedByName: string | null; voucherCount: number; pendingCount: number }`
+  - `type MonthStatus = { month: string; closed: boolean; closedAt: Date | null; closedByName: string | null; voucherCount: number; pendingCount: number; reopenable: boolean }`
   - `listMonthStatus(db, fiscalStart: string): Promise<MonthStatus[]>`: the 12 months of that fiscal year.
   - `closeMonth(db, actor: SessionUser, month: string): Promise<Result>`
   - `reopenMonth(db, actor: SessionUser, month: string): Promise<Result>`
