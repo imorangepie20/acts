@@ -124,7 +124,15 @@ export type AccountLedger = {
   /** 1-based page, or null for the full ledger. */
   page: number | null;
   pages: number;
+  /** P&L accounts are read one fiscal year at a time: the new `from` (fiscal year start) when it was moved up, else null. */
+  clampedFrom: string | null;
 };
+
+/** P&L ranges never span fiscal years: `from` moves up to the fiscal year start of `to`. */
+function clampPnl(f: ReportFilter, startMonth: number): { f: ReportFilter; clampedFrom: string | null } {
+  const start = fiscalYearStart(f.to, startMonth);
+  return f.from < start ? { f: { ...f, from: start }, clampedFrom: start } : { f, clampedFrom: null };
+}
 
 /**
  * 계정별 원장 with running balance, 월계 and 누계. `null` for an unknown account.
@@ -135,14 +143,16 @@ export type AccountLedger = {
 export async function getAccountLedger(
   db: Db,
   accountId: number,
-  f: ReportFilter,
+  filter: ReportFilter,
   opts: { partnerId?: number | null; page?: number | null; pageSize?: number } = {},
 ): Promise<AccountLedger | null> {
   const account = await getAccountById(db, accountId);
   if (!account) return null;
   const company = await getCompany(db);
   const sign = normalSideOf(account.group) === "debit" ? 1 : -1;
-  const openFrom = isPnlGroup(account.group) ? fiscalYearStart(f.from, company.fiscalYearStartMonth) : null;
+  const pnl = isPnlGroup(account.group);
+  const { f, clampedFrom } = pnl ? clampPnl(filter, company.fiscalYearStartMonth) : { f: filter, clampedFrom: null };
+  const openFrom = pnl ? fiscalYearStart(f.from, company.fiscalYearStartMonth) : null;
   const partnerCond = opts.partnerId == null ? undefined : eq(voucherLines.partnerId, opts.partnerId);
   const common = [...scope(f), eq(voucherLines.accountId, accountId), partnerCond];
   const inPeriod = and(...common, gte(vouchers.date, f.from), lte(vouchers.date, f.to));
@@ -247,7 +257,7 @@ export async function getAccountLedger(
     }
   });
   const pages = page === null ? 1 : Math.max(1, Math.ceil(totalLines / size));
-  return { account, rows, closing: balance, totalLines, page, pages };
+  return { account, rows, closing: balance, totalLines, page, pages, clampedFrom };
 }
 
 /** Debit/credit per month over the first `n` ledger lines (the pages before the current one). */
@@ -283,12 +293,14 @@ export type PartnerSummaryRow = {
 export const NO_PARTNER_LABEL = "(거래처 없음)";
 
 /** 거래처별 원장 summary for one account: one aggregate query, grouped by partner. */
-export async function getPartnerSummary(db: Db, accountId: number, f: ReportFilter): Promise<PartnerSummaryRow[]> {
+export async function getPartnerSummary(db: Db, accountId: number, filter: ReportFilter): Promise<PartnerSummaryRow[]> {
   const account = await getAccountById(db, accountId);
   if (!account) return [];
   const company = await getCompany(db);
   const sign = normalSideOf(account.group) === "debit" ? 1 : -1;
-  const openFrom = isPnlGroup(account.group) ? fiscalYearStart(f.from, company.fiscalYearStartMonth) : null;
+  const pnl = isPnlGroup(account.group);
+  const f = pnl ? clampPnl(filter, company.fiscalYearStartMonth).f : filter;
+  const openFrom = pnl ? fiscalYearStart(f.from, company.fiscalYearStartMonth) : null;
 
   const before = sql`${vouchers.date} < ${f.from}${openFrom === null ? sql`` : sql` and ${vouchers.date} >= ${openFrom}`}`;
   const inPeriod = sql`${vouchers.date} >= ${f.from} and ${vouchers.date} <= ${f.to}`;

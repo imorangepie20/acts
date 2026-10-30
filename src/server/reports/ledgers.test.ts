@@ -130,6 +130,28 @@ describe("getAccountLedger", () => {
     expect(l!.closing).toBe(300);
   });
 
+  it("clamps a P&L ledger to the fiscal year of `to`", async () => {
+    await create("2025-09-01", [line("811", "debit", 700), line("101", "credit", 700)]);
+    await create("2026-02-01", [line("811", "debit", 300), line("101", "credit", 300)]);
+    const f = { ...F, from: "2025-07-01", to: "2026-06-30" };
+    const l = await getAccountLedger(db, acc["811"], f);
+    expect(l!.clampedFrom).toBe("2026-01-01");
+    const dates = l!.rows.filter((r) => r.kind === "line").map((r) => r.kind === "line" && r.date);
+    expect(dates).toEqual(["2026-02-01"]);
+    expect(l!.closing).toBe(300);
+    const s = await getPartnerSummary(db, acc["811"], f);
+    expect(s.reduce((n, r) => n + r.debit, 0)).toBe(300);
+  });
+
+  it("does not clamp a balance-sheet ledger or a within-year P&L ledger", async () => {
+    await create("2025-09-01", [line("103", "debit", 700), line("101", "credit", 700)]);
+    const f = { ...F, from: "2025-07-01", to: "2026-06-30" };
+    const l = await getAccountLedger(db, acc["103"], f);
+    expect(l!.clampedFrom).toBeNull();
+    expect(l!.closing).toBe(700);
+    expect((await getAccountLedger(db, acc["811"], F))!.clampedFrom).toBeNull();
+  });
+
   it("partnerId restricts lines but keeps the same opening logic", async () => {
     const [{ id: pid }] = await db.insert(partners).values({ name: "거래처" }).returning({ id: partners.id });
     await create("2026-02-05", [{ ...line("103", "debit", 500), partnerId: pid }, line("101", "credit", 500)]);

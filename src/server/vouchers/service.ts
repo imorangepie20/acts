@@ -248,7 +248,7 @@ async function nextNo(tx: Tx, date: string): Promise<number> {
 function statusFields(ctx: Context, actor: SessionUser) {
   return ctx.approvalRequired
     ? { status: "pending" as const, approvedBy: null, approvedAt: null }
-    : { status: "approved" as const, approvedBy: actor.id, approvedAt: new Date() };
+    : { status: "approved" as const, approvedBy: actor.id, approvedAt: sql`now()` };
 }
 
 async function insertLines(tx: Tx, voucherId: string, lines: LineInput[]): Promise<void> {
@@ -513,7 +513,7 @@ async function decide(
   id: string,
   version: number,
   action: "approved" | "rejected",
-  set: Partial<typeof vouchers.$inferInsert>,
+  set: { [K in keyof typeof vouchers.$inferInsert]?: (typeof vouchers.$inferInsert)[K] | SQL },
   note: string | null,
 ): Promise<Result> {
   if (!can(actor.role, "voucher:approve")) return fail(ERR_NO_APPROVE);
@@ -536,7 +536,7 @@ export function approveVoucher(db: Db, actor: SessionUser, id: string, version: 
   return decide(db, actor, id, version, "approved", {
     status: "approved",
     approvedBy: actor.id,
-    approvedAt: new Date(),
+    approvedAt: sql`now()`,
     rejectReason: null,
   }, null);
 }

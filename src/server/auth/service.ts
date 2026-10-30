@@ -44,7 +44,7 @@ export async function authenticate(
       .set({
         failedLoginCount: sql`CASE WHEN ${reached} THEN 0 ELSE ${nextCount} END`,
         lockedUntil: sql`CASE WHEN ${reached} THEN ${lockAt.toISOString()}::timestamptz ELSE ${users.lockedUntil} END`,
-        updatedAt: now,
+        updatedAt: sql`now()`,
       })
       .where(and(eq(users.id, u.id), unlocked))
       .returning({ id: users.id });
@@ -53,7 +53,7 @@ export async function authenticate(
 
   const cleared = await db
     .update(users)
-    .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: now })
+    .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: sql`now()` })
     .where(and(eq(users.id, u.id), unlocked))
     .returning({ id: users.id });
   if (cleared.length === 0) return { ok: false, reason: "locked" };

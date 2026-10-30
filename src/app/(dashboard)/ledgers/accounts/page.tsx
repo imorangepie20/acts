@@ -44,6 +44,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
       </div>
       {ledger ? (
         <>
+          {ledger.clampedFrom && (
+            <p className="text-sm text-muted-foreground">
+              손익 계정은 회계연도 단위로 조회합니다. ({ledger.clampedFrom}부터)
+            </p>
+          )}
           <AccountLedgerTable rows={ledger.rows} />
           <LedgerPager page={ledger.page ?? 1} pages={ledger.pages} totalLines={ledger.totalLines} href={pageHref} />
         </>

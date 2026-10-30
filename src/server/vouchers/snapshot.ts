@@ -65,7 +65,7 @@ export async function approveAllPending(tx: Tx, actorId: string): Promise<void> 
     .set({
       status: "approved",
       approvedBy: actorId,
-      approvedAt: new Date(),
+      approvedAt: sql`now()`,
       version: sql`${vouchers.version} + 1`,
       updatedAt: sql`now()`,
     })

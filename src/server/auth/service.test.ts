@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestDb, resetDb } from "../../../tests/helpers/db";
 import { sessions, users } from "@/server/db/schema";
@@ -40,6 +40,13 @@ beforeEach(async () => {
 });
 
 describe("authenticate", () => {
+  it("stamps updatedAt from the DB clock on login, not the injected now", async () => {
+    const [{ t }] = (await db.execute(sql`select now() as t`)) as unknown as { t: Date }[];
+    const r = await authenticate(db, EMAIL, PW, new Date("2020-01-01T00:00:00Z"));
+    expect(r.ok).toBe(true);
+    expect((await row()).updatedAt.getTime()).toBeGreaterThanOrEqual(new Date(t).getTime());
+  });
+
   it("normalizes email", async () => {
     const r = await authenticate(db, "  Kim@ACTS.kr ", PW);
     expect(r.ok).toBe(true);
