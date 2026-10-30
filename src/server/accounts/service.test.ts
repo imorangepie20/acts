@@ -54,6 +54,15 @@ describe("updateAccount", () => {
     const [row] = await listAccounts(db);
     expect(row).toMatchObject({ name: "새이름", isActive: false, requiresPartner: true });
   });
+  it("sets and clears the dashboard role", async () => {
+    const r = await createAccount(db, { ...base, code: "850", dashboardRole: "payable" });
+    if (!r.ok) throw new Error();
+    expect(r.value.dashboardRole).toBe("payable");
+    expect(await updateAccount(db, r.value.id, { dashboardRole: "cash" })).toEqual({ ok: true });
+    expect((await listAccounts(db))[0].dashboardRole).toBe("cash");
+    expect(await updateAccount(db, r.value.id, { dashboardRole: null })).toEqual({ ok: true });
+    expect((await listAccounts(db))[0].dashboardRole).toBeNull();
+  });
   it("blank name rejected", async () => {
     const r = await createAccount(db, { ...base, code: "850" });
     if (!r.ok) throw new Error();
@@ -81,6 +90,15 @@ describe("standard chart", () => {
     const rows = await db.select().from(accounts);
     expect(rows).toHaveLength(STANDARD_ACCOUNTS.length);
     expect(rows.every((r) => r.isSystem)).toBe(true);
+  });
+  it("seeds dashboard roles", async () => {
+    await seedStandardAccounts(db);
+    const rows = await listAccounts(db);
+    const role = (c: string) => rows.find((r) => r.code === c)?.dashboardRole;
+    expect(role("103")).toBe("cash");
+    expect(role("108")).toBe("receivable");
+    expect(role("253")).toBe("payable");
+    expect(role("811")).toBeNull();
   });
   it("groups match Douzone ranges and codes are unique", () => {
     for (const a of STANDARD_ACCOUNTS) expect(a.group, a.code).toBe(suggestGroup(a.code));

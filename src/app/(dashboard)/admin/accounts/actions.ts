@@ -34,7 +34,7 @@ export async function createAccountAction(
   fd: FormData,
 ): Promise<AccountActionState> {
   await requirePermission("settings:manage");
-  const keys = ["code", "name", "group", "requiresPartner"];
+  const keys = ["code", "name", "group", "requiresPartner", "dashboardRole"];
   const p = parseCreateAccount(fd);
   if (!p.ok) return failState(fd, keys, INVALID);
   const r = await createAccount(db, p.data);
@@ -48,7 +48,7 @@ export async function updateAccountAction(
   fd: FormData,
 ): Promise<AccountActionState> {
   await requirePermission("settings:manage");
-  const keys = ["name", "group", "requiresPartner", "isActive"];
+  const keys = ["name", "group", "requiresPartner", "isActive", "dashboardRole"];
   const p = parseUpdateAccount(fd);
   if (!p.ok) return failState(fd, keys, INVALID);
   const { id, ...patch } = p.data;

@@ -93,6 +93,8 @@ export const accountGroup = pgEnum("account_group", [
   "income_tax",
 ]);
 
+export const dashboardRole = pgEnum("dashboard_role", ["cash", "receivable", "payable"]);
+
 export const accounts = pgTable("accounts", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   code: text("code").notNull().unique(),
@@ -101,6 +103,7 @@ export const accounts = pgTable("accounts", {
   requiresPartner: boolean("requires_partner").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   isSystem: boolean("is_system").notNull().default(false),
+  dashboardRole: dashboardRole("dashboard_role"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { ACCOUNT_GROUPS } from "@/lib/accounts";
+import { ACCOUNT_GROUPS, DASHBOARD_ROLES } from "@/lib/accounts";
 
 const group = z.enum(ACCOUNT_GROUPS);
+// "" (the 없음 option) clears the role.
+const role = z.enum([...DASHBOARD_ROLES, ""]).transform((v) => (v === "" ? null : v));
 const id = z.coerce.number().int().positive();
 // Switches submit "true" when on and nothing when off.
 const flag = z
@@ -21,6 +23,7 @@ const createSchema = z.object({
   name: z.string(),
   group,
   requiresPartner: flag,
+  dashboardRole: role,
 });
 const updateSchema = z.object({
   id,
@@ -28,6 +31,7 @@ const updateSchema = z.object({
   group,
   requiresPartner: flag,
   isActive: flag,
+  dashboardRole: role,
 });
 
 export const parseCreateAccount = (fd: FormData) => run(createSchema, fd);

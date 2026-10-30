@@ -50,6 +50,14 @@ export const ACCOUNT_GROUP_LABELS: Record<AccountGroup, string> = {
   income_tax: "법인세비용",
 };
 
+export const DASHBOARD_ROLES = ["cash", "receivable", "payable"] as const;
+export type DashboardRole = (typeof DASHBOARD_ROLES)[number];
+export const DASHBOARD_ROLE_LABELS: Record<DashboardRole, string> = {
+  cash: "현금·예금",
+  receivable: "받을 돈",
+  payable: "줄 돈",
+};
+
 export const VAT_INPUT_CODE = "135"; // 부가세대급금
 export const VAT_OUTPUT_CODE = "255"; // 부가세예수금
 

@@ -12,7 +12,7 @@ test("계정과목: 표준 계정 목록, 추가(구분 자동 선택), 숨김",
     await page.getByRole("button", { name: "계정 추가" }).click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("코드").fill(code);
-    await expect(dlg.getByLabel("구분")).toHaveValue("sga");
+    await expect(dlg.getByLabel("구분", { exact: true })).toHaveValue("sga");
     await dlg.getByLabel("계정명").fill(name);
     await dlg.getByRole("button", { name: "추가" }).click();
     const dup = dlg.getByRole("alert").filter({ hasText: "이미 사용 중인 계정코드입니다." });
@@ -31,4 +31,12 @@ test("계정과목: 표준 계정 목록, 추가(구분 자동 선택), 숨김",
     }
   }
   expect(added).toBe(true);
+});
+
+test("계정과목: 수정 창에 대시보드 구분 선택이 있다", async ({ page }) => {
+  await page.goto("/admin/accounts");
+  await page.getByRole("row", { name: /103 보통예금/ }).getByRole("button", { name: "수정" }).click();
+  const sel = page.getByRole("dialog").getByLabel("대시보드 구분");
+  await expect(sel).toHaveValue("cash");
+  await expect(sel.locator("option")).toHaveText(["없음", "현금·예금", "받을 돈", "줄 돈"]);
 });

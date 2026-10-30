@@ -50,6 +50,20 @@
       "when": 1793308906257,
       "tag": "0006_certain_scarecrow",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793320905315,
+      "tag": "0007_deep_radioactive_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793320908519,
+      "tag": "0008_dashboard_roles",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { asc, eq, inArray, sql, type SQL } from "drizzle-orm";
-import { type AccountGroup, VAT_INPUT_CODE, VAT_OUTPUT_CODE } from "@/lib/accounts";
+import { type AccountGroup, type DashboardRole, VAT_INPUT_CODE, VAT_OUTPUT_CODE } from "@/lib/accounts";
 import type { Db } from "@/server/db/client";
 import { isUniqueViolation } from "@/server/db/errors";
 import { accounts } from "@/server/db/schema";
@@ -14,6 +14,7 @@ export type AccountRow = {
   requiresPartner: boolean;
   isActive: boolean;
   isSystem: boolean;
+  dashboardRole: DashboardRole | null;
 };
 
 const columns = {
@@ -24,6 +25,7 @@ const columns = {
   requiresPartner: accounts.requiresPartner,
   isActive: accounts.isActive,
   isSystem: accounts.isSystem,
+  dashboardRole: accounts.dashboardRole,
 };
 
 const ERR_CODE = "계정코드는 101~999 사이의 3자리 숫자여야 합니다.";
@@ -47,7 +49,10 @@ export async function getAccountById(db: Db, id: number): Promise<AccountRow | n
 
 export async function createAccount(
   db: Db,
-  input: { code: string; name: string; group: AccountGroup; requiresPartner: boolean },
+  input: { code: string; name: string; group: AccountGroup;
+    requiresPartner: boolean;
+    dashboardRole?: DashboardRole | null;
+  },
 ): Promise<Result<AccountRow>> {
   if (!/^\d{3}$/.test(input.code) || Number(input.code) < 101) return fail(ERR_CODE);
   const name = input.name.trim();
@@ -55,7 +60,13 @@ export async function createAccount(
   try {
     const [row] = await db
       .insert(accounts)
-      .values({ code: input.code, name, group: input.group, requiresPartner: input.requiresPartner })
+      .values({
+        code: input.code,
+        name,
+        group: input.group,
+        requiresPartner: input.requiresPartner,
+        dashboardRole: input.dashboardRole ?? null,
+      })
       .returning(columns);
     return ok(row);
   } catch (e) {
@@ -67,7 +78,13 @@ export async function createAccount(
 export async function updateAccount(
   db: Db,
   id: number,
-  patch: { name?: string; group?: AccountGroup; requiresPartner?: boolean; isActive?: boolean },
+  patch: {
+    name?: string;
+    group?: AccountGroup;
+    requiresPartner?: boolean;
+    isActive?: boolean;
+    dashboardRole?: DashboardRole | null;
+  },
 ): Promise<Result> {
   const set: Partial<Omit<typeof accounts.$inferInsert, "updatedAt">> & { updatedAt: SQL } = { updatedAt: sql`now()` };
   if (patch.name !== undefined) {
@@ -78,6 +95,7 @@ export async function updateAccount(
   if (patch.group !== undefined) set.group = patch.group;
   if (patch.requiresPartner !== undefined) set.requiresPartner = patch.requiresPartner;
   if (patch.isActive !== undefined) set.isActive = patch.isActive;
+  if (patch.dashboardRole !== undefined) set.dashboardRole = patch.dashboardRole;
 
   const [target] = await db.select({ code: accounts.code }).from(accounts).where(eq(accounts.id, id));
   if (!target) return fail(ERR_NOT_FOUND);

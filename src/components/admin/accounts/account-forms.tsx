@@ -9,6 +9,8 @@ import { Switch } from "@/components/ui/switch";
 import {
   ACCOUNT_GROUPS,
   ACCOUNT_GROUP_LABELS,
+  DASHBOARD_ROLES,
+  DASHBOARD_ROLE_LABELS,
   suggestGroup,
   type AccountGroup,
 } from "@/lib/accounts";
@@ -64,6 +66,19 @@ function GroupSelect({
       {ACCOUNT_GROUPS.map((g) => (
         <option key={g} value={g}>
           {ACCOUNT_GROUP_LABELS[g]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function RoleSelect({ id, defaultValue }: { id: string; defaultValue: string }) {
+  return (
+    <select id={id} name="dashboardRole" defaultValue={defaultValue} className={selectClass}>
+      <option value="">없음</option>
+      {DASHBOARD_ROLES.map((r) => (
+        <option key={r} value={r}>
+          {DASHBOARD_ROLE_LABELS[r]}
         </option>
       ))}
     </select>
@@ -133,6 +148,10 @@ function CreateAccountFields({ state, formAction, pending }: FieldProps) {
         <Label htmlFor="new-group">구분</Label>
         <GroupSelect id="new-group" value={group} onChange={setGroup} />
       </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="new-role">대시보드 구분</Label>
+        <RoleSelect id="new-role" defaultValue={v?.dashboardRole ?? ""} />
+      </div>
       <SwitchField
         id="new-partner"
         name="requiresPartner"
@@ -177,6 +196,10 @@ function EditAccountFields({ account, state, formAction, pending }: FieldProps &
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="edit-group">구분</Label>
         <GroupSelect id="edit-group" value={group} onChange={setGroup} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="edit-role">대시보드 구분</Label>
+        <RoleSelect id="edit-role" defaultValue={v?.dashboardRole ?? account.dashboardRole ?? ""} />
       </div>
       <SwitchField
         id="edit-partner"

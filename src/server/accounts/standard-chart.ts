@@ -1,11 +1,21 @@
-import type { AccountGroup } from "@/lib/accounts";
+import type { AccountGroup, DashboardRole } from "@/lib/accounts";
 
 export type StandardAccount = {
   code: string;
   name: string;
   group: AccountGroup;
   requiresPartner: boolean;
+  dashboardRole: DashboardRole | null;
 };
+
+// Which standard accounts the executive dashboard sums as cash / receivables / payables.
+const DASHBOARD_ROLE_CODES: Record<DashboardRole, string[]> = {
+  cash: ["101", "102", "103", "104", "105", "106"],
+  receivable: ["108", "110", "120"],
+  payable: ["251", "252", "253"],
+};
+const roleOf = (code: string): DashboardRole | null =>
+  (Object.keys(DASHBOARD_ROLE_CODES) as DashboardRole[]).find((r) => DASHBOARD_ROLE_CODES[r].includes(code)) ?? null;
 
 // "code name" entries; a trailing * marks requiresPartner.
 const CHART: Record<AccountGroup, string[]> = {
@@ -45,6 +55,6 @@ export const STANDARD_ACCOUNTS: StandardAccount[] = (
   items.map((item) => {
     const [code, rest] = item.split(" ");
     const requiresPartner = rest.endsWith("*");
-    return { code, name: requiresPartner ? rest.slice(0, -1) : rest, group, requiresPartner };
+    return { code, name: requiresPartner ? rest.slice(0, -1) : rest, group, requiresPartner, dashboardRole: roleOf(code) };
   }),
 );
