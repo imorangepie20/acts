@@ -44,7 +44,8 @@
   2. the voucher row `FOR UPDATE`
   3. the numbering advisory lock
 
-  The new month lock is taken **first** in every voucher-writing transaction, before any of those. It is `pg_advisory_xact_lock_shared(PERIOD_LOCK, monthKey)` for each distinct month touched, in ascending order. Close and reopen take `pg_advisory_xact_lock(PERIOD_LOCK, monthKey)` and no row locks. `monthKey = year * 12 + (month − 1)`. `PERIOD_LOCK` is a new constant distinct from `NUMBERING_LOCK`.
+  The new period lock is taken **first** in every voucher-writing transaction, before any of those. It is one global key, `pg_advisory_xact_lock_shared(PERIOD_LOCK, 0)`. Close and reopen take `pg_advisory_xact_lock(PERIOD_LOCK, 0)` and no row locks. `PERIOD_LOCK` is a new constant distinct from `NUMBERING_LOCK`.
+- **Month close is a watermark — "closed through M"** (amended after the Task 3 review). A month counts as closed when any `period_closes` row has `month ≥` it. Writes into an earlier month that is empty and not explicitly closed are refused too, because they would move balance-sheet and year-to-date figures as of M. Closing M still requires every earlier month **that has vouchers** to be explicitly closed, so each one is reviewed and has no pending vouchers. Reopen works on the latest explicit close only.
 - **Exact messages:**
   - closed month: `마감된 월(YYYY-MM)의 전표는 추가·수정·삭제할 수 없습니다.`
   - date on or before the opening cut-off: `기초잔액 기준일(YYYY-MM-DD) 이후 날짜만 입력할 수 있습니다.`
