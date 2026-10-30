@@ -268,7 +268,7 @@ function sameVoucher(a: VoucherInput, b: VoucherInput): boolean {
 }
 
 /**
- * Stored date read before the transaction, so the month lock can be taken first. Callers re-check
+ * Stored date read before the transaction, so the period lock can be taken first. Callers re-check
  * it against the row locked by `lockForWrite` and return the conflict message if it moved.
  */
 async function storedDate(db: Db, id: string): Promise<string | null> {
@@ -425,7 +425,7 @@ export async function writeOpeningVoucher(
 
 /**
  * Locks the stored voucher and checks existence, permission (default: may modify), version, and
- * that its date is still `expectedDate` (the pre-transaction read the month locks were taken for).
+ * that its date is still `expectedDate` (the pre-transaction read the closed-month check was made for).
  */
 async function lockForWrite(
   tx: Tx,

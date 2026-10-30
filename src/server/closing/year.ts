@@ -1,4 +1,4 @@
-import { desc, eq, isNotNull } from "drizzle-orm";
+import { desc, eq, isNotNull, sql } from "drizzle-orm";
 import { can } from "@/lib/permissions";
 import { addDays, fiscalYearStart, shiftYear } from "@/lib/reports/fiscal";
 import type { StatementLine } from "@/lib/reports/statements";
@@ -116,10 +116,10 @@ export async function closeFiscalYear(db: Db, actor: SessionUser, fiscalStart: s
     if (!(await isMonthClosed(tx, monthOf(fiscalEndOf(fiscalStart))))) return fail(ERR_MONTHS_OPEN);
     await tx
       .insert(fiscalYearCloses)
-      .values({ fiscalStart, closedBy: actor.id, closedAt: new Date() })
+      .values({ fiscalStart, closedBy: actor.id, closedAt: sql`now()` })
       .onConflictDoUpdate({
         target: fiscalYearCloses.fiscalStart,
-        set: { closedBy: actor.id, closedAt: new Date() },
+        set: { closedBy: actor.id, closedAt: sql`now()` },
       });
     return ok();
   });

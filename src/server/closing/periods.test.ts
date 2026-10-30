@@ -7,6 +7,7 @@ import { todayInSeoul } from "@/lib/vouchers/dates";
 import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
 import { addAttachment, removeAttachment } from "@/server/attachments/service";
 import type { SessionUser } from "@/server/auth/service";
+import { createAccount, updateAccount } from "@/server/accounts/service";
 import { getCompany, updateCompany } from "@/server/company/service";
 import { accounts, periodCloses, sites, users, voucherAttachments, voucherHistory, vouchers } from "@/server/db/schema";
 import {
@@ -430,5 +431,47 @@ describe("close races a write", () => {
         expect(v).toEqual({ date: "2024-05-20", version: 3 });
       }
     }
+  });
+});
+
+describe("final-review guards", () => {
+  it("refuses a fiscal-start change while a month is closed, but allows other saves", async () => {
+    await mkVoucher("2020-01-10");
+    await mustClose("2020-01");
+    const c = await getCompany(db);
+    const other = (c.fiscalYearStartMonth % 12) + 1;
+    expect(await updateCompany(db, { ...c, fiscalYearStartMonth: other }, admin.id)).toEqual({
+      ok: false,
+      error: "마감된 월이 있어 회계연도 시작 월을 바꿀 수 없습니다. 마감을 모두 해제한 뒤 변경하세요.",
+    });
+    expect((await getCompany(db)).fiscalYearStartMonth).toBe(c.fiscalYearStartMonth);
+    expect((await updateCompany(db, { ...c, name: "새 이름" }, admin.id)).ok).toBe(true);
+    expect((await getCompany(db)).name).toBe("새 이름");
+    await reopenMonth(db, admin, "2020-01");
+    expect((await updateCompany(db, { ...c, fiscalYearStartMonth: other }, admin.id)).ok).toBe(true);
+  });
+
+  it("refuses an account group change once it has voucher lines; other edits stay allowed", async () => {
+    await mkVoucher("2020-01-10");
+    const err = "전표가 있는 계정은 구분을 바꿀 수 없습니다.";
+    expect(await updateAccount(db, acc["811"], { group: "revenue" })).toEqual({ ok: false, error: err });
+    expect((await updateAccount(db, acc["811"], { group: "sga", name: "복리후생비2", requiresPartner: true })).ok).toBe(true);
+    expect((await updateAccount(db, acc["811"], { isActive: false })).ok).toBe(true);
+    const fresh = await createAccount(db, { code: "899", name: "새", group: "sga", requiresPartner: false });
+    if (!fresh.ok) throw new Error(fresh.error);
+    expect((await updateAccount(db, fresh.value.id, { group: "revenue" })).ok).toBe(true);
+  });
+
+  it("validates dashboardRole against the account group", async () => {
+    const err = "대시보드 구분이 계정 구분과 맞지 않습니다.";
+    const base = { name: "역할", requiresPartner: false };
+    expect(await createAccount(db, { ...base, code: "890", group: "sga", dashboardRole: "cash" })).toEqual({ ok: false, error: err });
+    expect(await createAccount(db, { ...base, code: "890", group: "current_asset", dashboardRole: "payable" })).toEqual({ ok: false, error: err });
+    const a = await createAccount(db, { ...base, code: "891", group: "current_asset", dashboardRole: "receivable" });
+    const l = await createAccount(db, { ...base, code: "892", group: "current_liability", dashboardRole: "payable" });
+    if (!a.ok || !l.ok) throw new Error("create failed");
+    expect(await updateAccount(db, a.value.id, { group: "sga" })).toEqual({ ok: false, error: err });
+    expect(await updateAccount(db, l.value.id, { dashboardRole: "cash" })).toEqual({ ok: false, error: err });
+    expect((await updateAccount(db, l.value.id, { group: "noncurrent_liability" })).ok).toBe(true);
   });
 });

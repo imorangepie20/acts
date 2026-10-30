@@ -99,7 +99,7 @@ export async function addAttachment(
 
 export async function removeAttachment(db: Db, actor: SessionUser, attachmentId: string): Promise<Result> {
   if (!isUuid(attachmentId)) return fail(ERR_NOT_FOUND);
-  // Read before the transaction so the month lock can be its first statement.
+  // Read before the transaction so the shared period lock can be its first statement.
   const [pre] = await db
     .select({ voucherId: voucherAttachments.voucherId, date: vouchers.date })
     .from(voucherAttachments)

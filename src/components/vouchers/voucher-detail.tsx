@@ -62,12 +62,15 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
 export function VoucherDetail({
   voucher: v,
   canModify,
+  canEditOpening = false,
   canApprove = false,
   closed = false,
   children,
 }: {
   voucher: Detail;
   canModify: boolean;
+  /** May use /closing/opening (period:close). */
+  canEditOpening?: boolean;
   canApprove?: boolean;
   /** The voucher's month is closed: show 마감됨 and no actions (the service refuses them anyway). */
   closed?: boolean;
@@ -151,7 +154,7 @@ export function VoucherDetail({
               </Dialog>
             </>
           )}
-          {!closed && v.kind === "opening" && canModify && (
+          {!closed && v.kind === "opening" && canEditOpening && (
             <Link href="/closing/opening" className="self-center text-sm text-muted-foreground underline underline-offset-4">
               기초잔액 화면에서 수정
             </Link>

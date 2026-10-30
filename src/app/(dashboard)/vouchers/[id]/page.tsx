@@ -36,6 +36,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     <VoucherDetail
       voucher={voucher}
       canModify={modifiable}
+      canEditOpening={can(user.role, "period:close")}
       canApprove={can(user.role, "voucher:approve")}
       closed={closed}
     >

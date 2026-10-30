@@ -55,10 +55,10 @@ describe("updateAccount", () => {
     expect(row).toMatchObject({ name: "새이름", isActive: false, requiresPartner: true });
   });
   it("sets and clears the dashboard role", async () => {
-    const r = await createAccount(db, { ...base, code: "850", dashboardRole: "payable" });
+    const r = await createAccount(db, { ...base, code: "850", group: "current_liability", dashboardRole: "payable" });
     if (!r.ok) throw new Error();
     expect(r.value.dashboardRole).toBe("payable");
-    expect(await updateAccount(db, r.value.id, { dashboardRole: "cash" })).toEqual({ ok: true });
+    expect(await updateAccount(db, r.value.id, { group: "current_asset", dashboardRole: "cash" })).toEqual({ ok: true });
     expect((await listAccounts(db))[0].dashboardRole).toBe("cash");
     expect(await updateAccount(db, r.value.id, { dashboardRole: null })).toEqual({ ok: true });
     expect((await listAccounts(db))[0].dashboardRole).toBeNull();

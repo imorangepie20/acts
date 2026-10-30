@@ -76,7 +76,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
       <PositionSummary position={d.position} href={balanceSheet} />
       {d.closing.count > 0 && (
         <Link
-          href="/vouchers?kind=closing&from=2000-01-01&to=2099-12-31"
+          href={href("/vouchers", { kind: "closing", from: d.fiscalStart, to: asOf })}
           className="w-fit rounded-md border bg-muted/40 px-3 py-2 text-sm font-medium hover:bg-muted"
         >
           결산 반영 {d.closing.count}건 (손익 영향 {formatKoreanShort(d.closing.profitEffect)})

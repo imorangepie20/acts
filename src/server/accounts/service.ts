@@ -2,7 +2,7 @@ import { asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { type AccountGroup, type DashboardRole, VAT_INPUT_CODE, VAT_OUTPUT_CODE } from "@/lib/accounts";
 import type { Db } from "@/server/db/client";
 import { isUniqueViolation } from "@/server/db/errors";
-import { accounts } from "@/server/db/schema";
+import { accounts, voucherLines } from "@/server/db/schema";
 import { fail, ok, type Result } from "@/server/result";
 import { STANDARD_ACCOUNTS } from "./standard-chart";
 
@@ -32,7 +32,17 @@ const ERR_CODE = "계정코드는 101~999 사이의 3자리 숫자여야 합니�
 const ERR_DUP = "이미 사용 중인 계정코드입니다.";
 const ERR_NAME = "계정명을 입력하세요.";
 const ERR_VAT = "부가세 계정은 숨길 수 없습니다.";
+const ERR_GROUP_USED = "전표가 있는 계정은 구분을 바꿀 수 없습니다.";
+const ERR_ROLE = "대시보드 구분이 계정 구분과 맞지 않습니다.";
 const ERR_NOT_FOUND = "계정과목을 찾을 수 없습니다.";
+
+const ASSET_GROUPS: AccountGroup[] = ["current_asset", "noncurrent_asset"];
+const LIABILITY_GROUPS: AccountGroup[] = ["current_liability", "noncurrent_liability"];
+
+function roleFitsGroup(role: DashboardRole | null | undefined, group: AccountGroup): boolean {
+  if (!role) return true;
+  return (role === "payable" ? LIABILITY_GROUPS : ASSET_GROUPS).includes(group);
+}
 
 export async function listAccounts(
   db: Db,
@@ -57,6 +67,7 @@ export async function createAccount(
   if (!/^\d{3}$/.test(input.code) || Number(input.code) < 101) return fail(ERR_CODE);
   const name = input.name.trim();
   if (!name) return fail(ERR_NAME);
+  if (!roleFitsGroup(input.dashboardRole, input.group)) return fail(ERR_ROLE);
   try {
     const [row] = await db
       .insert(accounts)
@@ -97,8 +108,22 @@ export async function updateAccount(
   if (patch.isActive !== undefined) set.isActive = patch.isActive;
   if (patch.dashboardRole !== undefined) set.dashboardRole = patch.dashboardRole;
 
-  const [target] = await db.select({ code: accounts.code }).from(accounts).where(eq(accounts.id, id));
+  const [target] = await db
+    .select({ code: accounts.code, group: accounts.group, dashboardRole: accounts.dashboardRole })
+    .from(accounts)
+    .where(eq(accounts.id, id));
   if (!target) return fail(ERR_NOT_FOUND);
+  const group = patch.group ?? target.group;
+  const role = patch.dashboardRole !== undefined ? patch.dashboardRole : target.dashboardRole;
+  if (patch.group !== undefined && patch.group !== target.group) {
+    const [used] = await db
+      .select({ id: voucherLines.id })
+      .from(voucherLines)
+      .where(eq(voucherLines.accountId, id))
+      .limit(1);
+    if (used) return fail(ERR_GROUP_USED);
+  }
+  if (!roleFitsGroup(role, group)) return fail(ERR_ROLE);
   if (patch.isActive === false && (target.code === VAT_INPUT_CODE || target.code === VAT_OUTPUT_CODE)) {
     return fail(ERR_VAT);
   }
