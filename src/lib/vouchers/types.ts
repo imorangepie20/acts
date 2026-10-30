@@ -6,10 +6,11 @@ export const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
   general: "일반 전표",
 };
 
-export type VoucherKind = "general" | "closing";
+export type VoucherKind = "general" | "closing" | "opening";
 export const VOUCHER_KIND_LABELS: Record<VoucherKind, string> = {
   general: "일반",
   closing: "결산",
+  opening: "기초",
 };
 
 export type VoucherStatus = "pending" | "approved" | "rejected";
@@ -71,6 +72,10 @@ export type VoucherHeaderInput = {
 
 export type VoucherInput = VoucherHeaderInput & { lines: LineInput[] };
 
+/** A stored voucher's header: any kind, including 기초 (opening), which only `saveOpening` writes. */
+export type StoredVoucherHeader = Omit<VoucherHeaderInput, "kind"> & { kind: VoucherKind };
+export type StoredVoucherInput = StoredVoucherHeader & { lines: LineInput[] };
+
 export type VoucherAction =
   | "created"
   | "updated"
@@ -81,7 +86,7 @@ export type VoucherAction =
   | "detached";
 
 /** Voucher state stored in a history row; `attachments` holds file names. */
-export type VoucherSnapshot = VoucherInput & {
+export type VoucherSnapshot = StoredVoucherInput & {
   no: number;
   status: VoucherStatus;
   attachments: string[];

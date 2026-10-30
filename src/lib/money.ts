@@ -8,6 +8,14 @@ export function parseWon(input: string): number | null {
   return Number.isSafeInteger(n) && n <= MAX_WON ? n : null;
 }
 
+/** Like `parseWon`, but allows a leading minus (signed balances). |n| <= MAX_WON; "-0" is 0. */
+export function parseSignedWon(input: string): number | null {
+  const m = /^\s*(-?)\s*(.*)$/.exec(input)!;
+  const n = parseWon(m[2]);
+  if (n === null) return null;
+  return m[1] && n !== 0 ? -n : n;
+}
+
 export function formatWon(n: number): string {
   return n.toLocaleString("en-US");
 }

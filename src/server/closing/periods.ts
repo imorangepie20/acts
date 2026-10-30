@@ -126,8 +126,11 @@ export async function listMonthStatus(db: Db, fiscalStart: string): Promise<Mont
   });
 }
 
-/** Exclusive period lock: waits out every in-flight voucher write and blocks new ones until commit. */
-async function lockPeriodsExclusive(tx: Tx): Promise<void> {
+/**
+ * Exclusive period lock: waits out every in-flight voucher write and blocks new ones until commit.
+ * Taken by close, reopen and saveOpening (which moves the cut-off every voucher write checks).
+ */
+export async function lockPeriodsExclusive(tx: Tx): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(${PERIOD_LOCK}::int, ${PERIOD_KEY}::int)`);
 }
 

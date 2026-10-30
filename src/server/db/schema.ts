@@ -146,7 +146,7 @@ export const departments = pgTable("departments", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const voucherKind = pgEnum("voucher_kind", ["general", "closing"]);
+export const voucherKind = pgEnum("voucher_kind", ["general", "closing", "opening"]);
 export const voucherStatus = pgEnum("voucher_status", ["pending", "approved", "rejected"]);
 export const entryType = pgEnum("entry_type", ["purchase", "sale", "transfer", "general"]);
 export const evidenceType = pgEnum("evidence_type", [
@@ -202,6 +202,8 @@ export const vouchers = pgTable(
     uniqueIndex("vouchers_date_no_uq").on(t.date, t.no),
     index("vouchers_date_idx").on(t.date),
     index("vouchers_status_date_idx").on(t.status, t.date),
+    // At most one 기초 (opening) voucher: the pre-adoption balances as of the cut-off.
+    uniqueIndex("vouchers_single_opening_uq").on(t.kind).where(sql`${t.kind} = 'opening'`),
   ],
 );
 

@@ -8,8 +8,9 @@ import { buildSimpleVoucher, toSimpleInput, type VatAccounts } from "@/lib/vouch
 import type {
   EntryType,
   LineInput,
+  StoredVoucherHeader,
+  StoredVoucherInput,
   VoucherAction,
-  VoucherHeaderInput,
   VoucherInput,
   VoucherKind,
   VoucherSnapshot,
@@ -35,10 +36,9 @@ import {
 import { fail, ok, type Result } from "@/server/result";
 import { addHistory, header, lineColumns, loadSnapshot, type Conn, type Tx } from "./snapshot";
 
-export type VoucherDetail = VoucherHeaderInput & {
+export type VoucherDetail = StoredVoucherHeader & {
   id: string;
   no: number;
-  kind: VoucherKind;
   status: VoucherStatus;
   rejectReason: string | null;
   version: number;
@@ -77,16 +77,18 @@ export type HistoryEntry = {
   note: string | null;
 };
 
-const ERR_DATE = "날짜가 올바르지 않습니다.";
+export const ERR_DATE = "날짜가 올바르지 않습니다.";
 const ERR_LINES = "전표에는 2줄 이상이 필요합니다.";
-const ERR_AMOUNT = "금액은 1원 이상 1조 원 미만의 정수여야 합니다.";
+export const ERR_AMOUNT = "금액은 1원 이상 1조 원 미만의 정수여야 합니다.";
 const ERR_BALANCE = "차변 합계와 대변 합계가 일치하지 않습니다.";
-const ERR_ACCOUNT = "사용할 수 없는 계정과목입니다.";
-const errPartnerRequired = (code: string, name: string) => `${code} ${name} 계정은 거래처를 입력해야 합니다.`;
-const ERR_REF = "사용할 수 없는 거래처, 사업장 또는 부서입니다.";
+export const ERR_ACCOUNT = "사용할 수 없는 계정과목입니다.";
+export const errPartnerRequired = (code: string, name: string) => `${code} ${name} 계정은 거래처를 입력해야 합니다.`;
+export const ERR_REF = "사용할 수 없는 거래처, 사업장 또는 부서입니다.";
 const ERR_INVALID = "입력값이 올바르지 않습니다.";
 const ERR_CLOSING_TYPE = "결산 전표는 일반 전표로만 입력합니다.";
 export const ERR_CONFLICT = "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.";
+const errBeforeCutoff = (cutoff: string) => `기초잔액 기준일(${cutoff}) 이후 날짜만 입력할 수 있습니다.`;
+const ERR_OPENING_ONLY = "기초잔액은 기초잔액 화면에서 수정하세요.";
 const ERR_NOT_FOUND = "전표를 찾을 수 없습니다.";
 const ERR_FORBIDDEN = "이 전표를 수정할 권한이 없습니다.";
 const ERR_NOT_PENDING = "승인 대기 중인 전표가 아닙니다.";
@@ -102,6 +104,9 @@ export function canModify(actor: SessionUser, v: { createdBy: string }): boolean
 }
 
 const MIN_YEAR = 2000;
+
+/** True for a valid YYYY-MM-DD a voucher may carry (years 2000..Seoul year + 1). */
+export const isVoucherDate = (date: string): boolean => epochDay(date) !== null;
 
 /** Days since 1970-01-01 for a valid YYYY-MM-DD within 2000..(Seoul year + 1), else null. */
 function epochDay(date: string): number | null {
@@ -123,7 +128,7 @@ const nonNull = <T>(xs: (T | null)[]): T[] => [...new Set(xs.filter((x): x is T 
 
 /** Read before the transaction: VAT account ids (for the simple-entry re-check). */
 type Context = { vat: VatAccounts; approvalRequired: boolean };
-async function loadVat(db: Db): Promise<VatAccounts> {
+export async function loadVat(db: Db): Promise<VatAccounts> {
   return getVatAccountIds(db);
 }
 
@@ -142,8 +147,28 @@ async function readApproval(tx: Tx): Promise<boolean> {
   return row.approvalRequired;
 }
 
-async function validate(tx: Conn, ctx: Context, input: VoucherInput, allowed: Allowed): Promise<string | null> {
+/**
+ * The 기초잔액 cut-off: the opening voucher's date, or null. Voucher writes read it inside their
+ * transaction, after the period lock; `saveOpening` holds that lock exclusively, so a write never
+ * races a cut-off change.
+ */
+export async function getOpeningCutoff(conn: Conn): Promise<string | null> {
+  const [row] = await conn.select({ date: vouchers.date }).from(vouchers).where(eq(vouchers.kind, "opening"));
+  return row?.date ?? null;
+}
+
+async function validate(
+  tx: Conn,
+  ctx: Context,
+  input: StoredVoucherInput,
+  allowed: Allowed,
+): Promise<string | null> {
   if (epochDay(input.date) === null) return ERR_DATE;
+  if (input.kind !== "opening") {
+    // Nothing regular on or before the cut-off: the opening voucher already holds that history.
+    const cutoff = await getOpeningCutoff(tx);
+    if (cutoff !== null && input.date <= cutoff) return errBeforeCutoff(cutoff);
+  }
   if (input.lines.length < 2) return ERR_LINES;
   if (input.lines.some((l) => !Number.isInteger(l.amount) || l.amount < 1 || l.amount > MAX_WON)) {
     return ERR_AMOUNT;
@@ -210,11 +235,13 @@ async function validate(tx: Conn, ctx: Context, input: VoucherInput, allowed: Al
       return ERR_INVALID;
     }
   } else {
-    const s = toSimpleInput(input, ctx.vat);
+    if (input.kind === "opening") return ERR_INVALID; // 기초 is always a general entry
+    const regular: VoucherInput = { ...input, kind: input.kind };
+    const s = toSimpleInput(regular, ctx.vat);
     if (s === null) return ERR_INVALID;
     const b = buildSimpleVoucher(s, ctx.vat);
     if (!b.ok) return b.error;
-    if (!sameVoucher(b.value, input)) return ERR_INVALID;
+    if (!sameVoucher(b.value, regular)) return ERR_INVALID;
   }
   return null;
 }
@@ -260,10 +287,18 @@ async function nextNo(tx: Tx, date: string): Promise<number> {
   return next;
 }
 
-function statusFields(ctx: Context, actor: SessionUser) {
-  return ctx.approvalRequired
-    ? { status: "pending" as const, approvedBy: null, approvedAt: null }
-    : { status: "approved" as const, approvedBy: actor.id, approvedAt: sql`now()` };
+type StatusFields =
+  | { status: "pending"; approvedBy: null; approvedAt: null }
+  | { status: "approved"; approvedBy: string; approvedAt: SQL };
+
+const approvedBy = (actor: SessionUser): StatusFields => ({
+  status: "approved",
+  approvedBy: actor.id,
+  approvedAt: sql`now()`,
+});
+
+function statusFields(ctx: Context, actor: SessionUser): StatusFields {
+  return ctx.approvalRequired ? { status: "pending", approvedBy: null, approvedAt: null } : approvedBy(actor);
 }
 
 async function insertLines(tx: Tx, voucherId: string, lines: LineInput[]): Promise<void> {
@@ -282,6 +317,70 @@ async function insertLines(tx: Tx, voucherId: string, lines: LineInput[]): Promi
   );
 }
 
+/** Numbers and inserts a validated voucher with its lines and the `created` history row. */
+async function insertVoucher(
+  tx: Tx,
+  actor: SessionUser,
+  input: StoredVoucherInput,
+  status: StatusFields,
+): Promise<string> {
+  const no = await nextNo(tx, input.date);
+  const [{ id }] = await tx
+    .insert(vouchers)
+    .values({ ...header(input), no, ...status, createdBy: actor.id, updatedBy: actor.id })
+    .returning({ id: vouchers.id });
+  await insertLines(tx, id, input.lines);
+  await addHistory(tx, id, "created", actor.id, (await loadSnapshot(tx, id))!);
+  return id;
+}
+
+/**
+ * Replaces a locked voucher's header and lines with validated input: renumbers on a date change,
+ * bumps the version and writes the `updated` history row. Fails with the conflict message if the
+ * version moved.
+ */
+async function replaceVoucher(
+  tx: Tx,
+  actor: SessionUser,
+  id: string,
+  version: number,
+  storedDate: string,
+  input: StoredVoucherInput,
+  status: StatusFields,
+): Promise<Result> {
+  const renumber = input.date !== storedDate ? { no: await nextNo(tx, input.date) } : {};
+  const updated = await tx
+    .update(vouchers)
+    .set({
+      ...header(input),
+      ...renumber,
+      ...status,
+      rejectReason: null,
+      version: sql`${vouchers.version} + 1`,
+      updatedBy: actor.id,
+      updatedAt: sql`now()`,
+    })
+    .where(and(eq(vouchers.id, id), eq(vouchers.version, version)))
+    .returning({ id: vouchers.id });
+  if (updated.length === 0) return fail(ERR_CONFLICT);
+
+  await tx.delete(voucherLines).where(eq(voucherLines.voucherId, id));
+  await insertLines(tx, id, input.lines);
+  await addHistory(tx, id, "updated", actor.id, (await loadSnapshot(tx, id))!);
+  return ok();
+}
+
+/** Ids on a stored voucher's lines; they stay usable on update even if since deactivated. */
+async function storedRefs(tx: Tx, id: string): Promise<Allowed> {
+  const stored = await tx.select(lineColumns).from(voucherLines).where(eq(voucherLines.voucherId, id));
+  return {
+    accounts: new Set(stored.map((l) => l.accountId)),
+    partners: new Set(nonNull(stored.map((l) => l.partnerId))),
+    sites: new Set(stored.map((l) => l.siteId)),
+    departments: new Set(nonNull(stored.map((l) => l.departmentId))),
+  };
+}
+
 export async function createVoucher(
   db: Db,
   actor: SessionUser,
@@ -295,21 +394,33 @@ export async function createVoucher(
     const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
     const error = await validate(tx, ctx, input, NONE_ALLOWED);
     if (error) return fail(error);
-    const no = await nextNo(tx, input.date);
-    const [{ id }] = await tx
-      .insert(vouchers)
-      .values({
-        ...header(input),
-        no,
-        ...statusFields(ctx, actor),
-        createdBy: actor.id,
-        updatedBy: actor.id,
-      })
-      .returning({ id: vouchers.id });
-    await insertLines(tx, id, input.lines);
-    await addHistory(tx, id, "created", actor.id, (await loadSnapshot(tx, id))!);
-    return ok({ id });
+    return ok({ id: await insertVoucher(tx, actor, input, statusFields(ctx, actor)) });
   });
+}
+
+/**
+ * Writes the single 기초 (opening) voucher for `saveOpening` through the regular validation,
+ * numbering, version bump, line replacement and history. Always approved by the actor. The caller
+ * holds the period lock exclusively, has checked the opening rules, and passes the stored opening
+ * voucher it locked FOR UPDATE (or null); a `version` that does not match it is a conflict.
+ */
+export async function writeOpeningVoucher(
+  tx: Tx,
+  actor: SessionUser,
+  vat: VatAccounts,
+  input: StoredVoucherInput & { kind: "opening" },
+  version: number | null,
+  stored: { id: string; version: number; date: string } | null,
+): Promise<Result> {
+  if (version !== (stored?.version ?? null)) return fail(ERR_CONFLICT);
+  const ctx: Context = { vat, approvalRequired: false };
+  const error = await validate(tx, ctx, input, stored ? await storedRefs(tx, stored.id) : NONE_ALLOWED);
+  if (error) return fail(error);
+  if (!stored) {
+    await insertVoucher(tx, actor, input, approvedBy(actor));
+    return ok();
+  }
+  return replaceVoucher(tx, actor, stored.id, stored.version, stored.date, input, approvedBy(actor));
 }
 
 /**
@@ -322,7 +433,11 @@ async function lockForWrite(
   id: string,
   version: number,
   expectedDate: string | null,
-  permitted: (v: { createdBy: string }) => Result = (v) => (canModify(actor, v) ? ok() : fail(ERR_FORBIDDEN)),
+  permitted: (v: { createdBy: string; kind: VoucherKind }) => Result = (v) => {
+    // The opening voucher is written only by saveOpening (its own rules and screen).
+    if (v.kind === "opening") return fail(ERR_OPENING_ONLY);
+    return canModify(actor, v) ? ok() : fail(ERR_FORBIDDEN);
+  },
 ): Promise<Result<{ date: string; status: VoucherStatus }>> {
   if (!isUuid(id)) return fail(ERR_NOT_FOUND);
   const [v] = await tx
@@ -331,6 +446,7 @@ async function lockForWrite(
       version: vouchers.version,
       createdBy: vouchers.createdBy,
       status: vouchers.status,
+      kind: vouchers.kind,
     })
     .from(vouchers)
     .where(eq(vouchers.id, id))
@@ -359,36 +475,9 @@ export async function updateVoucher(
     const locked = await lockForWrite(tx, actor, id, version, oldDate);
     if (!locked.ok) return locked;
 
-    const stored = await tx.select(lineColumns).from(voucherLines).where(eq(voucherLines.voucherId, id));
-    const allowed: Allowed = {
-      accounts: new Set(stored.map((l) => l.accountId)),
-      partners: new Set(nonNull(stored.map((l) => l.partnerId))),
-      sites: new Set(stored.map((l) => l.siteId)),
-      departments: new Set(nonNull(stored.map((l) => l.departmentId))),
-    };
-    const error = await validate(tx, ctx, input, allowed);
+    const error = await validate(tx, ctx, input, await storedRefs(tx, id));
     if (error) return fail(error);
-
-    const renumber = input.date !== locked.value.date ? { no: await nextNo(tx, input.date) } : {};
-    const updated = await tx
-      .update(vouchers)
-      .set({
-        ...header(input),
-        ...renumber,
-        ...statusFields(ctx, actor),
-        rejectReason: null,
-        version: sql`${vouchers.version} + 1`,
-        updatedBy: actor.id,
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(vouchers.id, id), eq(vouchers.version, version)))
-      .returning({ id: vouchers.id });
-    if (updated.length === 0) return fail(ERR_CONFLICT);
-
-    await tx.delete(voucherLines).where(eq(voucherLines.voucherId, id));
-    await insertLines(tx, id, input.lines);
-    await addHistory(tx, id, "updated", actor.id, (await loadSnapshot(tx, id))!);
-    return ok();
+    return replaceVoucher(tx, actor, id, version, locked.value.date, input, statusFields(ctx, actor));
   });
 }
 

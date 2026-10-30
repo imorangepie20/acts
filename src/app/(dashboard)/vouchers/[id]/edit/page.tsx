@@ -17,7 +17,8 @@ function editTarget(v: VoucherDetail, vat: VatAccounts): EditTarget {
     date: v.date,
     description: v.description,
     entryType: v.entryType,
-    kind: v.kind,
+    // The page redirects the 기초 voucher to /closing/opening before this runs.
+    kind: v.kind === "closing" ? "closing" : "general",
     partnerId: v.partnerId,
     evidenceType: v.evidenceType,
     vatType: v.vatType,
@@ -71,6 +72,8 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   if (!isUuid(id)) notFound();
   const voucher = await getVoucher(db, id);
   if (!voucher) notFound();
+  // Opening balances have their own screen and rules.
+  if (voucher.kind === "opening") redirect("/closing/opening");
   if (!canModify(user, { createdBy: voucher.createdBy.id })) redirect(`/vouchers/${id}`);
   if (await isMonthClosed(db, monthOf(voucher.date))) redirect(`/vouchers/${id}`);
 

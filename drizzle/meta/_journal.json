@@ -71,6 +71,13 @@
       "when": 1793321519962,
       "tag": "0009_period_closes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793324658532,
+      "tag": "0010_opening_voucher",
+      "breakpoints": true
     }
   ]
 }

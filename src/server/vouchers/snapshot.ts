@@ -1,5 +1,5 @@
 import { asc, eq, sql } from "drizzle-orm";
-import type { VoucherAction, VoucherHeaderInput, VoucherSnapshot } from "@/lib/vouchers/types";
+import type { StoredVoucherHeader, VoucherAction, VoucherSnapshot } from "@/lib/vouchers/types";
 import type { Db } from "@/server/db/client";
 import { voucherAttachments, voucherHistory, voucherLines, vouchers } from "@/server/db/schema";
 
@@ -8,7 +8,7 @@ export type Conn = Db | Tx;
 
 export const AUTO_APPROVE_NOTE = "전표 승인 기능 해제로 자동 승인";
 
-export const header = (input: VoucherHeaderInput): VoucherHeaderInput => ({
+export const header = <H extends StoredVoucherHeader>(input: H): StoredVoucherHeader & Pick<H, "kind"> => ({
   date: input.date,
   entryType: input.entryType,
   kind: input.kind,

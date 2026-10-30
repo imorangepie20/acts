@@ -36,6 +36,52 @@ test.afterAll(async ({ browser }) => {
   await ctx.close();
 });
 
+// Fills a won input once the form has hydrated (the handler adds the thousands separators).
+async function fillWon(page: Page, label: string, digits: string, shown: string) {
+  const input = page.getByLabel(label, { exact: true });
+  await expect(async () => {
+    await input.fill(digits);
+    await expect(input).toHaveValue(shown, { timeout: 1000 });
+  }).toPass();
+}
+
+// The opening voucher stays in the e2e DB: its cut-off 2000-01-01 is the 1B date floor, and every
+// other voucher (this spec's included) is dated after it. Re-runs replace the same voucher.
+test("기초잔액: 2000-01-01 기준 101·331 1,000,000 저장, 다시 저장하면 같은 전표를 바꾼다", async ({ page }) => {
+  const list = "/vouchers?from=2000-01-01&to=2000-01-01&kind=opening";
+  await page.goto("/closing/opening");
+  await expect(page.getByRole("tab", { name: "기초잔액" })).toHaveAttribute("aria-selected", "true");
+  await fillWon(page, "101 현금 잔액", "1000000", "1,000,000"); // returns once hydrated
+  await fillWon(page, "331 자본금 잔액", "1000000", "1,000,000");
+  await page.getByLabel("기준일").fill("2000-01-01");
+  await expect(page.getByLabel("기준일")).toHaveValue("2000-01-01");
+  const save = page.getByRole("button", { name: "저장", exact: true });
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  // the stored balances come back; an unbalanced edit disables 저장
+  await page.reload();
+  await expect(page.getByLabel("기준일")).toHaveValue("2000-01-01");
+  await expect(page.getByLabel("101 현금 잔액", { exact: true })).toHaveValue("1,000,000");
+  await fillWon(page, "101 현금 잔액", "900000", "900,000");
+  await expect(save).toBeDisabled();
+  await fillWon(page, "101 현금 잔액", "1000000", "1,000,000");
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.getByText("저장되었습니다.").first()).toBeVisible();
+
+  // still exactly one 기초 voucher, and it is edited only on this screen
+  await page.goto(list);
+  const row = page.getByRole("row").filter({ hasText: "기초잔액" });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("기초");
+  await row.click();
+  await expect(page).toHaveURL(/\/vouchers\/[0-9a-f-]{36}$/);
+  await page.goto(`${page.url()}/edit`);
+  await expect(page).toHaveURL(/\/closing\/opening$/);
+});
+
 test("월 마감: 2000-01 → 2000-02 마감, 마감된 월의 전표는 수정할 수 없다", async ({ page }) => {
   const desc = `E2E 마감 ${Date.now()}`;
 
