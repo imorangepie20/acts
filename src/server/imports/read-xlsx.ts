@@ -46,15 +46,17 @@ export async function readFirstSheet(bytes: Uint8Array): Promise<Result<Cell[][]
   const ws = wb.worksheets[0];
   if (!ws) return fail(ERR_WRONG_FILE_TYPE);
 
+  // Only non-blank rows, in order: the parsers need no row positions, and sparse sheets stay cheap.
   const grid: Cell[][] = [];
-  let nonBlank = 0;
-  const width = ws.columnCount;
-  for (let r = 1; r <= ws.rowCount; r++) {
-    const row = ws.getRow(r);
+  const width = ws.actualColumnCount;
+  let tooMany = false;
+  ws.eachRow({ includeEmpty: false }, (row) => {
+    if (tooMany) return;
     const cells: Cell[] = [];
     for (let c = 1; c <= width; c++) cells.push(toCell(row.getCell(c).value));
-    if (!isBlankRow(cells) && ++nonBlank > GUARD_ROWS) return fail(ERR_TOO_MANY_ROWS);
-    grid.push(cells);
-  }
-  return ok(grid);
+    if (isBlankRow(cells)) return;
+    if (grid.length >= GUARD_ROWS) tooMany = true;
+    else grid.push(cells);
+  });
+  return tooMany ? fail(ERR_TOO_MANY_ROWS) : ok(grid);
 }

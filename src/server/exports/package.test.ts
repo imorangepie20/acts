@@ -157,4 +157,15 @@ describe("getPackageSummary", () => {
     expect(s.invoicesSale).toEqual({ count: 0, total: 0 });
     expect(s.cards).toEqual({ count: 0, total: 0 });
   });
+
+  it("sums attachment sizes past 2 GiB without overflowing", async () => {
+    const v = await mkVoucher();
+    await attach(v.id, "a.png");
+    const [row] = await db.select().from(voucherAttachments);
+    await db.insert(voucherAttachments).values(
+      [1, 2].map((i) => ({ ...row, id: undefined, fileName: `big${i}.png`, size: 1_900_000_000 })),
+    );
+    const s = await getPackageSummary(db, "2026-10-01", "2026-10-31");
+    expect(s.attachments.bytes).toBe(PNG.length + 3_800_000_000);
+  });
 });

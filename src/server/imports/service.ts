@@ -1,4 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
+import { cleanBusinessNumber } from "@/lib/business-number";
 import { parseCardPurchases } from "@/lib/imports/card";
 import { parseTaxInvoices } from "@/lib/imports/tax-invoice";
 import type { ImportMeta, ParsedRow } from "@/lib/imports/types";
@@ -32,6 +33,7 @@ export type PreviewRow = ParsedRow & {
 
 const errWrongDirection = (direction: "purchase" | "sale") =>
   `이 파일의 ${direction === "purchase" ? "공급받는자" : "공급자"}가 우리 회사가 아닙니다. 매입·매출 선택을 확인하세요.`;
+const ERR_COUNTERPARTY_NUMBER = "거래처 사업자등록번호가 올바르지 않습니다. 전표 입력 화면에서 직접 입력하세요.";
 const errPartnerInactive = (name: string) => `거래처(${name})가 사용 중지 상태입니다.`;
 
 export async function previewImport(
@@ -110,6 +112,9 @@ export async function previewImport(
     } else if (partner && !partner.isActive) {
       status = "blocked";
       reason = errPartnerInactive(partner.name);
+    } else if (kind === "tax_invoice" && !partner && r.counterpartyBusinessNumber && !cleanBusinessNumber(r.counterpartyBusinessNumber).ok) {
+      status = "blocked";
+      reason = ERR_COUNTERPARTY_NUMBER;
     }
     out.push({
       ...r,

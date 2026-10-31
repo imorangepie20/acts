@@ -23,7 +23,7 @@ export async function getPackageSummary(db: Db, from: string, to: string): Promi
     listTaxInvoices(db, from, to),
     listCardPurchases(db, from, to),
     db
-      .select({ count: sql<number>`count(*)::int`, bytes: sql<number>`coalesce(sum(${voucherAttachments.size}), 0)::int` })
+      .select({ count: sql<number>`count(*)::int`, bytes: sql<number>`coalesce(sum(${voucherAttachments.size}), 0)::float8` })
       .from(voucherAttachments)
       .innerJoin(vouchers, eq(vouchers.id, voucherAttachments.voucherId))
       .where(and(between(vouchers.date, from, to), inArray(vouchers.status, [...POSTED_STATUSES]))),

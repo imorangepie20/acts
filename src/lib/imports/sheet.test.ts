@@ -1,3 +1,5 @@
+import ExcelJS from "exceljs";
+import { readFirstSheet } from "@/server/imports/read-xlsx";
 import { describe, expect, it } from "vitest";
 import { findHeader, isBlankRow, parseDate, parseWon } from "./sheet";
 
@@ -37,8 +39,15 @@ describe("parseDate", () => {
     expect(parseDate("2026/10/15")).toBe("2026-10-15");
     expect(parseDate(new Date(Date.UTC(2026, 9, 15)))).toBe("2026-10-15");
   });
-  it("uses Asia/Seoul for Date values", () => {
-    expect(parseDate(new Date("2026-10-14T16:00:00Z"))).toBe("2026-10-15");
+  it("reads Date values by their UTC fields (exceljs stores the wall clock as UTC)", () => {
+    expect(parseDate(new Date("2026-10-15T16:00:00Z"))).toBe("2026-10-15");
+  });
+  it("keeps the day of a date-time cell written and read back through exceljs", async () => {
+    const wb = new ExcelJS.Workbook();
+    wb.addWorksheet("s").addRow([new Date(Date.UTC(2026, 9, 31, 16, 0, 0))]);
+    const r = await readFirstSheet(new Uint8Array(await wb.xlsx.writeBuffer()));
+    if (!r.ok) throw new Error(r.error);
+    expect(parseDate(r.value[0][0])).toBe("2026-10-31");
   });
   it("rejects impossible dates", () => {
     expect(parseDate("2026-02-30")).toBeNull();

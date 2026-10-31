@@ -205,6 +205,14 @@ describe("imports", () => {
     expect([rows2[2].status, rows2[3].status]).toEqual(["blocked", "blocked"]); // blank 승인번호 rows share a key
   });
 
+  it("blocks a row whose unmatched counterparty number is not a valid business number", async () => {
+    const rows = await preview(
+      await book([TAX_HEAD, taxRow("2026-10-15", "N1", 1000, "a", "9001011"), taxRow("2026-10-16", "N2", 1000, "b")]),
+    );
+    expect(rows.map((r) => r.status)).toEqual(["blocked", "ready"]);
+    expect(rows[0].reason).toBe("거래처 사업자등록번호가 올바르지 않습니다. 전표 입력 화면에서 직접 입력하세요.");
+  });
+
   it("at commit one bad row fails while the other succeeds", async () => {
     await openingAt("2026-01-31");
     const rows = await preview(await book([TAX_HEAD, taxRow("2026-01-15", "B1", 1000, "a"), taxRow("2026-10-10", "B2", 1000, "b")]));

@@ -36,8 +36,6 @@ export function parseWon(c: Cell): number | null {
   return /^-?\d+$/.test(s) ? Number(s) : null;
 }
 
-const seoulDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" });
-
 function realDate(y: number, m: number, d: number): string | null {
   const dt = new Date(Date.UTC(y, m - 1, d));
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
@@ -45,7 +43,10 @@ function realDate(y: number, m: number, d: number): string | null {
 }
 
 export function parseDate(c: Cell): string | null {
-  if (c instanceof Date) return Number.isNaN(c.getTime()) ? null : seoulDate.format(c);
+  // exceljs builds Dates from serials by treating the stored wall clock as UTC, so read the UTC fields.
+  if (c instanceof Date) {
+    return Number.isNaN(c.getTime()) ? null : realDate(c.getUTCFullYear(), c.getUTCMonth() + 1, c.getUTCDate());
+  }
   const s = typeof c === "number" ? String(c) : typeof c === "string" ? c.trim() : "";
   const m =
     /^(\d{4})([-./])(\d{1,2})\2(\d{1,2})(?:[ T]+\d{1,2}:\d{2}(?::\d{2})?)?$/.exec(s) ??
