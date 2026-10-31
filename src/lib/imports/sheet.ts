@@ -10,6 +10,7 @@ export function findHeader(
   scanRows = 20,
 ): Result<{ row: number; cols: Record<string, number[]> }> {
   const fields = { ...optional, ...required };
+  let best: { row: number; missing: string[] } | null = null;
   for (let r = 0; r < Math.min(scanRows, grid.length); r++) {
     const cells = grid[r].map(norm);
     const cols: Record<string, number[]> = {};
@@ -17,9 +18,12 @@ export function findHeader(
       const wanted = aliases.map((a) => a.replace(/\s/g, ""));
       cols[field] = cells.flatMap((c, i) => (c && wanted.includes(c) ? [i] : []));
     }
-    if (Object.keys(required).every((f) => cols[f].length > 0)) return ok({ row: r, cols });
+    const missing = Object.keys(required).filter((f) => cols[f].length === 0);
+    if (missing.length === 0) return ok({ row: r, cols });
+    if (!best || missing.length < best.missing.length) best = { row: r, missing };
   }
-  const names = Object.values(required).map((a) => a[0]);
+  const missing = best?.missing ?? Object.keys(required);
+  const names = missing.map((f) => required[f][0]);
   return fail(
     `필요한 열(${names.join(", ")})을 찾을 수 없습니다. 홈택스에서 내려받은 파일인지 확인하세요.`,
   );

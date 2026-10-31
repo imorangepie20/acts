@@ -47,7 +47,13 @@ export function parseCardPurchases(grid: Cell[][]): ParseResult {
     if (isBlankRow(cells)) continue;
     const dateCell = get(cells, "date");
     const merchant = text(get(cells, "merchant"));
-    if (text(dateCell) === "" && merchant === "") continue; // 합계 row
+    const dateText = text(dateCell);
+    if (
+      (dateText === "" && (merchant === "" || merchant.includes("합계"))) ||
+      dateText.includes("합계")
+    ) {
+      continue; // blank and 합계 rows
+    }
     if (rows.length >= MAX_IMPORT_ROWS) return fail(ERR_TOO_MANY_ROWS);
 
     const date = parseDate(dateCell);

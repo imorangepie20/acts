@@ -71,6 +71,16 @@ describe("parseCardPurchases", () => {
     ]);
   });
 
+  it("skips a 합계 footer row", () => {
+    const grid: Cell[][] = [
+      ["승인일자", "가맹점명", "합계"],
+      ["2026-10-15", "가", 1000],
+      ["합계", null, 1000],
+      [null, "합계", 1000],
+    ];
+    expect(rowsOf(parseCardPurchases(grid))).toHaveLength(1);
+  });
+
   it("rejects more than 1,000 data rows", () => {
     const many: Cell[][] = Array.from({ length: 1001 }, (_, i) => ["2026-10-15", "가", 1000 + i]);
     const head: Cell[] = ["승인일자", "가맹점명", "합계"];
