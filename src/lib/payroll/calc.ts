@@ -50,8 +50,10 @@ function taxForFamily(table: WithholdingTable, wage: number, family: number): nu
     let rule: (typeof table.over10m)[number] | undefined;
     for (const r of table.over10m) if (wage > r.above) rule = r;
     if (!rule) return base;
+    if (rule.base !== "table10m") throw new Error(`Unsupported over10m base: ${rule.base}`);
     // (wage - above) × plusRate% × plusPercent%, integer math in 1/10000 steps
     const extra = Math.floor(((wage - rule.above) * rule.plusRate * rule.plusPercentOfExcess) / 10_000);
+    // 10원 미만 버림 (국고금 관리법 제47조), consistent with the 80%/120% floor.
     return floor10(base + rule.addFixed + extra);
   }
   const row = table.rows.find((r) => r.from <= wage && wage < r.to);
@@ -103,7 +105,8 @@ export function computeLine(input: {
   const healthEmp = healthOn ? pct10(e.healthBase, r.healthEmployee) : 0;
   const healthCo = healthOn ? pct10(e.healthBase, r.healthCompany) : 0;
   // 장기요양 is a share of that side's 건강보험료.
-  const ltcEmp = pct10(healthEmp, r.ltcEmployee);
+  // An overridden 건강보험료 drives the employee ltc unless ltc is overridden too.
+  const ltcEmp = pct10(overrides.health ?? healthEmp, r.ltcEmployee);
   const ltcCo = pct10(healthCo, r.ltcCompany);
 
   const employmentEmp = e.insEmployment ? pct10(split.employmentBase, r.employmentEmployee) : 0;

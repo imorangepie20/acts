@@ -11,6 +11,8 @@ const table: WithholdingTable = {
     { from: 1_000_000, to: 2_000_000, tax: [100_000, 50_000, 30_000, 20_000, 10_000, 5_000, 0, 0, 0, 0, 0] },
     { from: 2_000_000, to: 3_000_000, tax: [12_345, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
     // 10,000천원 row; family 1 = 1,507,400 as in the real table
+    { from: 3_000_000, to: 4_000_000, tax: [0, 0, 0, 0, 0, 0, 0, 0, 0, 30_000, 10_000] },
+    { from: 4_000_000, to: 5_000_000, tax: [0, 0, 0, 0, 0, 0, 0, 0, 0, 12_000, 10_000] },
     { from: 10_000_000, to: 10_000_001, tax: [1_507_400, 1_000_000, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
   ],
   over10m: real.over10m,
@@ -143,5 +145,33 @@ describe("income tax", () => {
   // 20,000,000, 1명: 1,507,400 + 1,397,000 + 6,000,000 × 0.98 × 0.38 (= 2,234,400) = 5,138,800
   it("over 10,000천원, second band", () => {
     expect(monthlyIncomeTax(table, 20_000_000, 1, 0)).toBe(5_138_800);
+  });
+  it("floors the over-10,000천원 amount to 10원 (국고금 관리법 제47조)", () => {
+    // 1,507,400 + 25,000 + floor(1 x 0.98 x 0.35) = 1,532,400
+    expect(monthlyIncomeTax(table, 10_000_001, 1, 0)).toBe(1_532_400);
+    // 100 x 0.98 x 0.35 = 34.3 -> 34; 1,532,400 + 34 = 1,532,434 -> 1,532,430
+    expect(monthlyIncomeTax(table, 10_000_100, 1, 0)).toBe(1_532_430);
+  });
+  it("throws on an unsupported over10m base", () => {
+    const bad = { ...table, over10m: [{ ...real.over10m[0], base: "prev" as const }] };
+    expect(() => monthlyIncomeTax(bad, 12_000_000, 1, 0)).toThrow();
+  });
+  it("more than 11 family: tax(11) - (tax(10) - tax(11)) x extra", () => {
+    // 3,500,000: tax(11) 10,000, tax(10) 30,000 -> 10,000 - 20,000 = -10,000 -> 0
+    expect(monthlyIncomeTax(table, 3_500_000, 12, 0)).toBe(0);
+    // 4,500,000: 10,000 - 2,000 x 1 = 8,000 (12명); 6,000 (13명)
+    expect(monthlyIncomeTax(table, 4_500_000, 12, 0)).toBe(8_000);
+    expect(monthlyIncomeTax(table, 4_500_000, 13, 0)).toBe(6_000);
+  });
+  it("band edges: from inclusive, to exclusive, below the first band", () => {
+    expect(monthlyIncomeTax(table, 999_999, 1, 0)).toBe(0); // row 0
+    expect(monthlyIncomeTax(table, 1_000_000, 1, 0)).toBe(100_000); // row 1
+    expect(monthlyIncomeTax(table, 1_999_999, 1, 0)).toBe(100_000);
+    expect(monthlyIncomeTax(table, 2_000_000, 1, 0)).toBe(12_345);
+    expect(monthlyIncomeTax({ ...table, rows: table.rows.slice(1) }, 999_999, 1, 0)).toBe(0); // below first band
+  });
+  it("override of health recomputes employee ltc unless ltc is overridden", () => {
+    expect(calc({ overrides: { health: 100_000 } }).deductions.ltc).toBe(13_140);
+    expect(calc({ overrides: { health: 100_000, ltc: 5 } }).deductions.ltc).toBe(5);
   });
 });
