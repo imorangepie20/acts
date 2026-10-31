@@ -9,16 +9,25 @@ export class MissingEncryptionKeyError extends Error {
   }
 }
 
+/** The key is set but unusable (not 32 bytes of base64). Subclass, so every missing-key guard catches it. */
+export class InvalidEncryptionKeyError extends MissingEncryptionKeyError {
+  constructor() {
+    super();
+    this.message = "PAYROLL_ENCRYPTION_KEY가 올바르지 않습니다. 32바이트 키를 base64로 설정하세요.";
+    this.name = "InvalidEncryptionKeyError";
+  }
+}
+
 /** Read on every call so a missing key fails only the caller, not unrelated pages. */
 function masterKey(): Buffer {
   const raw = process.env.PAYROLL_ENCRYPTION_KEY;
   if (!raw) throw new MissingEncryptionKeyError();
   const key = Buffer.from(raw, "base64");
-  if (key.length !== 32) throw new Error("PAYROLL_ENCRYPTION_KEY는 base64 32바이트여야 합니다.");
+  if (key.length !== 32) throw new InvalidEncryptionKeyError();
   return key;
 }
 
-/** Throws MissingEncryptionKeyError (or the length error) when the key is not usable. */
+/** Throws MissingEncryptionKeyError (or InvalidEncryptionKeyError) when the key is not usable. */
 export function assertEncryptionKey(): void {
   masterKey();
 }
@@ -33,8 +42,11 @@ export function encryptSecret(plain: string): string {
 export function decryptSecret(stored: string): string {
   const [v, iv, tag, ct] = stored.split(":");
   if (v !== "v1" || !iv || !tag || ct === undefined) throw new Error("알 수 없는 암호문 형식입니다.");
-  const d = createDecipheriv("aes-256-gcm", masterKey(), Buffer.from(iv, "base64"));
-  d.setAuthTag(Buffer.from(tag, "base64"));
+  const ivBytes = Buffer.from(iv, "base64");
+  const tagBytes = Buffer.from(tag, "base64");
+  if (ivBytes.length !== 12 || tagBytes.length !== 16) throw new Error("알 수 없는 암호문 형식입니다.");
+  const d = createDecipheriv("aes-256-gcm", masterKey(), ivBytes, { authTagLength: 16 });
+  d.setAuthTag(tagBytes);
   return Buffer.concat([d.update(Buffer.from(ct, "base64")), d.final()]).toString("utf8");
 }
 

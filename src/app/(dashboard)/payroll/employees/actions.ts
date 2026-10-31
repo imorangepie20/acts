@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/server/auth/dal";
-import { ENCRYPTION_KEY_MISSING_PAGE } from "@/server/auth/mfa";
+import { encryptionKeyMessage } from "@/server/auth/mfa";
 import { MissingEncryptionKeyError } from "@/server/crypto/secret";
 import { db } from "@/server/db";
 import { createEmployee, revealEmployeeSecret, updateEmployee, type SecretField } from "@/server/payroll/employees";
@@ -18,7 +18,7 @@ async function guarded<T>(fn: () => Promise<Result<T>>): Promise<Result<T>> {
   try {
     return await fn();
   } catch (e) {
-    if (e instanceof MissingEncryptionKeyError) return fail(ENCRYPTION_KEY_MISSING_PAGE);
+    if (e instanceof MissingEncryptionKeyError) return fail(encryptionKeyMessage(e));
     throw e;
   }
 }

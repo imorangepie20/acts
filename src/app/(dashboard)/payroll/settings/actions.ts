@@ -10,11 +10,11 @@ import { fail, type Result } from "@/server/result";
 
 const INVALID = "입력값이 올바르지 않습니다.";
 
-export async function savePayItemAction(input: unknown): Promise<Result> {
+export async function savePayItemAction(input: unknown, mode: unknown): Promise<Result> {
   const user = await requirePermission("payroll:manage");
   const p = parsePayItem(input);
-  if (!p.ok) return fail(INVALID);
-  const r = await saveItem(db, user, p.data);
+  if (!p.ok || (mode !== "create" && mode !== "update")) return fail(INVALID);
+  const r = await saveItem(db, user, p.data, mode);
   if (r.ok) revalidatePath("/payroll/settings");
   return r;
 }

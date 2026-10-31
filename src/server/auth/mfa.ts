@@ -8,6 +8,7 @@ import {
   decryptSecret,
   encryptSecret,
   keyedHash,
+  InvalidEncryptionKeyError,
   MissingEncryptionKeyError,
 } from "@/server/crypto/secret";
 import { fail, ok, type Result } from "@/server/result";
@@ -18,6 +19,13 @@ import { generateTotpSecret, matchTotpStep, otpauthUrl } from "./totp";
 export const WRONG_CODE = "인증 코드가 올바르지 않습니다.";
 export const ENCRYPTION_KEY_MISSING_PAGE =
   "서버 설정 오류: PAYROLL_ENCRYPTION_KEY가 설정되지 않았습니다. 관리자에게 문의하세요.";
+
+/** Page message for a missing key, or the key's own message when it is set but malformed. */
+export function encryptionKeyMessage(e: MissingEncryptionKeyError): string {
+  return e instanceof InvalidEncryptionKeyError
+    ? `서버 설정 오류: ${e.message} 관리자에게 문의하세요.`
+    : ENCRYPTION_KEY_MISSING_PAGE;
+}
 const NO_ENROLMENT = "등록 정보가 없습니다. 화면을 새로 고쳐 다시 등록하세요.";
 const RECOVERY_COUNT = 10;
 // no 0/o, 1/l/i: the codes are read off paper
@@ -45,14 +53,14 @@ function hashRecoveryCode(code: string): string {
 }
 
 /**
- * Runs `fn`, turning only a missing PAYROLL_ENCRYPTION_KEY into the page message (so the 2FA
+ * Runs `fn`, turning only a missing or malformed PAYROLL_ENCRYPTION_KEY into the page message (so the 2FA
  * screens explain the problem instead of a 500). Every other error is rethrown.
  */
 export async function withEncryptionKey<T>(fn: () => Promise<T>): Promise<Result<T>> {
   try {
     return ok(await fn());
   } catch (e) {
-    if (e instanceof MissingEncryptionKeyError) return fail(ENCRYPTION_KEY_MISSING_PAGE);
+    if (e instanceof MissingEncryptionKeyError) return fail(encryptionKeyMessage(e));
     throw e;
   }
 }

@@ -303,6 +303,16 @@ describe("withEncryptionKey", () => {
     );
   });
 
+  it("shows the key's own message when it is malformed", async () => {
+    const u = await seedUser("admin");
+    process.env.PAYROLL_ENCRYPTION_KEY = "bad";
+    expect(await withEncryptionKey(() => startEnrolment(db, u.id))).toEqual({
+      ok: false,
+      error:
+        "서버 설정 오류: PAYROLL_ENCRYPTION_KEY가 올바르지 않습니다. 32바이트 키를 base64로 설정하세요. 관리자에게 문의하세요.",
+    });
+  });
+
   it("covers the second step too", async () => {
     const u = await seedUser("admin");
     const { secret } = await enrol(u.id);

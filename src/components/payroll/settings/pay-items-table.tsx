@@ -54,7 +54,10 @@ function ItemForm({
       onSubmit={(e) => {
         e.preventDefault();
         startTransition(async () => {
-          const r = await savePayItemAction({ ...v, nontaxLimit: v.taxable ? null : (v.nontaxLimit ?? 0) });
+          const r = await savePayItemAction(
+            { ...v, nontaxLimit: v.taxable ? null : (v.nontaxLimit ?? 0) },
+            isNew ? "create" : "update",
+          );
           if (r.ok) {
             toast.success(isNew ? "급여 항목을 추가했습니다." : "저장했습니다.");
             onDone();

@@ -1,5 +1,6 @@
 import { EmployeesTable } from "@/components/payroll/employees/employees-table";
 import { KeyMissingAlert } from "@/components/payroll/key-missing";
+import { encryptionKeyMessage } from "@/server/auth/mfa";
 import { requirePermission } from "@/server/auth/dal";
 import { MissingEncryptionKeyError } from "@/server/crypto/secret";
 import { db } from "@/server/db";
@@ -9,15 +10,17 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ a
   await requirePermission("payroll:manage");
   const includeLeft = (await searchParams).all === "1";
   let rows: EmployeeRow[] | null = null;
+  let keyError: string | undefined;
   try {
     rows = await listEmployees(db, { includeLeft });
   } catch (e) {
     if (!(e instanceof MissingEncryptionKeyError)) throw e;
+    keyError = encryptionKeyMessage(e);
   }
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">사원</h1>
-      {rows ? <EmployeesTable rows={rows} includeLeft={includeLeft} /> : <KeyMissingAlert />}
+      {rows ? <EmployeesTable rows={rows} includeLeft={includeLeft} /> : <KeyMissingAlert message={keyError} />}
     </div>
   );
 }

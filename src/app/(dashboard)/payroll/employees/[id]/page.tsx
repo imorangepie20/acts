@@ -3,6 +3,7 @@ import { KeyMissingAlert } from "@/components/payroll/key-missing";
 import { EmployeeForm } from "@/components/payroll/employees/employee-form";
 import { SecretReveal } from "@/components/payroll/employees/secret-reveal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { encryptionKeyMessage } from "@/server/auth/mfa";
 import { requirePermission } from "@/server/auth/dal";
 import { MissingEncryptionKeyError } from "@/server/crypto/secret";
 import { db } from "@/server/db";
@@ -21,7 +22,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     return (
       <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-semibold">사원 상세</h1>
-        <KeyMissingAlert />
+        <KeyMissingAlert message={encryptionKeyMessage(e)} />
       </div>
     );
   }

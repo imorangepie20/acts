@@ -93,36 +93,47 @@ describe("pay items", () => {
   });
 
   it("adds and updates an item", async () => {
-    expect((await saveItem(db, admin, item())).ok).toBe(true);
-    expect((await saveItem(db, admin, item({ name: "가족 수당", debitAccountCode: "802" }))).ok).toBe(true);
+    expect((await saveItem(db, admin, item(), "create")).ok).toBe(true);
+    expect((await saveItem(db, admin, item({ name: "가족 수당", debitAccountCode: "802" }), "update")).ok).toBe(true);
     expect((await listItems(db)).find((i) => i.code === "family")).toMatchObject({
       name: "가족 수당",
       debitAccountCode: "802",
     });
   });
 
+  it("refuses to create over an existing code and to update an unknown one", async () => {
+    expect((await saveItem(db, admin, item(), "create")).ok).toBe(true);
+    expect(await saveItem(db, admin, item({ name: "덮어쓰기" }), "create")).toEqual({
+      ok: false,
+      error: "이미 있는 항목 코드입니다.",
+    });
+    expect((await listItems(db)).find((i) => i.code === "family")?.name).not.toBe("덮어쓰기");
+    expect((await saveItem(db, admin, item({ code: "ghost" }), "update")).ok).toBe(false);
+    expect((await saveItem(db, admin, { ...(await listItems(db))[0], code: "basic" }, "create")).ok).toBe(false);
+  });
+
   it("validates code, account and 비과세 한도", async () => {
-    expect((await saveItem(db, admin, item({ code: "Family" }))).ok).toBe(false);
-    expect((await saveItem(db, admin, item({ code: "f" }))).ok).toBe(false);
-    expect((await saveItem(db, admin, item({ debitAccountCode: "999" }))).ok).toBe(false);
-    expect((await saveItem(db, admin, item({ name: " " }))).ok).toBe(false);
-    expect((await saveItem(db, admin, item({ taxable: false, nontaxLimit: -1 }))).ok).toBe(false);
+    expect((await saveItem(db, admin, item({ code: "Family" }), "create")).ok).toBe(false);
+    expect((await saveItem(db, admin, item({ code: "f" }), "create")).ok).toBe(false);
+    expect((await saveItem(db, admin, item({ debitAccountCode: "999" }), "create")).ok).toBe(false);
+    expect((await saveItem(db, admin, item({ name: " " }), "create")).ok).toBe(false);
+    expect((await saveItem(db, admin, item({ taxable: false, nontaxLimit: -1 }), "create")).ok).toBe(false);
   });
 
   it("deactivates but never deletes a seeded item", async () => {
     expect((await deleteItem(db, admin, "meal")).ok).toBe(false);
     const meal = (await listItems(db)).find((i) => i.code === "meal")!;
-    expect((await saveItem(db, admin, { ...meal, isActive: false })).ok).toBe(true);
+    expect((await saveItem(db, admin, { ...meal, isActive: false }, "update")).ok).toBe(true);
     expect((await listItems(db)).find((i) => i.code === "meal")?.isActive).toBe(false);
   });
 
   it("deletes an added item", async () => {
-    await saveItem(db, admin, item());
+    await saveItem(db, admin, item(), "create");
     expect((await deleteItem(db, admin, "family")).ok).toBe(true);
     expect((await listItems(db)).some((i) => i.code === "family")).toBe(false);
   });
 
   it("is forbidden for staff", async () => {
-    expect((await saveItem(db, staff, item())).ok).toBe(false);
+    expect((await saveItem(db, staff, item(), "create")).ok).toBe(false);
   });
 });

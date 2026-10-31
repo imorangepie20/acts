@@ -45,6 +45,7 @@ const ERR_ACCOUNT = "전표 계정을 찾을 수 없거나 사용하지 않는 �
 const ERR_BUILTIN = "기본 항목은 삭제할 수 없습니다. 사용 여부를 끄세요.";
 const ERR_IN_USE = "급여 대장이나 사원 기본 금액에 쓰인 항목은 삭제할 수 없습니다. 사용 여부를 끄세요.";
 const ERR_NOT_FOUND = "급여 항목을 찾을 수 없습니다.";
+const ERR_EXISTS = "이미 있는 항목 코드입니다.";
 
 export const canManagePayroll = (actor: SessionUser) => can(actor.role, "payroll:manage");
 
@@ -62,8 +63,13 @@ export async function isActiveAccountCode(db: Db, code: string): Promise<boolean
   return row !== undefined;
 }
 
-/** Creates the item, or updates the one with the same code. */
-export async function saveItem(db: Db, actor: SessionUser, item: PayItemInput): Promise<Result> {
+/** "create" fails on an existing code; "update" fails on an unknown one. */
+export async function saveItem(
+  db: Db,
+  actor: SessionUser,
+  item: PayItemInput,
+  mode: "create" | "update",
+): Promise<Result> {
   if (!canManagePayroll(actor)) return fail(ERR_FORBIDDEN);
   const code = item.code.trim();
   if (!CODE_RE.test(code)) return fail(ERR_CODE);
@@ -83,11 +89,16 @@ export async function saveItem(db: Db, actor: SessionUser, item: PayItemInput): 
     sort: item.sort,
     isActive: item.isActive,
   };
-  await db
-    .insert(payrollItems)
-    .values({ code, kind: "earning", ...values })
-    .onConflictDoUpdate({ target: payrollItems.code, set: values });
-  return ok();
+  if (mode === "create") {
+    const rows = await db
+      .insert(payrollItems)
+      .values({ code, kind: "earning", ...values })
+      .onConflictDoNothing()
+      .returning({ code: payrollItems.code });
+    return rows.length ? ok() : fail(ERR_EXISTS);
+  }
+  const rows = await db.update(payrollItems).set(values).where(eq(payrollItems.code, code)).returning({ code: payrollItems.code });
+  return rows.length ? ok() : fail(ERR_NOT_FOUND);
 }
 
 /** Deletes an added item that no run line or employee default uses. */

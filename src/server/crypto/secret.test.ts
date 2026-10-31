@@ -4,6 +4,7 @@ import {
   encryptSecret,
   hmacSecret,
   keyedHash,
+  InvalidEncryptionKeyError,
   MissingEncryptionKeyError,
 } from "./secret";
 
@@ -40,6 +41,23 @@ describe("secret", () => {
   it("throws MissingEncryptionKeyError when the key is unset", () => {
     delete process.env.PAYROLL_ENCRYPTION_KEY;
     expect(() => keyedHash("totp-recovery", "x")).toThrow(MissingEncryptionKeyError);
+  });
+  it("rejects a malformed key with InvalidEncryptionKeyError (a MissingEncryptionKeyError)", () => {
+    for (const bad of ["not-base64-32-bytes", "   ", Buffer.alloc(16).toString("base64")]) {
+      process.env.PAYROLL_ENCRYPTION_KEY = bad;
+      expect(() => encryptSecret("x")).toThrow(InvalidEncryptionKeyError);
+      expect(() => encryptSecret("x")).toThrow(MissingEncryptionKeyError);
+      expect(() => encryptSecret("x")).toThrow(
+        "PAYROLL_ENCRYPTION_KEY가 올바르지 않습니다. 32바이트 키를 base64로 설정하세요.",
+      );
+    }
+  });
+  it("rejects a truncated tag and a wrong-size iv", () => {
+    const p = encryptSecret("hello").split(":");
+    const tag = Buffer.from(p[2], "base64").subarray(0, 4).toString("base64");
+    expect(() => decryptSecret([p[0], p[1], tag, p[3]].join(":"))).toThrow("알 수 없는 암호문 형식입니다.");
+    const iv = Buffer.from(p[1], "base64").subarray(0, 8).toString("base64");
+    expect(() => decryptSecret([p[0], iv, p[2], p[3]].join(":"))).toThrow("알 수 없는 암호문 형식입니다.");
   });
   it("keyedHash uses a per-label subkey", () => {
     expect(keyedHash("totp-recovery", "a")).toMatch(/^[0-9a-f]{64}$/);
