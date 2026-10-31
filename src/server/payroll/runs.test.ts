@@ -12,6 +12,7 @@ import {
   employees,
   payrollRates,
   payrollRuns,
+  voucherLines,
   sites,
   users,
   voucherHistory,
@@ -37,6 +38,7 @@ import {
   deleteRun,
   getRun,
   listRuns,
+  previewRunVoucher,
   recomputeRun,
   removeEmployeeFromRun,
   updateRunLines,
@@ -273,6 +275,21 @@ describe("confirmRun", () => {
     expect((await updateRunLines(db, admin, id, d.version, [{ employeeId: d.lines[0].employeeId, amounts: { basic: 1 } }])).ok).toBe(
       false,
     );
+  });
+
+  it("previewRunVoucher sums the voucher per account and equals what confirm writes", async () => {
+    await emp();
+    await emp({ isExecutive: true, defaultAmounts: { basic: 5_000_000 } });
+    const id = await run(regular("2026-06", "2026-06-25"));
+    const p = await previewRunVoucher(db, id);
+    if (!p.ok) throw new Error(p.error);
+    expect(p.value.map((r) => r.code)).toEqual(["801", "802", "811", "817", "103", "254", "262"]);
+    const debit = p.value.reduce((s, r) => s + r.debit, 0);
+    expect(debit).toBe(p.value.reduce((s, r) => s + r.credit, 0));
+    const d = await confirm(id);
+    const lines = await db.select().from(voucherLines).where(eq(voucherLines.voucherId, d.voucherId!));
+    expect(lines.filter((l) => l.side === "debit").reduce((s, l) => s + Number(l.amount), 0)).toBe(debit);
+    expect((await previewRunVoucher(db, "not-a-uuid")).ok).toBe(false);
   });
 
   it("confirm creates a pending voucher when approval is on", async () => {

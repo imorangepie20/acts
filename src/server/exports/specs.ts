@@ -319,8 +319,15 @@ export async function buildSheetSpec(db: Db, report: ReportKey, sp: SearchParams
 export type TaxListKey = "tax-invoices" | "card-purchases";
 export const TAX_LIST_KEYS: readonly TaxListKey[] = ["tax-invoices", "card-purchases"];
 
-/** Permission an export key needs: tax lists are `export:tax`, the 1C reports `ledger:view`. */
+/** The 급여 대장 of one run (`?run=<id>`). */
+export const PAYROLL_RUN_KEY = "payroll-run";
+
+/**
+ * Permission an export key needs: tax lists are `export:tax`, the 급여 대장 `payroll:manage`, the
+ * 1C reports `ledger:view`.
+ */
 export function exportPermission(key: string): Permission {
+  if (key === PAYROLL_RUN_KEY) return "payroll:manage";
   return (TAX_LIST_KEYS as readonly string[]).includes(key) ? "export:tax" : "ledger:view";
 }
 

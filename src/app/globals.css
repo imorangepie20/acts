@@ -128,3 +128,31 @@
     @apply font-sans;
   }
 }
+/* Print views (급여명세서): only the [data-print-root] content, on white A4 pages. */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body:has([data-print-root]) {
+    background: white;
+    color: black;
+  }
+  body:has([data-print-root]) [data-slot="sidebar"],
+  body:has([data-print-root]) [data-slot="sidebar-inset"] > header {
+    display: none !important;
+  }
+  body:has([data-print-root]) [data-slot="sidebar-inset"],
+  body:has([data-print-root]) [data-slot="sidebar-inset"] > main {
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: 0 !important;
+  }
+  .payslip {
+    break-after: page;
+  }
+  .payslip:last-child {
+    break-after: auto;
+  }
+}

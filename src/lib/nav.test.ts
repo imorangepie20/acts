@@ -18,12 +18,12 @@ describe("navGroupsFor", () => {
     expect(h).toContain("/reports/balance-sheet");
     expect(h).not.toContain("/vouchers/new");
   });
-  it("admin sees all 20 items", () => {
-    expect(hrefs("admin")).toHaveLength(20);
+  it("admin sees all 21 items", () => {
+    expect(hrefs("admin")).toHaveLength(21);
   });
   it("payroll menus need payroll:manage", () => {
     for (const role of ["manager", "admin"] as const) {
-      expect(hrefs(role)).toEqual(expect.arrayContaining(["/payroll/employees", "/payroll/settings"]));
+      expect(hrefs(role)).toEqual(expect.arrayContaining(["/payroll/runs", "/payroll/employees", "/payroll/settings"]));
     }
     for (const role of ["staff", "executive"] as const) {
       expect(hrefs(role).some((h) => h.startsWith("/payroll"))).toBe(false);
@@ -50,6 +50,12 @@ describe("breadcrumbTrail", () => {
     expect(breadcrumbTrail(`/vouchers/${id}`).map((c) => c.label)).toEqual(["전표 목록", "전표 상세"]);
     expect(breadcrumbTrail("/payroll/employees/new").map((c) => c.label)).toEqual(["사원", "사원 등록"]);
     expect(breadcrumbTrail("/payroll/employees/7").map((c) => c.label)).toEqual(["사원", "사원 상세"]);
+    expect(breadcrumbTrail(`/payroll/runs/${id}`).map((c) => c.label)).toEqual(["급여 대장", "대장 상세"]);
+    expect(breadcrumbTrail(`/payroll/runs/${id}/payslips`).map((c) => c.label)).toEqual([
+      "급여 대장",
+      "대장 상세",
+      "급여명세서",
+    ]);
     expect(breadcrumbTrail(`/vouchers/${id}/edit`).map((c) => c.label)).toEqual(["전표 목록", "전표 상세", "수정"]);
   });
 });

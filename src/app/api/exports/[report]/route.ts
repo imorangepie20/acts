@@ -6,12 +6,16 @@ import {
   buildSheetSpec,
   buildTaxListSpecs,
   exportPermission,
+  PAYROLL_RUN_KEY,
   REPORT_KEYS,
   TAX_LIST_KEYS,
   type ReportKey,
   type TaxListKey,
 } from "@/server/exports/specs";
 import { renderWorkbook } from "@/server/exports/xlsx";
+import { getCompany } from "@/server/company/service";
+import { buildPayrollLedgerSheet } from "@/server/payroll/ledger-sheet";
+import { getRun } from "@/server/payroll/runs";
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -28,17 +32,25 @@ function xlsxResponse(body: Buffer, fileName: string) {
 
 /**
  * Excel download of one report, built from the same filters as its page. The 1C reports need `ledger:view`;
- * the tax lists (`tax-invoices`, `card-purchases`) need `export:tax` and take `from`/`to` only.
+ * the tax lists (`tax-invoices`, `card-purchases`) need `export:tax` and take `from`/`to` only;
+ * `payroll-run` (the 급여 대장, masked 주민등록번호 only) needs `payroll:manage` and takes `run`.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ report: string }> }) {
   const user = await verifySession();
   const { report } = await params;
   if (!can(user.role, exportPermission(report))) return new Response(null, { status: 403 });
-  const isTax = (TAX_LIST_KEYS as readonly string[]).includes(report);
-  if (!isTax && !(REPORT_KEYS as readonly string[]).includes(report)) return new Response(null, { status: 404 });
-
   const sp: Record<string, string> = {};
   for (const [k, v] of new URL(request.url).searchParams) if (!(k in sp)) sp[k] = v;
+
+  if (report === PAYROLL_RUN_KEY) {
+    const run = sp.run ? await getRun(db, sp.run) : null;
+    if (!run) return new Response(null, { status: 404 });
+    const spec = buildPayrollLedgerSheet(run, (await getCompany(db)).name);
+    return xlsxResponse(await renderWorkbook([spec]), spec.fileName);
+  }
+
+  const isTax = (TAX_LIST_KEYS as readonly string[]).includes(report);
+  if (!isTax && !(REPORT_KEYS as readonly string[]).includes(report)) return new Response(null, { status: 404 });
 
   if (isTax) {
     const { from, to } = sp;

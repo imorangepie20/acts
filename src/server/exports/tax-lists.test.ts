@@ -119,6 +119,8 @@ describe("workbooks and permissions", () => {
     expect(exportPermission("tax-invoices")).toBe("export:tax");
     expect(exportPermission("card-purchases")).toBe("export:tax");
     expect(exportPermission("journal")).toBe("ledger:view");
+    expect(exportPermission("payroll-run")).toBe("payroll:manage");
+    expect(can("staff", exportPermission("payroll-run"))).toBe(false);
     expect(can("executive", exportPermission("tax-invoices"))).toBe(false);
     expect(can("staff", exportPermission("tax-invoices"))).toBe(true);
   });

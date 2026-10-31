@@ -721,7 +721,7 @@ type Mapping = {
  * Resolves the settings' account codes (and the items' own debit accounts) to active accounts, and
  * requires the 기관 partners on the 예수금 / 미지급 accounts that need a partner.
  */
-async function resolveMapping(tx: Tx, ctx: Ctx, lines: { amounts: Record<string, number> }[]): Promise<Result<Mapping>> {
+async function resolveMapping(tx: Conn, ctx: Ctx, lines: { amounts: Record<string, number> }[]): Promise<Result<Mapping>> {
   const [s] = await tx.select().from(payrollSettings).where(eq(payrollSettings.id, 1));
   if (!s) return fail(ERR_SETTINGS);
   const used = ctx.items.filter((i) => lines.some((l) => (l.amounts[i.code] ?? 0) > 0));
@@ -787,6 +787,55 @@ async function resolveMapping(tx: Tx, ctx: Ctx, lines: { amounts: Record<string,
     partners,
     items: [...itemAccounts].map(([code, accountId]) => ({ code, accountId })),
   });
+}
+
+export type VoucherPreviewRow = { code: string; name: string; debit: number; credit: number };
+
+/**
+ * The voucher 확정 would write, summed per account, for the confirm dialog. Built from the stored
+ * lines as the grid shows them (confirm itself re-checks them against the current rates). A
+ * settings problem returns the same message confirm would.
+ */
+export async function previewRunVoucher(db: Db, runId: string): Promise<Result<VoucherPreviewRow[]>> {
+  if (!isUuid(runId)) return fail(ERR_NOT_FOUND);
+  const [run] = await db.select().from(payrollRuns).where(eq(payrollRuns.id, runId));
+  if (!run) return fail(ERR_NOT_FOUND);
+  const stored = await storedLines(db, runId);
+  if (stored.length === 0) return fail(ERR_EMPTY);
+  const ctx = await loadCtx(db, run);
+  if (!ctx.ok) return ctx;
+  const mapping = await resolveMapping(db, ctx.value, stored);
+  if (!mapping.ok) return mapping;
+  const voucher = buildPayrollVoucher({
+    payDate: run.payDate,
+    description: payrollDescription(run.type, run.yearMonth),
+    lines: stored.map((l) => ({
+      employee: {
+        isExecutive: l.snapshot.isExecutive,
+        siteId: l.snapshot.siteId,
+        departmentId: l.snapshot.departmentId,
+      },
+      amounts: l.amounts,
+      result: l.result,
+    })),
+    ...mapping.value,
+  });
+  const ids = [...new Set(voucher.lines.map((l) => l.accountId))];
+  const found = await db
+    .select({ id: accounts.id, code: accounts.code, name: accounts.name })
+    .from(accounts)
+    .where(inArray(accounts.id, ids));
+  const byId = new Map(found.map((a) => [a.id, a]));
+  const rows = new Map<number, VoucherPreviewRow>();
+  for (const l of voucher.lines) {
+    const a = byId.get(l.accountId)!;
+    const row = rows.get(l.accountId) ?? { code: a.code, name: a.name, debit: 0, credit: 0 };
+    if (l.side === "debit") row.debit += l.amount;
+    else row.credit += l.amount;
+    rows.set(l.accountId, row);
+  }
+  // Debit accounts first, then credit accounts, each by code.
+  return ok([...rows.values()].sort((a, b) => Number(b.debit > 0) - Number(a.debit > 0) || a.code.localeCompare(b.code)));
 }
 
 /**

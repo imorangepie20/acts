@@ -8,7 +8,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <SidebarProvider>
       <AppSidebar user={user} />
-      <SidebarInset>
+      {/* min-w-0: a wide table scrolls inside its own container instead of widening the page. */}
+      <SidebarInset className="min-w-0">
         <AppHeader user={user} />
         <main className="flex flex-1 flex-col gap-4 p-4">{children}</main>
       </SidebarInset>
