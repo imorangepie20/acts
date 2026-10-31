@@ -79,9 +79,10 @@ export function PartnerPicker({ label, id, value, onChange, className }: Props) 
           <span className="truncate">{value ? value.name : "거래처 없음"}</span>
           <ChevronsUpDownIcon className="size-4 opacity-50" />
         </PopoverTrigger>
-        <PopoverContent className="w-72 p-0" align="start">
+        {/* fixed: cmdk scrolls its first item into view before the popup is positioned, which would scroll the page */}
+        <PopoverContent className="w-72 p-0" align="start" positionMethod="fixed">
           <Command shouldFilter={false}>
-            <CommandInput placeholder="거래처명 또는 사업자등록번호" value={q} onValueChange={setQ} autoFocus />
+            <CommandInput placeholder="거래처명 또는 사업자등록번호" value={q} onValueChange={setQ} />
             <CommandList>
               <CommandGroup>
                 {results.map((p) => (

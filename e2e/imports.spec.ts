@@ -99,3 +99,24 @@ test("카드 사용내역: 봉사료 행은 비활성과 사유가 보인다", a
   const ok = page.getByRole("row").filter({ hasText: `문구점${id}` });
   await expect(ok.getByRole("checkbox")).toBeEnabled();
 });
+
+test("계정 선택창을 열어도 페이지 스크롤이 그대로다", async ({ page }) => {
+  const id = uniq();
+  const own = (await companyBn(page)) || bnFrom("123456789");
+  const file = await xlsx(
+    ["작성일자", "승인번호", "공급자사업자등록번호", "상호", "공급받는자사업자등록번호", "상호", "공급가액", "세액"],
+    Array.from({ length: 30 }, (_, i) => [today(), `SC${id}${i}`, bnFrom(`3${id.slice(0, 6)}${String(i).padStart(2, "0")}`), `스크롤${id}_${i}`, own, "우리", 10000, 1000]),
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/imports");
+  await page.locator('input[type="file"]').setInputFiles({ name: "scroll.xlsx", mimeType: "application/octet-stream", buffer: file });
+  await expect(page.getByText(/업로드 완료/)).toBeVisible();
+
+  const picker = page.getByRole("row").filter({ hasText: `스크롤${id}_12` }).getByRole("combobox");
+  await picker.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  const before = await page.evaluate(() => window.scrollY);
+  expect(before).toBeGreaterThan(0);
+  await picker.click();
+  await expect(page.getByPlaceholder("코드 또는 이름으로 검색")).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
+});

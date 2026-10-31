@@ -85,9 +85,10 @@ export function AccountPicker({ label, id, accounts, groups, first = NONE, value
         <span className="truncate">{selected ? `${selected.code} ${selected.name}` : "계정 선택"}</span>
         <ChevronsUpDownIcon className="size-4 opacity-50" />
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-0" align="start">
+      {/* fixed: cmdk scrolls its first item into view before the popup is positioned, which would scroll the page */}
+      <PopoverContent className="w-72 p-0" align="start" positionMethod="fixed">
         <Command>
-          <CommandInput placeholder="코드 또는 이름으로 검색" autoFocus />
+          <CommandInput placeholder="코드 또는 이름으로 검색" />
           <CommandList>
             <CommandEmpty>계정이 없습니다.</CommandEmpty>
             {pinned.length > 0 && <CommandGroup heading="자주 쓰는 계정">{pinned.map(item)}</CommandGroup>}
