@@ -15,8 +15,8 @@
  *   ㉮ = [(상여 + 지급대상기간의 상여 외 급여 합계) ÷ 월수]에 대한 간이세액표 세액
  *   ㉯ = 월수, ㉰ = 지급대상기간 상여 외 급여에서 이미 원천징수한 세액
  *   80/100/120% 선택: 간이세액표 세액에 대한 비율. The pages do not state the order against
- *   ×월수; we apply it to (㉮ × ㉯) and floor to 10원 (UNVERIFIED order).
- * Note: the period rules are in the 법 (제136조); the 시행령 page could not be fetched.
+ *   ×월수; we apply it to the monthly table amount, floor to 10원, then x months (same as the regular run; UNVERIFIED order).
+ * Note: the 법 제136조 text was used because the 시행령 제194조 page could not be fetched.
  * A period longer than 12 months is capped to the 12 months ending at `to`.
  */
 import { describe, expect, it } from "vitest";
@@ -52,6 +52,12 @@ describe("bonusPeriod", () => {
   it("keeps exactly 12 months", () => {
     expect(bonusPeriod("2026-07-25", "2025-07", "2026-06")).toMatchObject({ from: "2025-07", months: 12 });
   });
+  it("rejects a bad month or a half-entered period", () => {
+    expect(() => bonusPeriod("2026-07-25", "2026-00", "2026-04")).toThrow();
+    expect(() => bonusPeriod("2026-07-25", "2026-01", "2026-13")).toThrow();
+    expect(() => bonusPeriod("2026-07-25", "2026-01", null)).toThrow();
+    expect(() => bonusPeriod("2026-07-25", null, "2026-04")).toThrow();
+  });
   it("rejects a reversed period", () => {
     expect(() => bonusPeriod("2026-07-25", "2026-06", "2026-04")).toThrow();
   });
@@ -80,6 +86,22 @@ describe("bonusIncomeTax", () => {
     const i = { ...common, bonusTaxable: 3_000_000, periodRegularTaxable: 6_000_000, periodWithheld: 0, months: 3 };
     expect(bonusIncomeTax({ ...i, withholdingRate: 80 })).toBe(133_320); // 166,650 x .8 = 133,320
     expect(bonusIncomeTax({ ...i, withholdingRate: 120 })).toBe(199_980);
+  });
+  it("floors the rated monthly amount before x months", () => {
+    const odd: WithholdingTable = { ...table, rows: [{ from: 0, to: 10_000_000, tax: [55_545, ...Array(10).fill(0)] }, table.rows[3]] };
+    const tax = bonusIncomeTax({
+      ...common, table: odd, withholdingRate: 80, bonusTaxable: 3_000_000, periodRegularTaxable: 6_000_000, periodWithheld: 0, months: 3,
+    });
+    // floor10(55,545 x .8 = 44,436) = 44,430, x 3 = 133,290 (floor10 of the total would be 133,300)
+    expect(tax).toBe(133_290);
+  });
+  it("rejects bad input", () => {
+    const ok = { ...common, bonusTaxable: 1, periodRegularTaxable: 0, periodWithheld: 0, months: 1 };
+    expect(() => bonusIncomeTax({ ...ok, months: 0 })).toThrow();
+    expect(() => bonusIncomeTax({ ...ok, bonusTaxable: -1 })).toThrow();
+    expect(() => bonusIncomeTax({ ...ok, periodWithheld: 1.5 })).toThrow();
+    expect(() => bonusIncomeTax({ ...ok, bonusTaxable: Number.NaN })).toThrow();
+    expect(() => bonusIncomeTax({ ...ok, withholdingRate: 90 })).toThrow();
   });
   it("uses dependents and children", () => {
     const tax = bonusIncomeTax({
