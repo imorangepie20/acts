@@ -20,7 +20,7 @@ export async function previewImportAction(fd: FormData): Promise<Result<{ rows: 
     return fail(INVALID);
   }
   if (!(file instanceof File)) return fail(INVALID);
-  if (!file.name.toLowerCase().endsWith(".xlsx")) return fail(ERR_WRONG_FILE_TYPE);
+  if (!/\.xlsx?$/i.test(file.name)) return fail(ERR_WRONG_FILE_TYPE);
   if (file.size > MAX_BYTES) return fail("5MB 이하 파일만 올릴 수 있습니다.");
   return previewImport(db, kind, direction, new Uint8Array(await file.arrayBuffer()));
 }

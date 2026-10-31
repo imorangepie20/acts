@@ -35,7 +35,7 @@ export type ParseResult = Result<{ rows: ParsedRow[] }>;
 export const MAX_IMPORT_ROWS = 1000;
 export const ERR_TOO_MANY_ROWS = "한 번에 1,000건까지 불러올 수 있습니다.";
 export const ERR_WRONG_FILE_TYPE =
-  "엑셀(.xlsx) 파일만 올릴 수 있습니다. 엑셀에서 'Excel 통합 문서(.xlsx)'로 저장한 뒤 올려 주세요.";
+  "엑셀 파일(.xlsx, .xls)만 올릴 수 있습니다. 홈택스에서 내려받은 파일을 그대로 올려 주세요.";
 export const ERR_NEGATIVE = "음수 금액(수정·취소분)은 전표 입력 화면에서 직접 입력하세요.";
 export const ERR_SERVICE_CHARGE = "봉사료가 있는 건은 직접 입력하세요.";
 export const ERR_BAD_DATE = "날짜를 읽을 수 없습니다.";

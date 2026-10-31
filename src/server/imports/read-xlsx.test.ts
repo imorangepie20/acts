@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import * as XLSX from "xlsx";
 import { describe, expect, it } from "vitest";
 import { readFirstSheet } from "./read-xlsx";
 
@@ -40,12 +41,50 @@ describe("readFirstSheet", () => {
     expect(r.value[1][7]).toBe("far");
   });
 
+  it("reads a legacy .xls (BIFF8) workbook, dates as UTC wall clock", async () => {
+    const ws = XLSX.utils.aoa_to_sheet(
+      [
+        ["매입 전자세금계산서 목록"],
+        [],
+        ["작성일자", "상호", "공급가액"],
+        [new Date(Date.UTC(2026, 9, 15)), "공급사", 1000000],
+      ],
+      { UTC: true },
+    );
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "s");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["다른 시트"]]), "t");
+    const bytes = new Uint8Array(XLSX.write(wb, { type: "buffer", bookType: "biff8" }));
+    const r = await readFirstSheet(bytes);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toHaveLength(3); // the blank row is dropped
+    expect(r.value[0][0]).toBe("매입 전자세금계산서 목록");
+    expect(r.value[1]).toEqual(["작성일자", "상호", "공급가액"]);
+    const d = r.value[2][0];
+    expect(d).toBeInstanceOf(Date);
+    expect((d as Date).toISOString().slice(0, 10)).toBe("2026-10-15");
+    expect(r.value[2].slice(1)).toEqual(["공급사", 1000000]);
+  });
+
+  it("reads an HTML table saved with an .xls name, keeping text as written", async () => {
+    const html =
+      "﻿<html><body><table><tr><td>작성일자</td><td>공급가액</td><td>승인번호</td></tr>" +
+      "<tr><td>2026-10-15</td><td>1,000,000</td><td>20261015-0001</td></tr></table></body></html>";
+    const r = await readFirstSheet(new TextEncoder().encode(html));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toEqual([
+      ["작성일자", "공급가액", "승인번호"],
+      ["2026-10-15", "1,000,000", "20261015-0001"],
+    ]);
+  });
+
   it("rejects a CSV as the wrong type", async () => {
     const r = await readFirstSheet(new TextEncoder().encode("a,b\n1,2\n"));
     expect(r).toEqual({
       ok: false,
-      error:
-        "엑셀(.xlsx) 파일만 올릴 수 있습니다. 엑셀에서 'Excel 통합 문서(.xlsx)'로 저장한 뒤 올려 주세요.",
+      error: "엑셀 파일(.xlsx, .xls)만 올릴 수 있습니다. 홈택스에서 내려받은 파일을 그대로 올려 주세요.",
     });
   });
 

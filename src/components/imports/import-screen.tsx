@@ -248,7 +248,7 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
         <input
           ref={fileRef}
           type="file"
-          accept=".xlsx"
+          accept=".xlsx,.xls"
           aria-label="엑셀 파일"
           className="text-sm"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
