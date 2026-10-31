@@ -23,6 +23,23 @@ describe("readFirstSheet", () => {
     expect(r.value[1].slice(0, 2)).toEqual([3, "리치텍스트"]);
   });
 
+  it("keeps columns right of blank columns and sheets that start at column B", async () => {
+    const bytes = await book((ws) => {
+      ws.getCell("B1").value = "head";
+      ws.getCell("E1").value = "amount";
+      ws.getCell("B2").value = "x";
+      ws.getCell("E2").value = 100;
+      ws.getCell("H2").value = "far";
+    });
+    const r = await readFirstSheet(bytes);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value[0][1]).toBe("head");
+    expect(r.value[0][4]).toBe("amount");
+    expect(r.value[1][4]).toBe(100);
+    expect(r.value[1][7]).toBe("far");
+  });
+
   it("rejects a CSV as the wrong type", async () => {
     const r = await readFirstSheet(new TextEncoder().encode("a,b\n1,2\n"));
     expect(r).toEqual({

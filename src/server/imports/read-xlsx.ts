@@ -48,15 +48,20 @@ export async function readFirstSheet(bytes: Uint8Array): Promise<Result<Cell[][]
 
   // Only non-blank rows, in order: the parsers need no row positions, and sparse sheets stay cheap.
   const grid: Cell[][] = [];
-  const width = ws.actualColumnCount;
   let tooMany = false;
   ws.eachRow({ includeEmpty: false }, (row) => {
     if (tooMany) return;
+    // Highest used column index of this row (not the count of used columns).
+    const width = row.cellCount;
     const cells: Cell[] = [];
     for (let c = 1; c <= width; c++) cells.push(toCell(row.getCell(c).value));
     if (isBlankRow(cells)) return;
     if (grid.length >= GUARD_ROWS) tooMany = true;
     else grid.push(cells);
   });
-  return tooMany ? fail(ERR_TOO_MANY_ROWS) : ok(grid);
+  if (tooMany) return fail(ERR_TOO_MANY_ROWS);
+  // Rectangular grid: pad shorter rows up to the widest one.
+  const maxWidth = grid.reduce((m, r) => Math.max(m, r.length), 0);
+  for (const r of grid) while (r.length < maxWidth) r.push(null);
+  return ok(grid);
 }
