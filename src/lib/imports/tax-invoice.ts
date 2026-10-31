@@ -15,14 +15,19 @@ import {
 const REQUIRED = {
   date: ["작성일자"],
   approvalNo: ["승인번호"],
-  supplierBiz: ["공급자사업자등록번호"],
-  buyerBiz: ["공급받는자사업자등록번호"],
-  name: ["상호"],
+  supplierBiz: ["공급자사업자등록번호", "공급자등록번호"],
+  buyerBiz: ["공급받는자사업자등록번호", "공급받는자등록번호"],
   supply: ["공급가액"],
 };
+// Names come either side-prefixed ("공급자 상호") or bare and repeated per side ("상호" after each 등록번호).
 const OPTIONAL = {
+  name: ["상호"],
+  supplierName: ["공급자상호"],
+  buyerName: ["공급받는자상호"],
+  rep: ["대표자명", "성명"],
+  supplierRep: ["공급자대표자명", "공급자성명"],
+  buyerRep: ["공급받는자대표자명", "공급받는자성명"],
   vat: ["세액"],
-  rep: ["대표자명"],
   item: ["품목명"],
   kind: ["전자세금계산서종류", "전자계산서종류"],
 };
@@ -41,8 +46,11 @@ export function parseTaxInvoices(grid: Cell[][], direction: "purchase" | "sale")
   const sale = direction === "sale";
   const counterBizCol = sale ? buyerBizCol : supplierBizCol;
   const ownBizCol = sale ? supplierBizCol : buyerBizCol;
-  const nameCol = firstAfter(cols.name, counterBizCol);
-  const repCol = firstAfter(cols.rep, counterBizCol);
+  const nameCol = (sale ? cols.buyerName : cols.supplierName)[0] ?? firstAfter(cols.name, counterBizCol);
+  const repCol = (sale ? cols.buyerRep : cols.supplierRep)[0] ?? firstAfter(cols.rep, counterBizCol);
+  if (nameCol === undefined) {
+    return fail("필요한 열(상호)을 찾을 수 없습니다. 홈택스에서 내려받은 파일인지 확인하세요.");
+  }
 
   const rows: ParsedRow[] = [];
   for (const cells of grid.slice(headerRow + 1)) {

@@ -22,6 +22,52 @@ const rowsOf = (r: ReturnType<typeof parseTaxInvoices>) => {
 };
 
 describe("parseTaxInvoices", () => {
+  it("reads side-prefixed headers (공급자 등록번호 / 공급자 상호 / 공급자 성명)", () => {
+    const head: Cell[] = [
+      "승인번호", "작성일자", "발급일자", "전송일자",
+      "공급자 등록번호", "공급자 종사업장번호", "공급자 상호", "공급자 성명",
+      "공급받는자 등록번호", "공급받는자 종사업장번호", "공급받는자 상호", "공급받는자 성명",
+      "공급가액", "세액", "합계금액", "비고", "영수/청구", "연관공급가액", "연관세액", "미수금",
+      "공급자 이메일", "공급받는자 이메일",
+    ];
+    const row: Cell[] = [
+      "20261015-41000012-7c3a9b2e", "2026-10-15", "2026-10-15", "2026-10-16",
+      "111-11-11111", null, "(주)공급사", "김공급",
+      "222-22-22222", null, "구매사", "이구매",
+      "1,000,000", "100,000", "1,100,000", null, "청구", null, null, null,
+      "a@x.kr", "b@y.kr",
+    ];
+    const [p] = rowsOf(parseTaxInvoices([head, row], "purchase"));
+    expect(p).toMatchObject({
+      counterpartyName: "(주)공급사",
+      counterpartyBusinessNumber: "1111111111",
+      representative: "김공급",
+      ownBusinessNumber: "2222222222",
+      description: "(주)공급사",
+      supplyAmount: 1000000,
+      vatAmount: 100000,
+      problem: null,
+    });
+    const [s] = rowsOf(parseTaxInvoices([head, row], "sale"));
+    expect(s).toMatchObject({
+      counterpartyName: "구매사",
+      counterpartyBusinessNumber: "2222222222",
+      representative: "이구매",
+      ownBusinessNumber: "1111111111",
+    });
+  });
+
+  it("names 상호 when no name column exists", () => {
+    const r = parseTaxInvoices(
+      [["작성일자", "승인번호", "공급자사업자등록번호", "공급받는자사업자등록번호", "공급가액"]],
+      "purchase",
+    );
+    expect(r).toEqual({
+      ok: false,
+      error: "필요한 열(상호)을 찾을 수 없습니다. 홈택스에서 내려받은 파일인지 확인하세요.",
+    });
+  });
+
   it("reads the 홈택스 목록조회 layout (info, 총합계 and title rows above a 35-column header)", () => {
     const head: Cell[] = [
       "작성일자", "승인번호", "발급일자", "전송일자",
