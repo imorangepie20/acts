@@ -6,11 +6,12 @@ export const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
   general: "일반 전표",
 };
 
-export type VoucherKind = "general" | "closing" | "opening";
+export type VoucherKind = "general" | "closing" | "opening" | "payroll";
 export const VOUCHER_KIND_LABELS: Record<VoucherKind, string> = {
   general: "일반",
   closing: "결산",
   opening: "기초",
+  payroll: "급여",
 };
 
 export type VoucherStatus = "pending" | "approved" | "rejected";

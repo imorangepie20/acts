@@ -238,7 +238,7 @@ async function validate(
       return ERR_INVALID;
     }
   } else {
-    if (input.kind === "opening") return ERR_INVALID; // 기초 is always a general entry
+    if (input.kind === "opening" || input.kind === "payroll") return ERR_INVALID; // 기초 and 급여 are always general entries
     const regular: VoucherInput = { ...input, kind: input.kind };
     const s = toSimpleInput(regular, ctx.vat);
     if (s === null) return ERR_INVALID;

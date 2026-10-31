@@ -10,8 +10,11 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
+  primaryKey,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -167,7 +170,7 @@ export const departments = pgTable("departments", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const voucherKind = pgEnum("voucher_kind", ["general", "closing", "opening"]);
+export const voucherKind = pgEnum("voucher_kind", ["general", "closing", "opening", "payroll"]);
 export const voucherStatus = pgEnum("voucher_status", ["pending", "approved", "rejected"]);
 export const entryType = pgEnum("entry_type", ["purchase", "sale", "transfer", "general"]);
 export const evidenceType = pgEnum("evidence_type", [
@@ -346,4 +349,174 @@ export const voucherImports = pgTable("voucher_imports", {
   source: importSource("source").notNull(),
   meta: jsonb("meta").$type<ImportMeta>().notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// ---- Phase 2: payroll ----
+
+export const payrollItemKind = pgEnum("payroll_item_kind", ["earning"]);
+export const payrollRateKind = pgEnum("payroll_rate_kind", [
+  "pension_employee",
+  "pension_company",
+  "pension_cap",
+  "pension_floor",
+  "health_employee",
+  "health_company",
+  "ltc_employee",
+  "ltc_company",
+  "employment_employee",
+  "employment_company",
+]);
+export const payrollRunType = pgEnum("payroll_run_type", ["regular", "bonus"]);
+export const payrollRunStatus = pgEnum("payroll_run_status", ["draft", "confirmed"]);
+export const payrollAuditField = pgEnum("payroll_audit_field", ["rrn", "account"]);
+
+export const employees = pgTable(
+  "employees",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    employeeNo: text("employee_no").notNull().unique(),
+    name: text("name").notNull(),
+    rrnEnc: text("rrn_enc").notNull(),
+    rrnHmac: text("rrn_hmac").notNull().unique(),
+    hiredOn: date("hired_on", { mode: "string" }).notNull(),
+    leftOn: date("left_on", { mode: "string" }),
+    siteId: integer("site_id")
+      .notNull()
+      .references(() => sites.id),
+    departmentId: integer("department_id").references(() => departments.id),
+    isExecutive: boolean("is_executive").notNull().default(false),
+    /** 공제대상가족 count, including the employee. */
+    dependents: integer("dependents").notNull().default(1),
+    /** Children aged 8 to 20. */
+    children: integer("children").notNull().default(0),
+    withholdingRate: smallint("withholding_rate").notNull().default(100),
+    bank: text("bank"),
+    accountEnc: text("account_enc"),
+    accountLast4: text("account_last4"),
+    insPension: boolean("ins_pension").notNull().default(true),
+    insHealth: boolean("ins_health").notNull().default(true),
+    insEmployment: boolean("ins_employment").notNull().default(true),
+    /** 기준소득월액 */
+    pensionBase: bigint("pension_base", { mode: "number" }).notNull().default(0),
+    /** 보수월액 */
+    healthBase: bigint("health_base", { mode: "number" }).notNull().default(0),
+    defaultAmounts: jsonb("default_amounts").$type<Record<string, number>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    check("employees_dependents_min", sql`${t.dependents} >= 1`),
+    check("employees_children_min", sql`${t.children} >= 0`),
+    check("employees_withholding_rate", sql`${t.withholdingRate} in (80, 100, 120)`),
+  ],
+);
+
+export const payrollItems = pgTable("payroll_items", {
+  code: text("code").primaryKey(),
+  name: text("name").notNull(),
+  kind: payrollItemKind("kind").notNull().default("earning"),
+  taxable: boolean("taxable").notNull().default(true),
+  nontaxLimit: bigint("nontax_limit", { mode: "number" }),
+  inEmploymentBase: boolean("in_employment_base").notNull().default(true),
+  /** null = 801/802 by 임원 여부. */
+  debitAccountCode: text("debit_account_code"),
+  sort: integer("sort").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+});
+
+export const payrollSettings = pgTable(
+  "payroll_settings",
+  {
+    id: integer("id").primaryKey().default(1),
+    pensionCompanyCode: text("pension_company_code").notNull().default("817"),
+    insuranceCompanyCode: text("insurance_company_code").notNull().default("811"),
+    withholdingCode: text("withholding_code").notNull().default("254"),
+    companyPayableCode: text("company_payable_code").notNull().default("262"),
+    netPayCode: text("net_pay_code").notNull().default("103"),
+    executiveCode: text("executive_code").notNull().default("801"),
+    staffCode: text("staff_code").notNull().default("802"),
+    pensionPartnerId: integer("pension_partner_id").references(() => partners.id),
+    healthPartnerId: integer("health_partner_id").references(() => partners.id),
+    employmentPartnerId: integer("employment_partner_id").references(() => partners.id),
+    taxPartnerId: integer("tax_partner_id").references(() => partners.id),
+    localTaxPartnerId: integer("local_tax_partner_id").references(() => partners.id),
+  },
+  (t) => [check("payroll_settings_single", sql`${t.id} = 1`)],
+);
+
+export const payrollRates = pgTable(
+  "payroll_rates",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    kind: payrollRateKind("kind").notNull(),
+    effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
+    /** Percent rates are stored as percent (4.75); caps and floors in won. */
+    value: numeric("value", { precision: 12, scale: 6 }).notNull(),
+  },
+  (t) => [uniqueIndex("payroll_rates_kind_from").on(t.kind, t.effectiveFrom)],
+);
+
+export const withholdingTables = pgTable("withholding_tables", {
+  effectiveFrom: date("effective_from", { mode: "string" }).primaryKey(),
+  /** A WithholdingTable (see src/lib/payroll). */
+  data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+});
+
+export const payrollRuns = pgTable(
+  "payroll_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    type: payrollRunType("type").notNull(),
+    yearMonth: text("year_month").notNull(),
+    payDate: date("pay_date", { mode: "string" }).notNull(),
+    bonusFrom: text("bonus_from"),
+    bonusTo: text("bonus_to"),
+    status: payrollRunStatus("status").notNull().default("draft"),
+    voucherId: uuid("voucher_id").references(() => vouchers.id, { onDelete: "set null" }),
+    version: integer("version").notNull().default(1),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    confirmedBy: uuid("confirmed_by").references(() => users.id),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("payroll_runs_regular_month")
+      .on(t.yearMonth)
+      .where(sql`${t.type} = 'regular'`),
+  ],
+);
+
+export const payrollRunLines = pgTable(
+  "payroll_run_lines",
+  {
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => payrollRuns.id, { onDelete: "cascade" }),
+    employeeId: integer("employee_id")
+      .notNull()
+      .references(() => employees.id),
+    amounts: jsonb("amounts").$type<Record<string, number>>().notNull().default({}),
+    /** Partial<Record<DeductionKey, number>> */
+    overrides: jsonb("overrides").$type<Record<string, number>>().notNull().default({}),
+    /** LineResult: the last computed values with overrides applied. */
+    result: jsonb("result").$type<Record<string, unknown>>().notNull().default({}),
+    /** Employee facts at compute time, so payslips stay stable after edits. */
+    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (t) => [primaryKey({ columns: [t.runId, t.employeeId] })],
+);
+
+export const payrollAudit = pgTable("payroll_audit", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id),
+  employeeId: integer("employee_id")
+    .notNull()
+    .references(() => employees.id),
+  field: payrollAuditField("field").notNull(),
+  at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
 });
