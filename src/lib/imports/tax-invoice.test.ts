@@ -22,6 +22,50 @@ const rowsOf = (r: ReturnType<typeof parseTaxInvoices>) => {
 };
 
 describe("parseTaxInvoices", () => {
+  it("reads the 홈택스 목록조회 layout (info, 총합계 and title rows above a 35-column header)", () => {
+    const head: Cell[] = [
+      "작성일자", "승인번호", "발급일자", "전송일자",
+      "공급자사업자등록번호", "종사업장번호", "상호", "대표자명", "주소",
+      "공급받는자사업자등록번호", "종사업장번호", "상호", "대표자명", "주소",
+      "합계금액", "공급가액", "세액", "전자세금계산서분류", "전자세금계산서종류", "발급유형", "비고",
+      "영수/청구 구분", "공급자 이메일", "공급받는자 이메일1", "공급받는자 이메일2",
+      "품목일자", "품목명", "품목규격", "품목수량", "품목단가", "품목공급가액", "품목세액", "품목비고",
+      "공급받는자구분", "위수탁여부",
+    ];
+    const row: Cell[] = [
+      "2026-10-15", "20261015-41000012-7c3a9b2e", "2026-10-15", "2026-10-16",
+      "111-11-11111", null, "(주)공급사", "김공급", "서울",
+      "222-22-22222", null, "구매사", "이구매", "부산",
+      "1,100,000", "1,000,000", "100,000", "세금계산서", "일반", "전자발급", null,
+      "청구", "a@x.kr", "b@y.kr", null,
+      "2026-10-15", "철판", null, "1", "1,000,000", "1,000,000", "100,000", null,
+      "사업자", "아님",
+    ];
+    const grid: Cell[][] = [
+      ["사업자등록번호", "222-22-22222", "상호", "구매사"],
+      [null],
+      ["총 합계금액", "1,100,000", "총 공급가액", "1,000,000", "총 세액", "100,000"],
+      [null],
+      ["매입 전자세금계산서 목록"],
+      head,
+      row,
+    ];
+    const [r] = rowsOf(parseTaxInvoices(grid, "purchase"));
+    expect(r).toMatchObject({
+      key: "nts:20261015410000127c3a9b2e",
+      date: "2026-10-15",
+      counterpartyName: "(주)공급사",
+      counterpartyBusinessNumber: "1111111111",
+      representative: "김공급",
+      ownBusinessNumber: "2222222222",
+      description: "철판",
+      supplyAmount: 1000000,
+      vatAmount: 100000,
+      vatType: "taxable",
+      problem: null,
+    });
+  });
+
   it("finds the header below title rows and maps purchase to the supplier", () => {
     const [row] = rowsOf(parseTaxInvoices([...titles, HEAD, data()], "purchase"));
     expect(row).toMatchObject({

@@ -24,7 +24,7 @@ const OPTIONAL = {
   vat: ["세액"],
   rep: ["대표자명"],
   item: ["품목명"],
-  kind: ["전자세금계산서종류"],
+  kind: ["전자세금계산서종류", "전자계산서종류"],
 };
 
 const text = (c: Cell | undefined): string => (c == null ? "" : String(c).trim());

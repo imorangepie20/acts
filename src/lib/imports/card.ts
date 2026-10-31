@@ -21,11 +21,13 @@ const REQUIRED = {
 const OPTIONAL = {
   supply: ["공급가액"],
   vat: ["세액", "부가세"],
-  service: ["봉사료"],
+  service: ["봉사료", "비과세"],
   bizNo: ["가맹점사업자번호", "가맹점사업자등록번호", "사업자번호"],
   approvalNo: ["승인번호"],
+  /** 홈택스 files carry no 승인번호; this per-transaction serial is the dedup key instead. */
+  serial: ["사업용신용카드거래내역일련번호"],
   cardNo: ["카드번호"],
-  deduct: ["공제여부", "공제구분"],
+  deduct: ["공제여부결정", "공제여부", "공제구분"],
   type: ["가맹점유형", "과세유형"],
 };
 
@@ -60,6 +62,7 @@ export function parseCardPurchases(grid: Cell[][]): ParseResult {
     const total = parseWon(get(cells, "total"));
     const serviceCharge = parseWon(get(cells, "service")) ?? 0;
     const approvalNo = text(get(cells, "approvalNo")) || null;
+    const uniqueNo = approvalNo ?? (text(get(cells, "serial")) || null);
     const last4 = normalizeBusinessNumber(text(get(cells, "cardNo"))).slice(-4);
     const bizNo = normalizeBusinessNumber(text(get(cells, "bizNo"))) || null;
 
@@ -77,8 +80,8 @@ export function parseCardPurchases(grid: Cell[][]): ParseResult {
     }
 
     let key: string;
-    if (approvalNo) {
-      key = `card:${last4}:${date ?? ""}:${approvalNo}`;
+    if (uniqueNo) {
+      key = `card:${last4}:${date ?? ""}:${uniqueNo}`;
     } else {
       const tuple = `card:${date ?? ""}:${merchant}:${total ?? ""}`;
       const n = (seen.get(tuple) ?? 0) + 1;

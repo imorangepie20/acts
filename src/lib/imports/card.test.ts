@@ -46,6 +46,54 @@ describe("parseCardPurchases", () => {
     expect(b.counterpartyBusinessNumber).toBeNull();
   });
 
+  it("reads the 홈택스 사업용 신용카드 layout ((원) units, spaced headers, no 승인번호)", () => {
+    const grid: Cell[][] = [
+      ["사업용 신용카드 매입세액 공제 확인/변경"],
+      [
+        "가맹점명", "승인일자", "카드사", "카드번호", "가맹점 사업자번호", "공급가액(원)", "세액(원)",
+        "비과세(원)", "합계(원)", "가맹점 유형", "업태", "업종", "공제여부 결정", "공제여부 결정",
+        "공제구분코드", "사업용신용카드거래내역년도", "납세자구분코드", "사업용신용카드거래내역일련번호",
+      ],
+      [
+        "주유소", "2026-10-15", "신한카드", "1234-****-****-3456", "123-45-67890", "10,000", "1,000",
+        "0", "11,000", "일반과세자", "소매", "주유", "공제", "공제", "1", "2026", "1", "778899",
+      ],
+      [
+        "식당", "2026-10-16", "신한카드", "1234-****-****-3456", "222-33-44445", "20,000", "2,000",
+        "0", "22,000", "일반과세자", "음식", "한식", "불공제", "불공제", "2", "2026", "1", "778900",
+      ],
+      [
+        "약국", "2026-10-17", "신한카드", "1234-****-****-3456", "333-44-55556", "5,000", "0",
+        "0", "5,000", "면세사업자", "소매", "약", "", "", "", "2026", "1", "778901",
+      ],
+    ];
+    const [a, b, c] = rowsOf(parseCardPurchases(grid));
+    expect(a).toMatchObject({
+      date: "2026-10-15",
+      counterpartyName: "주유소",
+      counterpartyBusinessNumber: "1234567890",
+      supplyAmount: 10000,
+      vatAmount: 1000,
+      deductible: true,
+      vatType: "taxable",
+      key: "card:3456:2026-10-15:778899",
+      problem: null,
+    });
+    expect(a.meta.approvalNo).toBeNull();
+    expect(a.meta.cardNo).toBe("****3456");
+    expect(b).toMatchObject({ supplyAmount: 20000, vatAmount: 2000, deductible: false });
+    expect(c).toMatchObject({ supplyAmount: 5000, vatAmount: 0, vatType: "exempt", problem: null });
+  });
+
+  it("blocks 비과세 amounts like 봉사료", () => {
+    const grid: Cell[][] = [
+      ["가맹점명", "승인일자", "공급가액(원)", "세액(원)", "비과세(원)", "합계(원)"],
+      ["바", "2026-10-15", 10000, 1000, 2000, 13000],
+    ];
+    const [row] = rowsOf(parseCardPurchases(grid));
+    expect(row.problem).toBe("봉사료가 있는 건은 직접 입력하세요.");
+  });
+
   it("blocks 봉사료 and negative totals", () => {
     const grid: Cell[][] = [
       ["승인일자", "가맹점명", "합계", "봉사료"],

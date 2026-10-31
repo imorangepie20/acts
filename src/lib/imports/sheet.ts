@@ -1,7 +1,8 @@
 import { fail, ok, type Result } from "@/server/result";
 import type { Cell } from "./types";
 
-const norm = (c: Cell) => (c == null ? "" : String(c).replace(/\s/g, ""));
+// Header text without spaces or a "(원)" unit suffix: 홈택스 writes "가맹점 사업자번호", "합계(원)".
+const norm = (c: Cell) => (c == null ? "" : String(c).replace(/\s/g, "").replace(/\(원\)$/, ""));
 
 export function findHeader(
   grid: Cell[][],
