@@ -118,6 +118,19 @@ describe("buildTaxPackage", () => {
     expect([...files.keys()].filter((n) => n.startsWith("증빙/"))).toHaveLength(1);
   });
 
+  it("reports an unreadable stored path as missing instead of failing", async () => {
+    const v = await mkVoucher();
+    await attach(v.id, "a.png");
+    await attach(v.id, "b.png");
+    const [row] = await db.select().from(voucherAttachments).where(eq(voucherAttachments.fileName, "b.png"));
+    await fs.rm(path.join(dir, row.storagePath));
+    await fs.mkdir(path.join(dir, row.storagePath)); // a directory where the file should be
+
+    const files = await unpack();
+    expect(files.get("누락된 증빙.txt")!.toString("utf8")).toMatch(/b\.png/);
+    expect([...files.keys()].filter((n) => n.startsWith("증빙/"))).toHaveLength(1);
+  });
+
   it("keeps a traversal name inside 증빙/", async () => {
     const v = await mkVoucher();
     await attach(v.id, "x.png");

@@ -1,4 +1,3 @@
-import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import type { Readable } from "node:stream";
 import archiver from "archiver";
@@ -58,6 +57,22 @@ export async function buildTaxPackage(db: Db, from: string, to: string): Promise
   return zip;
 }
 
+/** Appends and waits until archiver has written the entry, so the queue never holds more than one file. */
+function appendEntry(zip: archiver.Archiver, data: Buffer, entry: archiver.ZipEntryData): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      zip.off("entry", done);
+      zip.off("close", done);
+      zip.off("error", done);
+      resolve();
+    };
+    zip.on("entry", done);
+    zip.on("close", done);
+    zip.on("error", done);
+    zip.append(data, entry);
+  });
+}
+
 async function fill(zip: archiver.Archiver, db: Db, from: string, to: string): Promise<void> {
   const journal = await buildSheetSpec(db, "journal", { from, to });
   const tb = await buildSheetSpec(db, "trial-balance", { from, to });
@@ -84,17 +99,20 @@ async function fill(zip: archiver.Archiver, db: Db, from: string, to: string): P
   const missing: string[] = [];
   const seq = new Map<string, number>();
   for (const r of rows) {
+    if (zip.destroyed) return; // the client went away
     const no = formatVoucherNo(r.date, r.no);
     const n = (seq.get(no) ?? 0) + 1;
     seq.set(no, n);
     const abs = resolveStored(r.storagePath);
-    const ok = abs !== null && (await fs.stat(abs).then((s) => s.isFile(), () => false));
-    if (!ok) {
+    // One file at a time (<= 10MB each): no open descriptors or read streams pile up, and a read
+    // failure of any kind (missing, unreadable, a directory) lands in the missing list.
+    const bytes = abs ? await fs.readFile(abs).catch(() => null) : null;
+    if (!bytes) {
       missing.push(`${no} ${r.fileName}`);
       continue;
     }
     // Images and PDFs are already compressed: store them as they are.
-    zip.append(createReadStream(abs), { name: `증빙/${no}_${n}_${safeFileName(r.fileName)}`, store: true });
+    await appendEntry(zip, bytes, { name: `증빙/${no}_${n}_${safeFileName(r.fileName)}`, store: true });
   }
   if (missing.length > 0) zip.append(missing.join("\n") + "\n", { name: "누락된 증빙.txt" });
   await zip.finalize();
