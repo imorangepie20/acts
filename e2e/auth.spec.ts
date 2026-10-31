@@ -1,4 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { totpCode } from "../src/server/auth/totp";
+import { login, savedTotpSecret, wrongTotpCode } from "./helpers/login";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -24,10 +26,7 @@ test.describe("인증", () => {
   });
 
   test("관리자 로그인 후 /overview 로 이동, 로그아웃 후 보호됨", async ({ page }) => {
-    await page.goto("/login");
-    await page.getByLabel("이메일", { exact: true }).fill(email);
-    await page.getByLabel("비밀번호", { exact: true }).fill(password);
-    await page.getByRole("button", { name: "로그인" }).click();
+    await login(page, email, password);
     await expect(page).toHaveURL(/\/overview/);
 
     // /overview does not exist until Task 5; use an existing dashboard page for the menu.
@@ -38,5 +37,28 @@ test.describe("인증", () => {
 
     await page.goto("/overview");
     await expect(page).toHaveURL(/\/login/);
+  });
+
+  test("2단계 인증 코드가 틀리면 오류를 보여 준다", async ({ page }) => {
+    const secret = savedTotpSecret(email);
+    await page.goto("/login");
+    await page.getByLabel("이메일", { exact: true }).fill(email);
+    await page.getByLabel("비밀번호", { exact: true }).fill(password);
+    await page.getByRole("button", { name: "로그인" }).click();
+    await expect(page).toHaveURL(/\/2fa\/verify/);
+
+    // the second step guards every page until it is passed
+    await page.goto("/overview");
+    await expect(page).toHaveURL(/\/2fa\/verify/);
+
+    await page.getByLabel("인증 코드").fill(wrongTotpCode(secret));
+    await page.getByRole("button", { name: "확인" }).click();
+    await expect(page.getByText("인증 코드가 올바르지 않습니다.")).toBeVisible();
+    await expect(page).toHaveURL(/\/2fa\/verify/);
+
+    // the right code clears the failed counter, so this test can never lock the admin
+    await page.getByLabel("인증 코드").fill(totpCode(secret, new Date()));
+    await page.getByRole("button", { name: "확인" }).click();
+    await expect(page).toHaveURL(/\/overview/);
   });
 });

@@ -16,7 +16,7 @@ Package manager is **pnpm**. Ports: app 3710, Postgres 5710 (override with `APP_
 docker compose up -d db  # dev database only (prod services are under profile `prod`)
 pnpm db:migrate          # apply Drizzle migrations (drizzle/)
 pnpm db:seed             # idempotent; creates admin from ADMIN_EMAIL / ADMIN_PASSWORD (refuses empty / "change-me-now"), the Douzone-style standard chart and the `본점` site (runs on every deploy via the `migrate` service)
-NEW_PASSWORD=... pnpm admin:reset-password <email>  # reset password, clear lock, drop sessions
+NEW_PASSWORD=... pnpm admin:reset-password <email> [--reset-2fa]  # reset password, clear lock, drop sessions (--reset-2fa also removes the TOTP enrolment)
 pnpm dev                 # dev server at http://localhost:3710
 pnpm build               # production build (does NOT run lint)
 pnpm lint                # eslint — run separately from build
@@ -59,5 +59,6 @@ Deploy: `docker compose --profile prod up -d --build` (db, migrate, app, cloudfl
 ## Gotchas
 
 - **Base UI, not Radix.** Composition uses the `render` prop, not `asChild` (exception: the vaul-based Drawer still uses `asChild`). When a `<Button>` renders a link (`render={<Link … />}`), pass `nativeButton={false}` — `e2e/no-base-ui-warnings.spec.ts` guards against the warning.
+- **2FA (TOTP) is mandatory for manager and admin** (`mfaRequired`, `src/server/auth/mfa.ts`); `verifySession` sends an unverified session to `/2fa/verify` or `/2fa/setup`. E2E logins go through `e2e/helpers/login.ts`, which keeps each user's secret in `e2e/.auth/totp-<email>.txt`; if you delete `e2e/.auth/`, also run `pnpm admin:reset-password <email> --reset-2fa` so setup enrols again.
 - ESLint downgrades `react-hooks/set-state-in-effect` to a warning on purpose (SSR mount guards like `src/hooks/use-mobile.ts`).
 - Work is organised in phases; design specs are in `docs/superpowers/specs/` and phase plans in `docs/superpowers/plans/`. E2E specs are named per phase/feature (`apps-2a.spec.ts`, `dashboards-finance.spec.ts`, `components-<name>.spec.ts`).

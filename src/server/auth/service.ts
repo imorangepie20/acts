@@ -1,12 +1,13 @@
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Role } from "@/lib/permissions";
 import type { Db } from "@/server/db/client";
-import { sessions, users } from "@/server/db/schema";
+import { sessions, users, userTotp } from "@/server/db/schema";
+import { clearFailedAttempts, recordFailedAttempt } from "./lockout";
+import { mfaRequired } from "./mfa";
 import { hashPassword, verifyPassword } from "./password";
 import { generateSessionToken, hashSessionToken } from "./token";
 
-export const MAX_FAILED_LOGINS = 5;
-export const LOCK_MINUTES = 15;
+export { LOCK_MINUTES, MAX_FAILED_LOGINS } from "./lockout";
 export const SESSION_HOURS = 12;
 
 let dummyHash: Promise<string> | undefined;
@@ -16,6 +17,14 @@ function getDummyHash(): Promise<string> {
 }
 
 export type SessionUser = { id: string; email: string; name: string; role: Role };
+
+/**
+ * - `pending`: enrolled in TOTP, but this session has not passed the second factor
+ * - `unenrolled`: the role requires TOTP and the user has not enrolled yet
+ * - `verified`: passed the second factor, or not required and not enrolled
+ */
+export type MfaState = "verified" | "pending" | "unenrolled";
+export type SessionUserWithMfa = SessionUser & { mfa: MfaState };
 
 export async function authenticate(
   db: Db,
@@ -32,31 +41,17 @@ export async function authenticate(
   }
   if (u.lockedUntil && u.lockedUntil > now) return { ok: false, reason: "locked" };
 
-  const unlocked = or(isNull(users.lockedUntil), lte(users.lockedUntil, now));
   const valid = await verifyPassword(password, u.passwordHash);
-  if (!valid) {
-    // Atomic increment; refuses to touch the row if a lock was set meanwhile.
-    const nextCount = sql`${users.failedLoginCount} + 1`;
-    const reached = sql`${nextCount} >= ${MAX_FAILED_LOGINS}`;
-    const lockAt = new Date(now.getTime() + LOCK_MINUTES * 60_000);
-    const updated = await db
-      .update(users)
-      .set({
-        failedLoginCount: sql`CASE WHEN ${reached} THEN 0 ELSE ${nextCount} END`,
-        lockedUntil: sql`CASE WHEN ${reached} THEN ${lockAt.toISOString()}::timestamptz ELSE ${users.lockedUntil} END`,
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(users.id, u.id), unlocked))
-      .returning({ id: users.id });
-    return { ok: false, reason: updated.length === 0 ? "locked" : "invalid" };
+  if (!valid) return { ok: false, reason: await recordFailedAttempt(db, u.id, now) };
+  // With TOTP enrolled, only the second factor clears the counter: otherwise each password login
+  // would reset the TOTP failures and allow unlimited code guesses.
+  const [totp] = await db
+    .select({ enabledAt: userTotp.enabledAt })
+    .from(userTotp)
+    .where(eq(userTotp.userId, u.id));
+  if (!totp?.enabledAt && !(await clearFailedAttempts(db, u.id, now))) {
+    return { ok: false, reason: "locked" };
   }
-
-  const cleared = await db
-    .update(users)
-    .set({ failedLoginCount: 0, lockedUntil: null, updatedAt: sql`now()` })
-    .where(and(eq(users.id, u.id), unlocked))
-    .returning({ id: users.id });
-  if (cleared.length === 0) return { ok: false, reason: "locked" };
   return { ok: true, user: { id: u.id, email: u.email, name: u.name, role: u.role } };
 }
 
@@ -75,7 +70,7 @@ export async function getSessionUser(
   db: Db,
   token: string,
   now: Date = new Date(),
-): Promise<SessionUser | null> {
+): Promise<SessionUserWithMfa | null> {
   const [row] = await db
     .select({
       id: users.id,
@@ -83,12 +78,22 @@ export async function getSessionUser(
       name: users.name,
       role: users.role,
       expiresAt: sessions.expiresAt,
+      mfaVerified: sessions.mfaVerified,
+      totpEnabledAt: userTotp.enabledAt,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
+    .leftJoin(userTotp, eq(userTotp.userId, users.id))
     .where(and(eq(sessions.id, hashSessionToken(token)), eq(users.isActive, true)));
   if (!row || row.expiresAt <= now) return null;
-  return { id: row.id, email: row.email, name: row.name, role: row.role };
+  const mfa: MfaState = row.totpEnabledAt
+    ? row.mfaVerified
+      ? "verified"
+      : "pending"
+    : mfaRequired(row.role)
+      ? "unenrolled"
+      : "verified";
+  return { id: row.id, email: row.email, name: row.name, role: row.role, mfa };
 }
 
 export async function deleteSession(db: Db, token: string): Promise<void> {

@@ -37,6 +37,7 @@ nano .env
 | `ADMIN_PASSWORD` | 강한 임의 비밀번호 (8자 이상, `change-me-now` 불가). **최초 시드 때만** 사용되며 이후 바꿔도 반영되지 않습니다 (변경은 9절의 재설정 스크립트) |
 | `COOKIE_SECURE` | 설정하지 않음 (compose 기본값 `true`). 로컬 dev/e2e 에서만 `false` |
 | `CLOUDFLARE_TUNNEL_TOKEN` | 2단계에서 복사한 토큰 |
+| `PAYROLL_ENCRYPTION_KEY` | 32바이트 임의 키(base64). `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` 로 만듭니다. 주민등록번호·계좌번호와 2단계 인증(TOTP) 비밀키를 암호화합니다. **없으면 2단계 인증 등록·로그인이 되지 않고**, 잃어버리면 암호화된 값을 되살릴 수 없으므로 DB 백업과 따로 보관하세요 |
 
 `DATABASE_URL` 은 compose 가 컨테이너 안에서 `db:5432` 로 직접 지정하므로 서버 `.env` 에서는 쓰이지 않습니다.
 
@@ -106,6 +107,12 @@ docker compose exec db psql -U acts -c "update users set locked_until = null, fa
 ```bash
 cd ~/acts
 docker compose --profile prod run --rm -e NEW_PASSWORD='새-비밀번호-8자이상' migrate pnpm admin:reset-password <email>
+```
+
+중간 관리자와 시스템 관리자는 2단계 인증(TOTP)이 필수입니다. 인증 앱이 든 휴대폰을 잃어버렸고 복구 코드도 없으면 `--reset-2fa` 를 붙여 실행합니다. TOTP 등록이 함께 해제되어, 다음 로그인 때 등록 화면이 다시 나옵니다.
+
+```bash
+docker compose --profile prod run --rm -e NEW_PASSWORD='새-비밀번호-8자이상' migrate pnpm admin:reset-password <email> --reset-2fa
 ```
 
 ## 10. 문제 해결

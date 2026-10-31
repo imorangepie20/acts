@@ -26,3 +26,10 @@ test("login page shows Korean email/password fields and no sign-up links", async
   await expect(page.getByRole("link", { name: "Sign up" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Forgot password?" })).toHaveCount(0);
 });
+
+test("2단계 인증 화면은 이미 인증한 세션을 홈으로 보낸다", async ({ page }) => {
+  await page.goto("/2fa/setup");
+  await expect(page).toHaveURL(/\/overview/);
+  await page.goto("/2fa/verify");
+  await expect(page).toHaveURL(/\/overview/);
+});

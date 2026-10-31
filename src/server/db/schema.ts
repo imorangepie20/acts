@@ -74,12 +74,29 @@ export const sessions = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    /** Second factor passed in this session (only meaningful when the user is enrolled). */
+    mfaVerified: boolean("mfa_verified").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => [index("sessions_user_id_idx").on(t.userId)],
 );
+
+/** TOTP enrolment: one row per user; `enabled_at` null until the first code is confirmed. */
+export const userTotp = pgTable("user_totp", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** base32 secret, encrypted with encryptSecret */
+  secret: text("secret").notNull(),
+  enabledAt: timestamp("enabled_at", { withTimezone: true }),
+  /** sha256 hex of each unused recovery code */
+  recoveryCodes: text("recovery_codes").array().notNull().default(sql`'{}'::text[]`),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
 
 export const accountGroup = pgEnum("account_group", [
   "current_asset",
