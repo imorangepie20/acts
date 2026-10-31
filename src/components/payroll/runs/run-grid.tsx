@@ -50,6 +50,7 @@ function WonCell({
   value,
   emptyIs,
   clearable = false,
+  resetNonce,
   onCommit,
 }: {
   label: string;
@@ -57,12 +58,16 @@ function WonCell({
   emptyIs: number | null;
   /** An override that an empty cell clears. */
   clearable?: boolean;
+  /** Bumped after a failed save: every cell drops its typed value and shows the stored one. */
+  resetNonce: number;
   onCommit: (v: number | null) => void;
 }) {
   const [v, setV] = useState<number | null>(value);
   const [shown, setShown] = useState(value);
-  if (value !== shown) {
+  const [nonce, setNonce] = useState(resetNonce);
+  if (value !== shown || resetNonce !== nonce) {
     setShown(value);
+    setNonce(resetNonce);
     setV(value);
   }
   return (
@@ -94,16 +99,30 @@ export function RunGrid({ runId, version, editable, items, lines, candidates }: 
   const queue = useRef<Promise<void>>(Promise.resolve());
   const [pending, startTransition] = useTransition();
   const [adding, setAdding] = useState("");
+  const [resetNonce, setResetNonce] = useState(0);
   useEffect(() => {
     if (version > versionRef.current) versionRef.current = version;
   }, [version]);
 
-  /** Saves are chained so each one carries the version the previous one returned. */
+  /**
+   * Saves are chained so each one carries the version the previous one returned. A refusal
+   * (ERR_CONFLICT included) or a thrown call shows its message, resets every cell to the stored
+   * value and reloads; the chain itself never rejects, so later edits still save.
+   */
   const save = (change: RunLineChange) => {
     queue.current = queue.current.then(async () => {
-      const r = await updateRunLinesAction(runId, versionRef.current, [change]);
-      if (r.ok) versionRef.current = r.value.version;
-      else toast.error(r.error); // ERR_CONFLICT and refusals as-is; the reload below shows the stored values
+      let error: string | null = null;
+      try {
+        const r = await updateRunLinesAction(runId, versionRef.current, [change]);
+        if (r.ok) versionRef.current = r.value.version;
+        else error = r.error;
+      } catch {
+        error = "저장하지 못했습니다. 다시 시도하세요.";
+      }
+      if (error !== null) {
+        toast.error(error);
+        setResetNonce((n) => n + 1);
+      }
       router.refresh();
     });
   };
@@ -163,6 +182,7 @@ export function RunGrid({ runId, version, editable, items, lines, candidates }: 
                         label={`${l.employeeNo} ${i.name}`}
                         value={l.amounts[i.code] ?? 0}
                         emptyIs={0}
+                        resetNonce={resetNonce}
                         onCommit={(v) => save({ employeeId: l.employeeId, amounts: { [i.code]: v ?? 0 } })}
                       />
                     ) : (
@@ -197,6 +217,7 @@ export function RunGrid({ runId, version, editable, items, lines, candidates }: 
                             label={label}
                             value={l.result.deductions[k]}
                             emptyIs={null}
+                            resetNonce={resetNonce}
                             clearable={overridden}
                             onCommit={(v) => save({ employeeId: l.employeeId, overrides: { [k]: v } })}
                           />

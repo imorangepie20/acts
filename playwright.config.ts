@@ -34,17 +34,25 @@ export default defineConfig({
       // after everything else, and one file at a time (a project cannot cap its own workers, so
       // the two files are chained as two projects).
       name: "settings-serial",
-      // payroll.spec.ts writes employees, a 2026-01 run and its voucher (shared state).
-      testMatch: /(admin|payroll)\.spec\.ts$/,
+      testMatch: /admin\.spec\.ts$/,
       fullyParallel: false,
       dependencies: ["chromium"],
+      use: admin,
+    },
+    {
+      // Writes employees, a 2026-01 run and its payroll voucher; chained so it never runs alongside
+      // admin.spec (which toggles 전표 승인) or the approval spec.
+      name: "settings-serial-payroll",
+      testMatch: /payroll\.spec\.ts$/,
+      fullyParallel: false,
+      dependencies: ["settings-serial"],
       use: admin,
     },
     {
       name: "settings-serial-approval",
       testMatch: /vouchers-approval\.spec\.ts$/,
       fullyParallel: false,
-      dependencies: ["settings-serial"],
+      dependencies: ["settings-serial-payroll"],
       use: admin,
     },
     {

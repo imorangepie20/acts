@@ -18,7 +18,7 @@ import {
   removeEmployeeFromRun,
   updateRunLines,
   type RunLineChange,
-  type VoucherPreviewRow,
+  type VoucherPreview,
 } from "@/server/payroll/runs";
 import { fail, type Result } from "@/server/result";
 
@@ -151,9 +151,9 @@ export async function deleteRunAction(id: unknown, v: unknown): Promise<Result> 
   return r;
 }
 
-export async function previewRunVoucherAction(id: unknown): Promise<Result<VoucherPreviewRow[]>> {
-  await requirePermission("payroll:manage");
+export async function previewRunVoucherAction(id: unknown): Promise<Result<VoucherPreview>> {
+  const user = await requirePermission("payroll:manage");
   const pid = runId.safeParse(id);
   if (!pid.success) return fail(INVALID);
-  return previewRunVoucher(db, pid.data);
+  return previewRunVoucher(db, user, pid.data);
 }

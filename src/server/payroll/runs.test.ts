@@ -29,6 +29,7 @@ import {
   updateVoucher,
 } from "@/server/vouchers/service";
 import { createEmployee, type EmployeeInput } from "./employees";
+import { ERR_FORBIDDEN } from "./items";
 import { loadRates, loadWithholdingTable } from "./rates";
 import {
   addEmployeeToRun,
@@ -281,15 +282,27 @@ describe("confirmRun", () => {
     await emp();
     await emp({ isExecutive: true, defaultAmounts: { basic: 5_000_000 } });
     const id = await run(regular("2026-06", "2026-06-25"));
-    const p = await previewRunVoucher(db, id);
+    const p = await previewRunVoucher(db, admin, id);
     if (!p.ok) throw new Error(p.error);
-    expect(p.value.map((r) => r.code)).toEqual(["801", "802", "811", "817", "103", "254", "262"]);
-    const debit = p.value.reduce((s, r) => s + r.debit, 0);
-    expect(debit).toBe(p.value.reduce((s, r) => s + r.credit, 0));
+    expect(p.value.rows.map((r) => r.code)).toEqual(["801", "802", "811", "817", "103", "254", "262"]);
+    const debit = p.value.rows.reduce((s, r) => s + r.debit, 0);
+    expect(debit).toBe(p.value.rows.reduce((s, r) => s + r.credit, 0));
+    expect(p.value.version).toBe((await detail(id)).version);
     const d = await confirm(id);
     const lines = await db.select().from(voucherLines).where(eq(voucherLines.voucherId, d.voucherId!));
     expect(lines.filter((l) => l.side === "debit").reduce((s, l) => s + Number(l.amount), 0)).toBe(debit);
-    expect((await previewRunVoucher(db, "not-a-uuid")).ok).toBe(false);
+    expect((await previewRunVoucher(db, admin, "not-a-uuid")).ok).toBe(false);
+    expect(await previewRunVoucher(db, staff, id)).toEqual({ ok: false, error: ERR_FORBIDDEN });
+  });
+
+  it("confirming with the preview's version fails with ERR_CONFLICT after a later edit", async () => {
+    const e = await emp();
+    const id = await run(regular("2026-06", "2026-06-25"));
+    const p = await previewRunVoucher(db, admin, id);
+    if (!p.ok) throw new Error(p.error);
+    expect((await updateRunLines(db, admin, id, p.value.version, [{ employeeId: e, amounts: { basic: 3_100_000 } }])).ok).toBe(true);
+    expect(await confirmRun(db, admin, id, p.value.version)).toEqual({ ok: false, error: ERR_CONFLICT });
+    expect((await detail(id)).status).toBe("draft");
   });
 
   it("confirm creates a pending voucher when approval is on", async () => {

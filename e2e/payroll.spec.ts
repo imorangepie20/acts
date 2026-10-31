@@ -99,6 +99,22 @@ test("정기 대장: 계산, 소득세 직접 입력, 확정, 명세서, 확정 
   await expect(page.getByLabel(`${EMP_NO} 기본급`, { exact: true })).toHaveValue("3,000,000");
   await expect(page.getByLabel(`${EMP_NO} 국민연금`, { exact: true })).toHaveValue("142,500");
 
+  // 1b. A save from a stale page fails with ERR_CONFLICT and the cell goes back to the stored value.
+  const other = await page.context().newPage();
+  await other.goto(runUrl);
+  const otherBasic = other.getByLabel(`${EMP_NO} 기본급`, { exact: true });
+  await expect(otherBasic).toHaveValue("3,000,000");
+  await otherBasic.fill("3100000");
+  await otherBasic.press("Tab");
+  await expect(other.getByRole("row").filter({ hasText: EMP_NO })).toContainText("3,300,000");
+  await other.close();
+  const meal = page.getByLabel(`${EMP_NO} 식대`, { exact: true });
+  await meal.fill("300000");
+  await meal.press("Tab");
+  await expect(page.getByText("다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.").first()).toBeVisible();
+  await expect(meal).toHaveValue("200,000");
+  await expect(page.getByLabel(`${EMP_NO} 기본급`, { exact: true })).toHaveValue("3,100,000");
+
   // 2. Overriding 소득세 marks the cell; the plain 주민등록번호 is never on the page.
   const tax = page.getByLabel(`${EMP_NO} 소득세`, { exact: true });
   await tax.fill("50000");

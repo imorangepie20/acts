@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { bonusIncomeTax, bonusPeriod } from "@/lib/payroll/bonus";
+import { DEDUCTION_KEYS } from "@/lib/payroll/labels";
 import { computeLine, splitTaxable } from "@/lib/payroll/calc";
 import { maskAccount, maskRrn } from "@/lib/payroll/rrn";
 import { SETTING_CODE_FIELDS, SETTING_LABELS, type SettingCodeField } from "@/lib/payroll/settings";
@@ -136,7 +137,6 @@ const errPartner = (code: string, name: string) =>
   `${code} ${name} 계정은 거래처가 필요합니다. 급여 설정에서 기관 거래처를 지정하세요.`;
 const errNegativeNet = (name: string) => `${name}의 실지급액이 0원보다 적습니다. 공제액을 확인하세요.`;
 
-const DEDUCTION_KEYS: readonly DeductionKey[] = ["pension", "health", "ltc", "employment", "incomeTax", "localTax"];
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -790,14 +790,22 @@ async function resolveMapping(tx: Conn, ctx: Ctx, lines: { amounts: Record<strin
 }
 
 export type VoucherPreviewRow = { code: string; name: string; debit: number; credit: number };
+export type VoucherPreview = { version: number; rows: VoucherPreviewRow[] };
 
 /**
- * The voucher 확정 would write, summed per account, for the confirm dialog. Built from the stored
- * lines as the grid shows them (confirm itself re-checks them against the current rates). A
- * settings problem returns the same message confirm would.
+ * The voucher 확정 would write, summed per account, for the confirm dialog, with the run version it
+ * was built from: the dialog confirms with that version, so an edit saved after the preview makes
+ * confirm fail with ERR_CONFLICT instead of writing figures the user did not see. Built from the
+ * stored lines (confirm itself re-checks them against the current rates), read in one
+ * repeatable-read snapshot. A settings problem returns the same message confirm would.
  */
-export async function previewRunVoucher(db: Db, runId: string): Promise<Result<VoucherPreviewRow[]>> {
+export async function previewRunVoucher(db: Db, actor: SessionUser, runId: string): Promise<Result<VoucherPreview>> {
+  if (!canManagePayroll(actor)) return fail(ERR_FORBIDDEN);
   if (!isUuid(runId)) return fail(ERR_NOT_FOUND);
+  return db.transaction(async (tx) => previewIn(tx, runId), { isolationLevel: "repeatable read", accessMode: "read only" });
+}
+
+async function previewIn(db: Tx, runId: string): Promise<Result<VoucherPreview>> {
   const [run] = await db.select().from(payrollRuns).where(eq(payrollRuns.id, runId));
   if (!run) return fail(ERR_NOT_FOUND);
   const stored = await storedLines(db, runId);
@@ -835,7 +843,8 @@ export async function previewRunVoucher(db: Db, runId: string): Promise<Result<V
     rows.set(l.accountId, row);
   }
   // Debit accounts first, then credit accounts, each by code.
-  return ok([...rows.values()].sort((a, b) => Number(b.debit > 0) - Number(a.debit > 0) || a.code.localeCompare(b.code)));
+  const sorted = [...rows.values()].sort((a, b) => Number(b.debit > 0) - Number(a.debit > 0) || a.code.localeCompare(b.code));
+  return ok({ version: run.version, rows: sorted });
 }
 
 /**

@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatWon } from "@/lib/money";
 import type { Result } from "@/server/result";
-import type { RunStatus, VoucherPreviewRow } from "@/server/payroll/runs";
+import type { RunStatus, VoucherPreview } from "@/server/payroll/runs";
 
 type Props = { runId: string; version: number; status: RunStatus; title: string; listHref: string };
 
@@ -82,11 +82,14 @@ function ConfirmButton({
   );
 }
 
-/** 확정: shows the voucher it would write (per account), then confirms. */
-function ConfirmRunButton({ runId, version, title }: { runId: string; version: number; title: string }) {
+/**
+ * 확정: shows the voucher it would write (per account), then confirms with the run version that
+ * preview was built from, so an edit saved in between fails with ERR_CONFLICT (shown as-is).
+ */
+function ConfirmRunButton({ runId, title }: { runId: string; title: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<Result<VoucherPreviewRow[]> | null>(null);
+  const [preview, setPreview] = useState<Result<VoucherPreview> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -97,7 +100,9 @@ function ConfirmRunButton({ runId, version, title }: { runId: string; version: n
     setPreview(null);
     startTransition(async () => setPreview(await previewRunVoucherAction(runId)));
   };
-  const confirm = () =>
+  const confirm = () => {
+    if (!preview?.ok) return;
+    const { version } = preview.value;
     startTransition(async () => {
       const r = await confirmRunAction(runId, version);
       if (!r.ok) {
@@ -109,8 +114,9 @@ function ConfirmRunButton({ runId, version, title }: { runId: string; version: n
       toast.success("확정했습니다. 급여 전표를 만들었습니다.");
       router.refresh();
     });
+  };
 
-  const rows = preview?.ok ? preview.value : [];
+  const rows = preview?.ok ? preview.value.rows : [];
   const debit = rows.reduce((s, r) => s + r.debit, 0);
   const credit = rows.reduce((s, r) => s + r.credit, 0);
   return (
@@ -201,7 +207,7 @@ export function RunActions({ runId, version, status, title, listHref }: Props) {
       <Button variant="outline" disabled={pending} onClick={recompute}>
         재계산
       </Button>
-      <ConfirmRunButton runId={runId} version={version} title={title} />
+      <ConfirmRunButton runId={runId} title={title} />
       <ConfirmButton
         label="삭제"
         title={`${title}을 삭제할까요?`}
