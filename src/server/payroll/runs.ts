@@ -126,6 +126,7 @@ const ERR_LINE = "급여 대장에 없는 사원입니다.";
 const ERR_EMPLOYEE = "사원을 찾을 수 없습니다.";
 const ERR_ALREADY_IN = "이미 급여 대장에 있는 사원입니다.";
 const ERR_SETTINGS = "급여 설정이 없습니다. 급여 설정을 저장하세요.";
+const ERR_STALE = "요율·세액표 또는 상여 기준이 바뀌었습니다. 재계산 후 다시 확정하세요.";
 const errDuplicate = (yearMonth: string) => {
   const [y, m] = yearMonth.split("-").map(Number);
   return `${y}년 ${m}월 정기 급여 대장이 이미 있습니다.`;
@@ -238,8 +239,10 @@ const ymOf = (i: number) => `${Math.floor(i / 12)}-${pad((i % 12) + 1)}`;
 /**
  * The 지급대상기간 basis per employee for a bonus run (소득세법 제136조, 시행령 제194조).
  * - With a period on the run: that period.
- * - Without: from the month after an earlier 상여 paid to the employee in the same year (the latest
- *   confirmed one before this pay date), else from January; through the pay month.
+ * - Without: from the month after an earlier 상여 paid to the employee in the same year, else from
+ *   January; through the pay month. "Earlier" = any other confirmed 상여 run of the same year with
+ *   a pay date on or before this one (a same-day one counts: this run is still a draft when it is
+ *   computed); one in the pay month itself leaves a one-month period.
  * Then the employee's confirmed 정기 runs whose 귀속월 is in the period give the 과세 급여 and the
  * 소득세 already withheld.
  */
@@ -262,7 +265,7 @@ async function bonusBases(conn: Conn, run: RunHead, ids: number[]): Promise<Map<
           eq(payrollRuns.status, "confirmed"),
           ne(payrollRuns.id, run.id),
           gte(payrollRuns.payDate, `${run.payDate.slice(0, 4)}-01-01`),
-          lt(payrollRuns.payDate, run.payDate),
+          lte(payrollRuns.payDate, run.payDate),
           inArray(payrollRunLines.employeeId, ids),
         ),
       );
@@ -382,10 +385,16 @@ async function freshLines(
 }
 
 /**
- * Prefill amounts: the employee's latest confirmed run of the same type, else the employee's
+ * Prefill amounts: the employee's latest confirmed run of the same type with an earlier 귀속월, else the employee's
  * default amounts; 상여 runs start at 0. Only active items with a positive amount are copied.
  */
-async function prefillAmounts(conn: Conn, type: RunType, ids: number[], ctx: Ctx): Promise<Map<number, Record<string, number>>> {
+async function prefillAmounts(
+  conn: Conn,
+  run: Pick<RunHead, "type" | "yearMonth">,
+  ids: number[],
+  ctx: Ctx,
+): Promise<Map<number, Record<string, number>>> {
+  const { type } = run;
   const out = new Map<number, Record<string, number>>(ids.map((id) => [id, {}]));
   if (type === "bonus" || ids.length === 0) return out;
   const active = new Set(ctx.items.filter((i) => i.isActive).map((i) => i.code));
@@ -407,6 +416,7 @@ async function prefillAmounts(conn: Conn, type: RunType, ids: number[], ctx: Ctx
       and(
         eq(payrollRuns.type, type),
         eq(payrollRuns.status, "confirmed"),
+        lt(payrollRuns.yearMonth, run.yearMonth),
         inArray(payrollRunLines.employeeId, ids),
       ),
     )
@@ -457,13 +467,28 @@ async function storedLines(conn: Conn, runId: string) {
   return conn.select().from(payrollRunLines).where(eq(payrollRunLines.runId, runId));
 }
 
-const fromStored = (l: typeof payrollRunLines.$inferSelect): LineInput => ({
+/** A stored line with its snapshot's employee facts and the given (current) rates. */
+const fromStored = (l: typeof payrollRunLines.$inferSelect, rates: Rates): LineInput => ({
   employeeId: l.employeeId,
   amounts: l.amounts,
   overrides: l.overrides,
   facts: factsOf(l.snapshot),
-  rates: l.snapshot.rates,
+  rates,
 });
+
+const COMPANY_KEYS = ["pension", "health", "ltc", "employment"] as const;
+function sameResult(a: LineResult, b: LineResult): boolean {
+  return (
+    a.gross === b.gross &&
+    a.taxable === b.taxable &&
+    a.nontaxable === b.nontaxable &&
+    a.employmentBase === b.employmentBase &&
+    a.totalDeductions === b.totalDeductions &&
+    a.netPay === b.netPay &&
+    DEDUCTION_KEYS.every((k) => a.deductions?.[k] === b.deductions?.[k]) &&
+    COMPANY_KEYS.every((k) => a.company?.[k] === b.company?.[k])
+  );
+}
 
 function cleanHead(input: RunInput): Result<Omit<RunHead, "id">> {
   if (input.type !== "regular" && input.type !== "bonus") return fail(ERR_TYPE);
@@ -504,7 +529,7 @@ export async function createRun(db: Db, actor: SessionUser, input: RunInput): Pr
       ),
     );
   const ids = employed.map((e) => e.id);
-  const amounts = await prefillAmounts(db, head.type, ids, ctx.value);
+  const amounts = await prefillAmounts(db, head, ids, ctx.value);
   const inputs = await freshLines(
     db,
     ctx.value,
@@ -557,7 +582,8 @@ function cleanChanges(changes: RunLineChange[], itemCodes: Set<string>): Result<
 
 /**
  * Edits draft lines: amounts merge in, an override number sets it and `null` clears it. Changed
- * lines are recomputed from their snapshot (employee facts and rates as last loaded).
+ * lines are recomputed from their snapshot's employee facts with the current rates, 간이세액표 and
+ * 상여 basis (employee master edits need `recomputeRun`).
  */
 export async function updateRunLines(
   db: Db,
@@ -585,7 +611,7 @@ export async function updateRunLines(
 
     const inputs = stored.map((s) => {
       const change = cleaned.value.get(s.employeeId)!;
-      const l = fromStored(s);
+      const l = fromStored(s, ctx.value.rates);
       const overrides: Partial<Record<DeductionKey, number>> = { ...l.overrides };
       for (const [k, v] of Object.entries(change.overrides ?? {}) as [DeductionKey, number | null][]) {
         if (v === null) delete overrides[k];
@@ -620,7 +646,7 @@ export async function addEmployeeToRun(
     if (exists) return fail(ERR_ALREADY_IN);
     const ctx = await loadCtx(tx, run);
     if (!ctx.ok) return ctx;
-    const amounts = await prefillAmounts(tx, run.type, [employeeId], ctx.value);
+    const amounts = await prefillAmounts(tx, run, [employeeId], ctx.value);
     const inputs = await freshLines(tx, ctx.value, [{ employeeId, amounts: amounts.get(employeeId)!, overrides: {} }]);
     if (!inputs.ok) return inputs;
     const [c] = await computeLines(tx, run, ctx.value, inputs.value);
@@ -790,8 +816,17 @@ export async function confirmRun(db: Db, actor: SessionUser, runId: string, vers
     const mapping = await resolveMapping(tx, ctx.value, stored);
     if (!mapping.ok) return mapping;
 
-    // Recompute every line from its snapshot, so the voucher matches the stored figures exactly.
-    const computed = await computeLines(tx, run, ctx.value, stored.map(fromStored));
+    // Recompute every line from its stored amounts and overrides, the snapshot's employee facts and
+    // the current rates, 간이세액표 and 상여 basis. Anything that moved since the last edit refuses
+    // the confirm, so the voucher always equals the figures the user saw.
+    const computed = await computeLines(
+      tx,
+      run,
+      ctx.value,
+      stored.map((s) => fromStored(s, ctx.value.rates)),
+    );
+    const resultOf = new Map(stored.map((s) => [s.employeeId, s.result]));
+    if (computed.some((c) => !sameResult(c.result, resultOf.get(c.employeeId)!))) return fail(ERR_STALE);
     const negative = computed.find((c) => c.result.netPay < 0);
     if (negative) return fail(errNegativeNet(negative.facts.name));
 
@@ -812,7 +847,6 @@ export async function confirmRun(db: Db, actor: SessionUser, runId: string, vers
     // Nothing is written before this point, so a refused voucher leaves the run untouched.
     const written = await writePayrollVoucher(tx, actor, vat, voucher);
     if (!written.ok) return written;
-    await saveLines(tx, runId, computed);
     await tx
       .update(payrollRuns)
       .set({

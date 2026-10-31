@@ -6,7 +6,17 @@ import { floor10, monthlyIncomeTax } from "@/lib/payroll/calc";
 import { addAttachment } from "@/server/attachments/service";
 import type { SessionUser } from "@/server/auth/service";
 import { closeMonth } from "@/server/closing/periods";
-import { accounts, company, employees, payrollRuns, sites, users, voucherHistory, vouchers } from "@/server/db/schema";
+import {
+  accounts,
+  company,
+  employees,
+  payrollRates,
+  payrollRuns,
+  sites,
+  users,
+  voucherHistory,
+  vouchers,
+} from "@/server/db/schema";
 import { createPartner } from "@/server/partners/service";
 import { getTestDb, resetDb } from "../../../tests/helpers/db";
 import {
@@ -511,5 +521,74 @@ describe("listRuns", () => {
     expect(rows[0]).toMatchObject({ yearMonth: "2026-06", type: "regular", status: "draft", employeeCount: 2, gross: 6_400_000 });
     const [r] = await db.select().from(payrollRuns).where(and(eq(payrollRuns.yearMonth, "2025-12")));
     expect(r.type).toBe("regular");
+  });
+});
+
+describe("confirm refuses figures that moved since the last edit", () => {
+  const STALE = { ok: false, error: "요율·세액표 또는 상여 기준이 바뀌었습니다. 재계산 후 다시 확정하세요." };
+  const bumpHealthRate = () =>
+    db
+      .update(payrollRates)
+      .set({ value: "3.7" })
+      .where(and(eq(payrollRates.kind, "health_employee"), eq(payrollRates.effectiveFrom, "2026-01-01")));
+
+  it("a changed payroll_rates row refuses the confirm until 재계산", async () => {
+    await emp();
+    const id = await run(regular("2026-06", "2026-06-25"));
+    await bumpHealthRate();
+    expect(await confirmRun(db, admin, id, (await detail(id)).version)).toEqual(STALE);
+    expect((await detail(id)).status).toBe("draft");
+    expect(await db.select().from(vouchers)).toHaveLength(0);
+    expect((await recomputeRun(db, admin, id, (await detail(id)).version)).ok).toBe(true);
+    const d = await confirm(id);
+    expect(d.status).toBe("confirmed");
+    expect(d.lines[0].snapshot.rates.healthEmployee).toBe(3.7);
+  });
+
+  it("updateRunLines also computes with the current rates", async () => {
+    const e = await emp();
+    const id = await run(regular("2026-06", "2026-06-25"));
+    await bumpHealthRate();
+    const v = (await detail(id)).version;
+    expect((await updateRunLines(db, admin, id, v, [{ employeeId: e, amounts: { basic: 3_000_000 } }])).ok).toBe(true);
+    expect((await confirm(id)).lines[0].snapshot.rates.healthEmployee).toBe(3.7);
+  });
+
+  it("a 정기 run confirmed or cancelled inside a draft 상여's period refuses the 상여 confirm", async () => {
+    const e = await emp();
+    const feb = await run(regular("2026-02", "2026-02-25"));
+    const bonus = await run({ type: "bonus", yearMonth: "2026-04", payDate: "2026-04-10", bonusFrom: "2026-01", bonusTo: "2026-04" });
+    await updateRunLines(db, admin, bonus, (await detail(bonus)).version, [{ employeeId: e, amounts: { bonus: 6_000_000 } }]);
+
+    const confirmedFeb = await confirm(feb); // the 상여 basis now includes February
+    expect(await confirmRun(db, admin, bonus, (await detail(bonus)).version)).toEqual(STALE);
+    expect((await recomputeRun(db, admin, bonus, (await detail(bonus)).version)).ok).toBe(true);
+
+    expect((await cancelConfirm(db, admin, feb, confirmedFeb.version)).ok).toBe(true); // and out again
+    expect(await confirmRun(db, admin, bonus, (await detail(bonus)).version)).toEqual(STALE);
+    expect(await db.select().from(vouchers)).toHaveLength(0);
+    expect((await recomputeRun(db, admin, bonus, (await detail(bonus)).version)).ok).toBe(true);
+    expect((await confirm(bonus)).status).toBe("confirmed");
+  });
+});
+
+describe("prefill and the 상여 period edge cases", () => {
+  it("a back-dated run does not copy a later month's amounts", async () => {
+    const e = await emp();
+    const july = await run(regular("2026-07", "2026-07-24"));
+    await updateRunLines(db, admin, july, (await detail(july)).version, [{ employeeId: e, amounts: { basic: 4_000_000 } }]);
+    await confirm(july);
+    const june = await detail(await run(regular("2026-06", "2026-06-25")));
+    expect(june.lines[0].amounts).toEqual({ basic: 3_000_000, meal: 200_000 });
+  });
+
+  it("an earlier 상여 confirmed on the same pay date counts: a one-month period", async () => {
+    const e = await emp();
+    const first = await run({ type: "bonus", yearMonth: "2026-06", payDate: "2026-06-10" });
+    await updateRunLines(db, admin, first, (await detail(first)).version, [{ employeeId: e, amounts: { bonus: 1_000_000 } }]);
+    await confirm(first);
+    const second = await run({ type: "bonus", yearMonth: "2026-06", payDate: "2026-06-10" });
+    await updateRunLines(db, admin, second, (await detail(second)).version, [{ employeeId: e, amounts: { bonus: 500_000 } }]);
+    expect((await detail(second)).lines[0].snapshot.bonus).toMatchObject({ from: "2026-06", to: "2026-06", months: 1 });
   });
 });
