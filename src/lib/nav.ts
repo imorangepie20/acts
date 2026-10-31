@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard, FilePlus2, FileText, Upload, BookOpen, BookText, Users,
   Scale, TrendingUp, Landmark, Lock, ArrowRightLeft, FileSpreadsheet,
-  Building2, ListTree, Handshake, MapPin, UserCog,
+  Building2, ListTree, Handshake, MapPin, UserCog, IdCard, SlidersHorizontal,
 } from "lucide-react";
 import { can, type Permission, type Role } from "@/lib/permissions";
 import { isUuid } from "@/lib/uuid";
@@ -48,6 +48,13 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
+    label: "급여",
+    items: [
+      { title: "사원", href: "/payroll/employees", icon: IdCard, permission: "payroll:manage" },
+      { title: "급여 설정", href: "/payroll/settings", icon: SlidersHorizontal, permission: "payroll:manage" },
+    ],
+  },
+  {
     label: "설정",
     items: [
       { title: "회사 정보", href: "/admin/company", icon: Building2, permission: "settings:manage" },
@@ -76,7 +83,9 @@ export function breadcrumbTrail(pathname: string): { href: string; label: string
     const item = allNavItems.find((n) => n.href === href);
     if (item) trail.push({ href, label: item.title });
     else if (segments[0] === "vouchers" && i === 1 && isUuid(seg)) trail.push({ href, label: "전표 상세" });
-    else if (seg === "edit" && i > 0) trail.push({ href, label: "수정" });
+    else if (segments[0] === "payroll" && segments[1] === "employees" && i === 2) {
+      trail.push({ href, label: seg === "new" ? "사원 등록" : "사원 상세" });
+    } else if (seg === "edit" && i > 0) trail.push({ href, label: "수정" });
   });
   return trail;
 }
