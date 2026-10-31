@@ -9,6 +9,7 @@ const matrix: Record<Permission, Role[]> = {
   "period:close": ["admin"],
   "export:tax": ["staff", "manager", "admin"],
   "settings:manage": ["admin"],
+  "payroll:manage": ["manager", "admin"],
 };
 const roles: Role[] = ["staff", "manager", "executive", "admin"];
 

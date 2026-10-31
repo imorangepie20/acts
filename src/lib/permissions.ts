@@ -6,7 +6,8 @@ export type Permission =
   | "ledger:view"
   | "period:close"
   | "export:tax"
-  | "settings:manage";
+  | "settings:manage"
+  | "payroll:manage";
 
 export const ROLE_LABELS: Record<Role, string> = {
   staff: "실무자",
@@ -23,6 +24,7 @@ const MATRIX: Record<Permission, readonly Role[]> = {
   "period:close": ["admin"],
   "export:tax": ["staff", "manager", "admin"],
   "settings:manage": ["admin"],
+  "payroll:manage": ["manager", "admin"],
 };
 
 export function can(role: Role, p: Permission): boolean {
