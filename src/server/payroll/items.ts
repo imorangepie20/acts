@@ -19,6 +19,8 @@ export type PayItemRow = {
   /** 비과세 월 한도 (won); null = no 비과세 part. */
   nontaxLimit: number | null;
   inEmploymentBase: boolean;
+  /** 지급명세서 제출 면제 비과세(소득세법 시행령 제214조): left out of the 총지급액. */
+  excludeFromTotalPaid: boolean;
   /** null = 임원급여/직원급여 by 임원 여부. */
   debitAccountCode: string | null;
   sort: number;
@@ -32,6 +34,7 @@ const columns = {
   taxable: payrollItems.taxable,
   nontaxLimit: payrollItems.nontaxLimit,
   inEmploymentBase: payrollItems.inEmploymentBase,
+  excludeFromTotalPaid: payrollItems.excludeFromTotalPaid,
   debitAccountCode: payrollItems.debitAccountCode,
   sort: payrollItems.sort,
   isActive: payrollItems.isActive,
@@ -85,6 +88,7 @@ export async function saveItem(
     taxable: item.taxable,
     nontaxLimit: limit,
     inEmploymentBase: item.inEmploymentBase,
+    excludeFromTotalPaid: item.excludeFromTotalPaid,
     debitAccountCode: debit,
     sort: item.sort,
     isActive: item.isActive,

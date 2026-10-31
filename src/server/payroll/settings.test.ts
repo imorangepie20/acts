@@ -33,6 +33,7 @@ const item = (over: Partial<PayItemInput> = {}): PayItemInput => ({
   taxable: true,
   nontaxLimit: null,
   inEmploymentBase: true,
+  excludeFromTotalPaid: false,
   debitAccountCode: null,
   sort: 70,
   isActive: true,

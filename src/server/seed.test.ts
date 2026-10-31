@@ -67,6 +67,14 @@ it("seeds payroll rates, 간이세액표, the six default items and the settings
     ["position", "직책수당", true, null, null],
     ["overtime", "연장근로수당", true, null, null],
   ]);
+  expect(items.map((i) => [i.code, i.excludeFromTotalPaid])).toEqual([
+    ["basic", false],
+    ["bonus", false],
+    ["meal", false],
+    ["car", true],
+    ["position", false],
+    ["overtime", false],
+  ]);
   const settings = await db.select().from(payrollSettings);
   expect(settings).toHaveLength(1);
   expect(settings[0]).toMatchObject({ id: 1, withholdingCode: "254", netPayCode: "103" });

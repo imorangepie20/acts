@@ -15,6 +15,14 @@ export type CompanyActionState = {
     representative: string;
     fiscalYearStartMonth: string;
     approvalRequired: boolean;
+    taxOfficeCode: string;
+    businessType: string;
+    corporateNumber: string;
+    withholdingSemiannual: boolean;
+    hometaxId: string;
+    filingContactDept: string;
+    filingContactName: string;
+    filingContactPhone: string;
   };
   nonce?: number;
 };
@@ -39,6 +47,14 @@ export async function updateCompanyAction(
       representative: str(fd, "representative") ?? "",
       fiscalYearStartMonth: str(fd, "fiscalYearStartMonth") ?? "",
       approvalRequired: str(fd, "approvalRequired") === "true",
+      taxOfficeCode: str(fd, "taxOfficeCode") ?? "",
+      businessType: str(fd, "businessType") ?? "corporation",
+      corporateNumber: str(fd, "corporateNumber") ?? "",
+      withholdingSemiannual: str(fd, "withholdingSemiannual") === "true",
+      hometaxId: str(fd, "hometaxId") ?? "",
+      filingContactDept: str(fd, "filingContactDept") ?? "",
+      filingContactName: str(fd, "filingContactName") ?? "",
+      filingContactPhone: str(fd, "filingContactPhone") ?? "",
     },
     nonce: Date.now(),
   });
@@ -47,6 +63,8 @@ export async function updateCompanyAction(
   const representative = str(fd, "representative");
   const monthRaw = str(fd, "fiscalYearStartMonth");
   const approval = str(fd, "approvalRequired");
+  const businessType = str(fd, "businessType");
+  const semiannual = str(fd, "withholdingSemiannual");
   if (name === null || businessNumber === null || representative === null) {
     return fail(INVALID);
   }
@@ -54,6 +72,8 @@ export async function updateCompanyAction(
     return fail("회계연도 시작 월은 1~12 사이여야 합니다.");
   }
   if (approval !== "true" && approval !== "false") return fail(INVALID);
+  if (businessType !== "corporation" && businessType !== "individual") return fail(INVALID);
+  if (semiannual !== "true" && semiannual !== "false") return fail(INVALID);
 
   const r = await updateCompany(db, {
     name,
@@ -61,6 +81,14 @@ export async function updateCompanyAction(
     representative,
     fiscalYearStartMonth: Number(monthRaw.trim()),
     approvalRequired: approval === "true",
+    taxOfficeCode: str(fd, "taxOfficeCode") ?? "",
+    businessType,
+    corporateNumber: str(fd, "corporateNumber") ?? "",
+    withholdingSemiannual: semiannual === "true",
+    hometaxId: str(fd, "hometaxId") ?? "",
+    filingContactDept: str(fd, "filingContactDept") ?? "",
+    filingContactName: str(fd, "filingContactName") ?? "",
+    filingContactPhone: str(fd, "filingContactPhone") ?? "",
   }, user.id);
   if (!r.ok) return fail(r.error);
   revalidatePath("/admin/company");

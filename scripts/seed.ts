@@ -21,7 +21,7 @@ const DEFAULT_PAY_ITEMS: (typeof payrollItems.$inferInsert)[] = [
   { code: "basic", name: "기본급", taxable: true, nontaxLimit: null, debitAccountCode: null, sort: 10 },
   { code: "bonus", name: "상여", taxable: true, nontaxLimit: null, debitAccountCode: "803", sort: 20 },
   { code: "meal", name: "식대", taxable: false, nontaxLimit: 200_000, debitAccountCode: null, sort: 30 },
-  { code: "car", name: "자가운전보조금", taxable: false, nontaxLimit: 200_000, debitAccountCode: null, sort: 40 },
+  { code: "car", name: "자가운전보조금", taxable: false, nontaxLimit: 200_000, excludeFromTotalPaid: true, debitAccountCode: null, sort: 40 },
   { code: "position", name: "직책수당", taxable: true, nontaxLimit: null, debitAccountCode: null, sort: 50 },
   { code: "overtime", name: "연장근로수당", taxable: true, nontaxLimit: null, debitAccountCode: null, sort: 60 },
 ];

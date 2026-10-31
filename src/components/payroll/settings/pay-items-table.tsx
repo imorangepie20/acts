@@ -26,6 +26,7 @@ const EMPTY: PayItemRow = {
   taxable: true,
   nontaxLimit: null,
   inEmploymentBase: true,
+  excludeFromTotalPaid: false,
   debitAccountCode: null,
   sort: 100,
   isActive: true,
@@ -100,6 +101,17 @@ function ItemForm({
           onCheckedChange={(c) => set("inEmploymentBase", c)}
         />
         <Label htmlFor="item-employment">고용보험 보수에 포함</Label>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center gap-3">
+          <Switch
+            id="item-exclude-total"
+            checked={v.excludeFromTotalPaid}
+            onCheckedChange={(c) => set("excludeFromTotalPaid", c)}
+          />
+          <Label htmlFor="item-exclude-total">총지급액 제외</Label>
+        </div>
+        <p className="text-xs text-muted-foreground">지급명세서 제출 면제 비과세(소득세법 시행령 제214조)</p>
       </div>
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-3">
@@ -181,6 +193,7 @@ export function PayItemsTable({ items, accounts }: Props) {
                 <TableHead>과세</TableHead>
                 <TableHead className="text-right">비과세 한도</TableHead>
                 <TableHead>고용보험 보수</TableHead>
+                <TableHead>총지급액 제외</TableHead>
                 <TableHead>전표 계정</TableHead>
                 <TableHead>상태</TableHead>
                 <TableHead />
@@ -196,6 +209,7 @@ export function PayItemsTable({ items, accounts }: Props) {
                     {i.nontaxLimit === null ? "-" : formatWon(i.nontaxLimit)}
                   </TableCell>
                   <TableCell>{i.inEmploymentBase ? "포함" : "제외"}</TableCell>
+                  <TableCell>{i.excludeFromTotalPaid ? "제외" : "-"}</TableCell>
                   <TableCell>{accountName(i.debitAccountCode)}</TableCell>
                   <TableCell>
                     <Badge variant={i.isActive ? "secondary" : "destructive"}>{i.isActive ? "사용" : "중지"}</Badge>

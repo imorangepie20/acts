@@ -12,6 +12,14 @@ const valid: Company = {
   representative: "홍길동",
   fiscalYearStartMonth: 4,
   approvalRequired: true,
+  taxOfficeCode: null,
+  businessType: "corporation",
+  corporateNumber: null,
+  withholdingSemiannual: false,
+  hometaxId: null,
+  filingContactDept: null,
+  filingContactName: null,
+  filingContactPhone: null,
 };
 
 let actorId: string;
@@ -56,6 +64,47 @@ describe("company service", () => {
       representative: "홍길동",
       fiscalYearStartMonth: 4,
       approvalRequired: true,
+      taxOfficeCode: null,
+      businessType: "corporation",
+      corporateNumber: null,
+      withholdingSemiannual: false,
+      hometaxId: null,
+      filingContactDept: null,
+      filingContactName: null,
+      filingContactPhone: null,
+    });
+  });
+  it("filing fields are optional and checked for format only when non-empty", async () => {
+    for (const bad of ["12", "12a"]) {
+      expect(await updateCompany(db, { ...valid, taxOfficeCode: bad }, actorId)).toEqual({
+        ok: false,
+        error: "세무서코드는 숫자 3자리입니다.",
+      });
+    }
+    expect(await updateCompany(db, { ...valid, corporateNumber: "123" }, actorId)).toEqual({
+      ok: false,
+      error: "법인등록번호는 숫자 13자리입니다.",
+    });
+    expect((await updateCompany(db, valid, actorId)).ok).toBe(true);
+    const full = {
+      ...valid,
+      taxOfficeCode: "123",
+      businessType: "individual" as const,
+      corporateNumber: "110111-1234567",
+      withholdingSemiannual: true,
+      hometaxId: " abc ",
+      filingContactDept: "경리팀",
+      filingContactName: "김담당",
+      filingContactPhone: "02-123-4567",
+    };
+    expect((await updateCompany(db, full, actorId)).ok).toBe(true);
+    expect(await getCompany(db)).toMatchObject({
+      taxOfficeCode: "123",
+      businessType: "individual",
+      corporateNumber: "1101111234567",
+      withholdingSemiannual: true,
+      hometaxId: "abc",
+      filingContactName: "김담당",
     });
   });
   it("stores null for empty business number and representative", async () => {

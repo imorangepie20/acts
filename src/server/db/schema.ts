@@ -40,6 +40,15 @@ export const company = pgTable(
       .notNull()
       .default(1),
     approvalRequired: boolean("approval_required").notNull().default(false),
+    /** 원천세 신고 정보 (Phase 3); presence is checked when a file is downloaded. */
+    taxOfficeCode: text("tax_office_code"),
+    businessType: text("business_type").notNull().default("corporation"),
+    corporateNumber: text("corporate_number"),
+    withholdingSemiannual: boolean("withholding_semiannual").notNull().default(false),
+    hometaxId: text("hometax_id"),
+    filingContactDept: text("filing_contact_dept"),
+    filingContactName: text("filing_contact_name"),
+    filingContactPhone: text("filing_contact_phone"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -50,6 +59,7 @@ export const company = pgTable(
       "company_fiscal_month",
       sql`${t.fiscalYearStartMonth} between 1 and 12`,
     ),
+    check("company_business_type", sql`${t.businessType} in ('corporation', 'individual')`),
   ],
 );
 
@@ -369,7 +379,7 @@ export const payrollRateKind = pgEnum("payroll_rate_kind", [
 ]);
 export const payrollRunType = pgEnum("payroll_run_type", ["regular", "bonus"]);
 export const payrollRunStatus = pgEnum("payroll_run_status", ["draft", "confirmed"]);
-export const payrollAuditField = pgEnum("payroll_audit_field", ["rrn", "account"]);
+export const payrollAuditField = pgEnum("payroll_audit_field", ["rrn", "account", "simplified_statement"]);
 
 export const employees = pgTable(
   "employees",
@@ -419,6 +429,8 @@ export const payrollItems = pgTable("payroll_items", {
   taxable: boolean("taxable").notNull().default(true),
   nontaxLimit: bigint("nontax_limit", { mode: "number" }),
   inEmploymentBase: boolean("in_employment_base").notNull().default(true),
+  /** 지급명세서 제출 면제 비과세 (소득세법 시행령 제214조): left out of the 총지급액. */
+  excludeFromTotalPaid: boolean("exclude_from_total_paid").notNull().default(false),
   /** null = 801/802 by 임원 여부. */
   debitAccountCode: text("debit_account_code"),
   sort: integer("sort").notNull().default(0),

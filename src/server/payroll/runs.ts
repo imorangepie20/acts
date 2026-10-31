@@ -176,6 +176,7 @@ async function loadCtx(conn: Conn, run: Pick<RunHead, "yearMonth" | "payDate">):
       taxable: payrollItems.taxable,
       nontaxLimit: payrollItems.nontaxLimit,
       inEmploymentBase: payrollItems.inEmploymentBase,
+      excludeFromTotalPaid: payrollItems.excludeFromTotalPaid,
       isActive: payrollItems.isActive,
       debitAccountCode: payrollItems.debitAccountCode,
     })

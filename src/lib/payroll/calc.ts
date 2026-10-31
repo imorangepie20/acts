@@ -24,10 +24,11 @@ function pct10(amount: number, percent: number): number {
 export function splitTaxable(
   items: ItemDef[],
   amounts: Record<string, number>,
-): { gross: number; taxable: number; nontaxable: number; employmentBase: number } {
+): { gross: number; taxable: number; nontaxable: number; excludedNontaxable: number; employmentBase: number } {
   let gross = 0;
   let taxable = 0;
   let nontaxable = 0;
+  let excludedNontaxable = 0;
   let employmentBase = 0;
   for (const item of items) {
     const amount = Math.max(0, amounts[item.code] ?? 0);
@@ -35,10 +36,11 @@ export function splitTaxable(
     const tax = amount - nontax;
     gross += amount;
     nontaxable += nontax;
+    if (item.excludeFromTotalPaid) excludedNontaxable += nontax;
     taxable += tax;
     if (item.inEmploymentBase) employmentBase += tax;
   }
-  return { gross, taxable, nontaxable, employmentBase };
+  return { gross, taxable, nontaxable, excludedNontaxable, employmentBase };
 }
 
 /** Table amount for 1..11 family members at this wage (before the 자녀 credit). */

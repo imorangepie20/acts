@@ -63,6 +63,8 @@ export type ItemDef = {
   taxable: boolean;
   nontaxLimit: number | null;
   inEmploymentBase: boolean;
+  /** 지급명세서 제출 면제 비과세: its 비과세 part is left out of the 총지급액. */
+  excludeFromTotalPaid: boolean;
 };
 
 export type EmployeeCalcInput = {
@@ -84,6 +86,8 @@ export type LineResult = {
   gross: number;
   taxable: number;
   nontaxable: number;
+  /** The part of `nontaxable` from items flagged excludeFromTotalPaid; absent on lines computed before Phase 3. */
+  excludedNontaxable?: number;
   employmentBase: number;
   deductions: Record<DeductionKey, number>;
   company: { pension: number; health: number; ltc: number; employment: number };

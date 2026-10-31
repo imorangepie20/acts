@@ -96,6 +96,7 @@ const itemSchema = z.object({
   taxable: z.boolean(),
   nontaxLimit: z.number().int().nullable(),
   inEmploymentBase: z.boolean(),
+  excludeFromTotalPaid: z.boolean(),
   debitAccountCode: z.string().max(10).nullable(),
   sort: z.number().int(),
   isActive: z.boolean(),

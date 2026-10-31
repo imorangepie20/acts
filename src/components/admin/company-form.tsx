@@ -78,6 +78,93 @@ export function CompanyForm({ company }: { company: Company }) {
           </p>
         </div>
       </div>
+      <div className="flex flex-col gap-4 border-t pt-4">
+        <div>
+          <h3 className="text-sm font-medium">원천세 신고 정보</h3>
+          <p className="text-sm text-muted-foreground">
+            원천징수이행상황신고서와 간이지급명세서 파일에 쓰입니다. 파일을 내려받을 때 빈 값을 확인합니다.
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="company-tax-office">세무서코드</Label>
+          <Input
+            id="company-tax-office"
+            name="taxOfficeCode"
+            inputMode="numeric"
+            placeholder="000"
+            defaultValue={v ? v.taxOfficeCode : (company.taxOfficeCode ?? "")}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="company-business-type">사업자 유형</Label>
+          <select
+            id="company-business-type"
+            name="businessType"
+            defaultValue={v?.businessType || company.businessType}
+            className={selectClass}
+          >
+            <option value="corporation">법인</option>
+            <option value="individual">개인</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="company-corp-no">법인등록번호</Label>
+          <Input
+            id="company-corp-no"
+            name="corporateNumber"
+            inputMode="numeric"
+            placeholder="0000000000000"
+            defaultValue={v ? v.corporateNumber : (company.corporateNumber ?? "")}
+          />
+        </div>
+        <div className="flex items-start gap-3">
+          <Switch
+            id="company-semiannual"
+            name="withholdingSemiannual"
+            value="true"
+            uncheckedValue="false"
+            defaultChecked={v ? v.withholdingSemiannual : company.withholdingSemiannual}
+          />
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="company-semiannual">반기별 납부</Label>
+            <p className="text-sm text-muted-foreground">반기별 납부 승인을 받은 사업장만 켭니다.</p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="company-hometax-id">홈택스 ID</Label>
+          <Input
+            id="company-hometax-id"
+            name="hometaxId"
+            autoComplete="off"
+            defaultValue={v ? v.hometaxId : (company.hometaxId ?? "")}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="company-contact-dept">담당자 부서</Label>
+          <Input
+            id="company-contact-dept"
+            name="filingContactDept"
+            defaultValue={v ? v.filingContactDept : (company.filingContactDept ?? "")}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="company-contact-name">담당자 성명</Label>
+          <Input
+            id="company-contact-name"
+            name="filingContactName"
+            defaultValue={v ? v.filingContactName : (company.filingContactName ?? "")}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="company-contact-phone">담당자 전화번호</Label>
+          <Input
+            id="company-contact-phone"
+            name="filingContactPhone"
+            inputMode="tel"
+            defaultValue={v ? v.filingContactPhone : (company.filingContactPhone ?? "")}
+          />
+        </div>
+      </div>
       {state.error ? (
         <p role="alert" className="text-sm text-destructive">
           {state.error}

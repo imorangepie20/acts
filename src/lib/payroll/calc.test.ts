@@ -44,8 +44,8 @@ const base: EmployeeCalcInput = {
   healthBase: 3_000_000,
 };
 const items: ItemDef[] = [
-  { code: "salary", name: "기본급", taxable: true, nontaxLimit: null, inEmploymentBase: true },
-  { code: "meal", name: "식대", taxable: false, nontaxLimit: 200_000, inEmploymentBase: false },
+  { code: "salary", name: "기본급", taxable: true, nontaxLimit: null, inEmploymentBase: true, excludeFromTotalPaid: false },
+  { code: "meal", name: "식대", taxable: false, nontaxLimit: 200_000, inEmploymentBase: false, excludeFromTotalPaid: false },
 ];
 const calc = (over: Partial<Parameters<typeof computeLine>[0]> = {}, emp: Partial<EmployeeCalcInput> = {}) =>
   computeLine({
@@ -61,7 +61,19 @@ const calc = (over: Partial<Parameters<typeof computeLine>[0]> = {}, emp: Partia
 describe("splitTaxable", () => {
   it("splits 비과세 above the monthly limit", () => {
     const s = splitTaxable(items, { salary: 3_000_000, meal: 250_000 });
-    expect(s).toEqual({ gross: 3_250_000, taxable: 3_050_000, nontaxable: 200_000, employmentBase: 3_000_000 });
+    expect(s).toEqual({ gross: 3_250_000, taxable: 3_050_000, nontaxable: 200_000, excludedNontaxable: 0, employmentBase: 3_000_000 });
+  });
+  const car: ItemDef = { code: "car", name: "자가운전보조금", taxable: false, nontaxLimit: 200_000, inEmploymentBase: false, excludeFromTotalPaid: true };
+  it("splitTaxable reports excluded 비과세", () => {
+    const s = splitTaxable([items[1], car], { meal: 250_000, car: 300_000 });
+    expect(s.nontaxable).toBe(400_000);
+    expect(s.excludedNontaxable).toBe(200_000);
+    expect(s.taxable).toBe(150_000);
+  });
+  it("computeLine carries excludedNontaxable", () => {
+    const line = calc({ items: [items[0], car], amounts: { salary: 3_000_000, car: 300_000 } });
+    expect(line.excludedNontaxable).toBe(200_000);
+    expect(line.nontaxable).toBe(200_000);
   });
 });
 
