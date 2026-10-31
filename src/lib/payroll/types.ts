@@ -56,3 +56,37 @@ export type Rates = {
   employmentEmployee: number;
   employmentCompany: number;
 };
+
+export type ItemDef = {
+  code: string;
+  name: string;
+  taxable: boolean;
+  nontaxLimit: number | null;
+  inEmploymentBase: boolean;
+};
+
+export type EmployeeCalcInput = {
+  /** 공제대상가족 수 (본인 포함), 1 or more. */
+  dependents: number;
+  /** 8세 이상 20세 이하 자녀 수 for the 자녀 세액공제. */
+  children: number;
+  withholdingRate: 80 | 100 | 120;
+  insPension: boolean;
+  insHealth: boolean;
+  insEmployment: boolean;
+  pensionBase: number;
+  healthBase: number;
+};
+
+export type DeductionKey = "pension" | "health" | "ltc" | "employment" | "incomeTax" | "localTax";
+
+export type LineResult = {
+  gross: number;
+  taxable: number;
+  nontaxable: number;
+  employmentBase: number;
+  deductions: Record<DeductionKey, number>;
+  company: { pension: number; health: number; ltc: number; employment: number };
+  totalDeductions: number;
+  netPay: number;
+};
