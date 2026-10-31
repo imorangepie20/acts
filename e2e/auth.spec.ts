@@ -1,6 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { totpCode } from "../src/server/auth/totp";
-import { login, savedTotpSecret, wrongTotpCode } from "./helpers/login";
+import { login, savedTotpSecret, withTotpCode, wrongTotpCode } from "./helpers/login";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -57,8 +56,10 @@ test.describe("인증", () => {
     await expect(page).toHaveURL(/\/2fa\/verify/);
 
     // the right code clears the failed counter, so this test can never lock the admin
-    await page.getByLabel("인증 코드").fill(totpCode(secret, new Date()));
-    await page.getByRole("button", { name: "확인" }).click();
-    await expect(page).toHaveURL(/\/overview/);
+    await withTotpCode(email, secret, async (code) => {
+      await page.getByLabel("인증 코드").fill(code);
+      await page.getByRole("button", { name: "확인" }).click();
+      await expect(page).toHaveURL(/\/overview/);
+    });
   });
 });

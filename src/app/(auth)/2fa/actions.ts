@@ -4,7 +4,12 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { homePathFor } from "@/lib/permissions";
 import { SESSION_COOKIE, verifyPartialSession } from "@/server/auth/dal";
-import { confirmEnrolment, markSessionMfaVerified, verifySecondFactor } from "@/server/auth/mfa";
+import {
+  confirmEnrolment,
+  markSessionMfaVerified,
+  verifySecondFactor,
+  withEncryptionKey,
+} from "@/server/auth/mfa";
 import { db } from "@/server/db";
 
 export type TotpSetupState = { error?: string; nonce?: number; recoveryCodes?: string[] };
@@ -17,7 +22,9 @@ export async function confirmTotpSetupAction(
   const user = await verifyPartialSession();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) redirect("/login");
-  const r = await confirmEnrolment(db, user.id, String(form.get("code") ?? ""));
+  const code = String(form.get("code") ?? "");
+  const wrapped = await withEncryptionKey(() => confirmEnrolment(db, user.id, code));
+  const r = wrapped.ok ? wrapped.value : wrapped;
   if (!r.ok) return { error: r.error, nonce: Date.now() };
   // Typing a valid code during enrolment counts as this session's second factor.
   await markSessionMfaVerified(db, token);
@@ -31,7 +38,9 @@ export async function verifyTotpAction(
   const user = await verifyPartialSession();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) redirect("/login");
-  const r = await verifySecondFactor(db, token, String(form.get("code") ?? ""));
+  const code = String(form.get("code") ?? "");
+  const wrapped = await withEncryptionKey(() => verifySecondFactor(db, token, code));
+  const r = wrapped.ok ? wrapped.value : wrapped;
   if (!r.ok) return { error: r.error, nonce: Date.now() };
   redirect(homePathFor(user.role));
 }

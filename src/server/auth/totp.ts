@@ -53,25 +53,34 @@ function codeForCounter(key: Buffer, counter: number): string {
   return String(bin).padStart(DIGITS, "0");
 }
 
-function counterAt(at: Date): number {
+/** The 30-second step number at `at`. */
+export function totpStep(at: Date): number {
   return Math.floor(at.getTime() / 1000 / STEP_SECONDS);
 }
 
 export function totpCode(secret: string, at: Date): string {
-  return codeForCounter(base32Decode(secret), counterAt(at));
+  return codeForCounter(base32Decode(secret), totpStep(at));
+}
+
+/**
+ * The step whose code matches, checking the current step and one either side (clock drift),
+ * or null. Callers use the step to refuse replays.
+ */
+export function matchTotpStep(secret: string, code: string, at: Date): number | null {
+  const typed = code.replace(/\s/g, "");
+  if (!/^\d{6}$/.test(typed)) return null;
+  const key = base32Decode(secret);
+  const c = totpStep(at);
+  let match: number | null = null;
+  for (const d of [-1, 0, 1]) {
+    if (timingSafeEqual(Buffer.from(codeForCounter(key, c + d)), Buffer.from(typed))) match = c + d;
+  }
+  return match;
 }
 
 /** Accepts the current step and one step either side (clock drift). */
 export function verifyTotp(secret: string, code: string, at: Date): boolean {
-  const typed = code.replace(/\s/g, "");
-  if (!/^\d{6}$/.test(typed)) return false;
-  const key = base32Decode(secret);
-  const c = counterAt(at);
-  let match = false;
-  for (const d of [-1, 0, 1]) {
-    if (timingSafeEqual(Buffer.from(codeForCounter(key, c + d)), Buffer.from(typed))) match = true;
-  }
-  return match;
+  return matchTotpStep(secret, code, at) !== null;
 }
 
 export function otpauthUrl(secret: string, email: string): string {

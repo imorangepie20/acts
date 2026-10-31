@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { decryptSecret, encryptSecret, hmacSecret } from "./secret";
+import {
+  decryptSecret,
+  encryptSecret,
+  hmacSecret,
+  keyedHash,
+  MissingEncryptionKeyError,
+} from "./secret";
 
 const KEY = process.env.PAYROLL_ENCRYPTION_KEY;
 afterEach(() => {
@@ -30,5 +36,15 @@ describe("secret", () => {
   it("throws when the key is unset", () => {
     delete process.env.PAYROLL_ENCRYPTION_KEY;
     expect(() => encryptSecret("x")).toThrow("PAYROLL_ENCRYPTION_KEY가 설정되지 않았습니다.");
+  });
+  it("throws MissingEncryptionKeyError when the key is unset", () => {
+    delete process.env.PAYROLL_ENCRYPTION_KEY;
+    expect(() => keyedHash("totp-recovery", "x")).toThrow(MissingEncryptionKeyError);
+  });
+  it("keyedHash uses a per-label subkey", () => {
+    expect(keyedHash("totp-recovery", "a")).toMatch(/^[0-9a-f]{64}$/);
+    expect(keyedHash("totp-recovery", "a")).toBe(keyedHash("totp-recovery", "a"));
+    expect(keyedHash("totp-recovery", "a")).not.toBe(hmacSecret("a"));
+    expect(keyedHash("rrn-index", "a")).toBe(hmacSecret("a"));
   });
 });

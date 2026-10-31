@@ -91,8 +91,10 @@ export const userTotp = pgTable("user_totp", {
   /** base32 secret, encrypted with encryptSecret */
   secret: text("secret").notNull(),
   enabledAt: timestamp("enabled_at", { withTimezone: true }),
-  /** sha256 hex of each unused recovery code */
+  /** keyed HMAC (hex) of each unused recovery code, see keyedHash("totp-recovery") */
   recoveryCodes: text("recovery_codes").array().notNull().default(sql`'{}'::text[]`),
+  /** 30-second step of the last accepted code; a code at or before it is a replay */
+  lastUsedStep: bigint("last_used_step", { mode: "number" }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

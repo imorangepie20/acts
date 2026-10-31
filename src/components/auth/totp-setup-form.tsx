@@ -15,7 +15,17 @@ function groupKey(secret: string): string {
   return secret.replace(/(.{4})/g, "$1 ").trim()
 }
 
-export function TotpSetupForm({ qr, secret, homePath }: { qr: string; secret: string; homePath: string }) {
+export function TotpSetupForm({
+  qr,
+  secret,
+  voluntary,
+  nextPath,
+}: {
+  qr: string
+  secret: string
+  voluntary: boolean
+  nextPath: string
+}) {
   const [state, formAction, pending] = useActionState<TotpSetupState, FormData>(confirmTotpSetupAction, {})
 
   if (state.recoveryCodes) {
@@ -35,7 +45,7 @@ export function TotpSetupForm({ qr, secret, homePath }: { qr: string; secret: st
               </li>
             ))}
           </ul>
-          <Link href={homePath} className={cn(buttonVariants(), "w-full")}>
+          <Link href={nextPath} className={cn(buttonVariants(), "w-full")}>
             다음
           </Link>
         </div>
@@ -46,13 +56,19 @@ export function TotpSetupForm({ qr, secret, homePath }: { qr: string; secret: st
   return (
     <AuthCard
       title="2단계 인증 등록"
-      description="이 계정은 2단계 인증을 써야 합니다. 인증 앱(Google Authenticator 등)으로 QR 코드를 찍은 뒤 앱에 표시된 6자리 코드를 입력하세요."
+      description={`${voluntary ? "" : "이 계정은 2단계 인증을 써야 합니다. "}인증 앱(Google Authenticator 등)으로 QR 코드를 찍은 뒤 앱에 표시된 6자리 코드를 입력하세요.`}
       footer={
-        <form action={logoutAction}>
-          <button type="submit" className="text-muted-foreground underline-offset-4 hover:underline">
-            다른 계정으로 로그인
-          </button>
-        </form>
+        voluntary ? (
+          <Link href="/profile" className="text-muted-foreground underline-offset-4 hover:underline">
+            취소
+          </Link>
+        ) : (
+          <form action={logoutAction}>
+            <button type="submit" className="text-muted-foreground underline-offset-4 hover:underline">
+              다른 계정으로 로그인
+            </button>
+          </form>
+        )
       }
     >
       <div className="flex flex-col gap-4">

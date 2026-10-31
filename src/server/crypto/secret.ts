@@ -1,13 +1,26 @@
 import "server-only";
 import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } from "node:crypto";
 
+/** The key is not configured; callers that can show a page message catch exactly this class. */
+export class MissingEncryptionKeyError extends Error {
+  constructor() {
+    super("PAYROLL_ENCRYPTION_KEY가 설정되지 않았습니다.");
+    this.name = "MissingEncryptionKeyError";
+  }
+}
+
 /** Read on every call so a missing key fails only the caller, not unrelated pages. */
 function masterKey(): Buffer {
   const raw = process.env.PAYROLL_ENCRYPTION_KEY;
-  if (!raw) throw new Error("PAYROLL_ENCRYPTION_KEY가 설정되지 않았습니다.");
+  if (!raw) throw new MissingEncryptionKeyError();
   const key = Buffer.from(raw, "base64");
   if (key.length !== 32) throw new Error("PAYROLL_ENCRYPTION_KEY는 base64 32바이트여야 합니다.");
   return key;
+}
+
+/** Throws MissingEncryptionKeyError (or the length error) when the key is not usable. */
+export function assertEncryptionKey(): void {
+  masterKey();
 }
 
 export function encryptSecret(plain: string): string {
@@ -25,8 +38,13 @@ export function decryptSecret(stored: string): string {
   return Buffer.concat([d.update(Buffer.from(ct, "base64")), d.final()]).toString("utf8");
 }
 
+/** Keyed HMAC-SHA256 (hex) with a subkey derived from the master key for this label only. */
+export function keyedHash(label: string, plain: string): string {
+  const sub = Buffer.from(hkdfSync("sha256", masterKey(), Buffer.alloc(0), label, 32));
+  return createHmac("sha256", sub).update(plain).digest("hex");
+}
+
 /** Deterministic lookup index (e.g. duplicate 주민등록번호), keyed with a label-derived subkey. */
 export function hmacSecret(plain: string): string {
-  const sub = Buffer.from(hkdfSync("sha256", masterKey(), Buffer.alloc(0), "rrn-index", 32));
-  return createHmac("sha256", sub).update(plain).digest("hex");
+  return keyedHash("rrn-index", plain);
 }
