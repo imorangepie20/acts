@@ -8,7 +8,7 @@ import { getVatAccountIds } from "@/server/accounts/service";
 import type { SessionUser } from "@/server/auth/service";
 import { getCompany, updateCompany } from "@/server/company/service";
 import { getIncomeStatement } from "@/server/reports/service";
-import { accounts, departments, partners, sites, users, voucherLines, vouchers } from "@/server/db/schema";
+import { accounts, departments, partners, sites, users, voucherImports, voucherLines, vouchers } from "@/server/db/schema";
 import { createPartner } from "@/server/partners/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
 import {
@@ -110,6 +110,28 @@ async function setApproval(on: boolean) {
   const r = await updateCompany(db, { ...c, approvalRequired: on }, manager.id);
   if (!r.ok) throw new Error(r.error);
 }
+
+describe("createVoucher import source", () => {
+  const meta = { approvalNo: "A1", merchantName: null, merchantBusinessNumber: null, cardNo: null };
+
+  it("records the import key in the same transaction and refuses a repeated key", async () => {
+    const src = { key: "nts:1", source: "tax_invoice" as const, meta };
+    const first = await createVoucher(db, staff, general(), src);
+    expect(first.ok).toBe(true);
+    const [row] = await db.select().from(voucherImports);
+    expect(row).toMatchObject({ importKey: "nts:1", source: "tax_invoice", voucherId: first.ok ? first.value.id : "" });
+
+    const second = await createVoucher(db, staff, general(), src);
+    expect(second).toEqual({ ok: false, error: "이미 불러온 자료입니다." });
+    expect(await db.select().from(vouchers)).toHaveLength(1);
+  });
+
+  it("leaves validation failures alone and writes no import row", async () => {
+    const r = await createVoucher(db, staff, general({ date: "bad" }), { key: "nts:2", source: "card", meta });
+    expect(r).toEqual({ ok: false, error: MSG.date });
+    expect(await db.select().from(voucherImports)).toHaveLength(0);
+  });
+});
 
 describe("createVoucher", () => {
   it("creates a balanced 2-line general voucher, approved when approval is off", async () => {

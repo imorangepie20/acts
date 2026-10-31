@@ -364,7 +364,7 @@ describe("close races a write", () => {
     await setApproval(true);
     const m = "2024-05";
     for (let i = 0; i < 10; i++) {
-      await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, vouchers`);
+      await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, voucher_imports, vouchers`);
       const [close, write] = await Promise.all([
         after(i * 2, () => closeMonth(db, admin, m)),
         createVoucher(db, admin, input("2024-05-15", `race ${i}`)),
@@ -392,7 +392,7 @@ describe("close races a write", () => {
     // Close first: 2024-02 is closed through the watermark and the write is refused.
     await setApproval(true);
     for (let i = 0; i < 10; i++) {
-      await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, vouchers`);
+      await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, voucher_imports, vouchers`);
       const [close, write] = await Promise.all([
         after(i * 2, () => closeMonth(db, admin, "2024-03")),
         createVoucher(db, admin, input("2024-02-10", `race ${i}`)),
@@ -414,7 +414,7 @@ describe("close races a write", () => {
     // With approval on the update leaves the voucher pending, which blocks the close.
     await setApproval(true);
     for (let i = 0; i < 10; i++) {
-      await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, vouchers`);
+      await db.execute(sql`truncate period_closes, voucher_history, voucher_lines, voucher_attachments, voucher_imports, vouchers`);
       const id = await mkVoucher("2024-06-10");
       expect(await approveVoucher(db, admin, id, 1)).toEqual({ ok: true });
       const [close, write] = await Promise.all([

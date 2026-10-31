@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import type { ImportMeta } from "@/lib/imports/types";
 import { MAX_WON } from "@/lib/money";
 import { can } from "@/lib/permissions";
 import { isUuid } from "@/lib/uuid";
@@ -21,6 +22,7 @@ import { removeStored } from "@/server/attachments/storage";
 import type { SessionUser } from "@/server/auth/service";
 import { assertMonthsOpen } from "@/server/closing/periods";
 import type { Db } from "@/server/db/client";
+import { isUniqueViolation } from "@/server/db/errors";
 import {
   accounts,
   company,
@@ -30,6 +32,7 @@ import {
   users,
   voucherAttachments,
   voucherHistory,
+  voucherImports,
   voucherLines,
   vouchers,
 } from "@/server/db/schema";
@@ -87,7 +90,7 @@ export const ERR_REF = "사용할 수 없는 거래처, 사업장 또는 부서�
 const ERR_INVALID = "입력값이 올바르지 않습니다.";
 const ERR_CLOSING_TYPE = "결산 전표는 일반 전표로만 입력합니다.";
 export const ERR_CONFLICT = "다른 사용자가 먼저 수정했습니다. 새로고침 후 다시 시도하세요.";
-const errBeforeCutoff = (cutoff: string) => `기초잔액 기준일(${cutoff}) 이후 날짜만 입력할 수 있습니다.`;
+export const errBeforeCutoff = (cutoff: string) => `기초잔액 기준일(${cutoff}) 이후 날짜만 입력할 수 있습니다.`;
 const ERR_OPENING_ONLY = "기초잔액은 기초잔액 화면에서 수정하세요.";
 const ERR_NOT_FOUND = "전표를 찾을 수 없습니다.";
 const ERR_FORBIDDEN = "이 전표를 수정할 권한이 없습니다.";
@@ -381,21 +384,45 @@ async function storedRefs(tx: Tx, id: string): Promise<Allowed> {
   };
 }
 
+export const ERR_ALREADY_IMPORTED = "이미 불러온 자료입니다.";
+export type ImportSource = { key: string; source: "tax_invoice" | "card"; meta: ImportMeta };
+
+/** True for a unique violation on the voucher_imports key (not the voucher_id unique or any other). */
+function isImportKeyViolation(e: unknown): boolean {
+  for (let cur = e as { code?: string; constraint_name?: string; cause?: unknown } | undefined; cur; cur = cur.cause as typeof cur) {
+    if (cur.code === "23505" && cur.constraint_name === "voucher_imports_pkey") return true;
+  }
+  return false;
+}
+
 export async function createVoucher(
   db: Db,
   actor: SessionUser,
   input: VoucherInput,
+  source?: ImportSource,
 ): Promise<Result<{ id: string }>> {
   const vat = await loadVat(db);
-  return db.transaction(async (tx) => {
-    // Lock order (every voucher write): global period lock (PERIOD_LOCK, 0) → company FOR SHARE → voucher row → numbering.
-    const closed = await assertMonthsOpen(tx, [input.date]);
-    if (closed) return fail(closed);
-    const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
-    const error = await validate(tx, ctx, input, NONE_ALLOWED);
-    if (error) return fail(error);
-    return ok({ id: await insertVoucher(tx, actor, input, statusFields(ctx, actor)) });
-  });
+  try {
+    return await db.transaction(async (tx) => {
+      // Lock order (every voucher write): global period lock (PERIOD_LOCK, 0) → company FOR SHARE → voucher row → numbering.
+      const closed = await assertMonthsOpen(tx, [input.date]);
+      if (closed) return fail(closed);
+      const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
+      const error = await validate(tx, ctx, input, NONE_ALLOWED);
+      if (error) return fail(error);
+      const id = await insertVoucher(tx, actor, input, statusFields(ctx, actor));
+      if (source) {
+        await tx
+          .insert(voucherImports)
+          .values({ importKey: source.key, voucherId: id, source: source.source, meta: source.meta });
+      }
+      return ok({ id });
+    });
+  } catch (e) {
+    // The failed insert aborted (and rolled back) the transaction, so catch it out here.
+    if (source && isUniqueViolation(e) && isImportKeyViolation(e)) return fail(ERR_ALREADY_IMPORTED);
+    throw e;
+  }
 }
 
 /**

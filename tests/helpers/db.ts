@@ -17,7 +17,7 @@ export function getTestDb(): Db {
 
 export async function resetDb(db: Db): Promise<void> {
   await db.execute(
-    sql`TRUNCATE voucher_templates, fiscal_year_closes, period_closes, voucher_history, voucher_lines, voucher_attachments, vouchers, sessions, users, company, accounts, partners, departments, sites RESTART IDENTITY CASCADE`,
+    sql`TRUNCATE voucher_imports, voucher_templates, fiscal_year_closes, period_closes, voucher_history, voucher_lines, voucher_attachments, vouchers, sessions, users, company, accounts, partners, departments, sites RESTART IDENTITY CASCADE`,
   );
 }
 

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { VoucherSnapshot } from "@/lib/vouchers/types";
+import type { ImportMeta } from "@/lib/imports/types";
 import type { TemplateBody } from "@/lib/vouchers/templates";
 import {
   bigint,
@@ -312,4 +313,18 @@ export const voucherTemplates = pgTable("voucher_templates", {
   createdBy: uuid("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const importSource = pgEnum("import_source", ["tax_invoice", "card"]);
+
+/** One row per imported voucher; deleting the voucher frees the key for re-import. */
+export const voucherImports = pgTable("voucher_imports", {
+  importKey: text("import_key").primaryKey(),
+  voucherId: uuid("voucher_id")
+    .notNull()
+    .unique()
+    .references(() => vouchers.id, { onDelete: "cascade" }),
+  source: importSource("source").notNull(),
+  meta: jsonb("meta").$type<ImportMeta>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
