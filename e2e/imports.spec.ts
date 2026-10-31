@@ -48,9 +48,8 @@ test("매입 세금계산서: 일괄 계정 지정 후 전표 생성, 재업로�
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: file,
   });
-  await page.getByRole("button", { name: "미리보기" }).click();
   await expect(page.getByText(nameA)).toBeVisible();
-  await expect(page.getByText("purchase.xlsx에서 2건을 읽었습니다. 전표로 만들 수 있는 건 2건.")).toBeVisible();
+  await expect(page.getByText("업로드 완료 · purchase.xlsx에서 2건을 읽었습니다. 전표로 만들 수 있는 건 2건.")).toBeVisible();
   await expect(page.getByText("새 거래처")).toHaveCount(2);
 
   const create = page.getByRole("button", { name: /전표 만들기/ });
@@ -74,7 +73,6 @@ test("매입 세금계산서: 일괄 계정 지정 후 전표 생성, 재업로�
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: file,
   });
-  await page.getByRole("button", { name: "미리보기" }).click();
   await expect(page.getByText("이미 불러온 자료")).toHaveCount(2);
   await expect(page.getByText("전표로 만들 수 있는 건 0건, 이미 불러온 건 2건.", { exact: false })).toBeVisible();
 });
@@ -95,7 +93,6 @@ test("카드 사용내역: 봉사료 행은 비활성과 사유가 보인다", a
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: file,
   });
-  await page.getByRole("button", { name: "미리보기" }).click();
   const blocked = page.getByRole("row").filter({ hasText: `식당${id}` });
   await expect(blocked.getByText("봉사료가 있는 건은 직접 입력하세요.")).toBeVisible();
   await expect(blocked.getByRole("checkbox")).toBeDisabled();

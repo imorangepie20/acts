@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { Loader2Icon } from "lucide-react";
+import { CircleAlertIcon, CircleCheckIcon, FileSpreadsheetIcon, Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -42,7 +42,9 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"preview" | "commit" | null>(null);
+  const [dragging, setDragging] = useState(false);
   const [bulk, setBulk] = useState<number | null>(null);
   const [pending, start] = useTransition();
 
@@ -52,6 +54,7 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
     setError(null);
     setDone(null);
     setSummary(null);
+    setUploadError(null);
     setFile(null);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -65,28 +68,30 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
   const patch = (i: number, p: Partial<RowState>) =>
     setStates((s) => s.map((x, j) => (j === i ? { ...x, ...p } : x)));
 
-  const preview = () => {
-    if (!file) {
-      setError("엑셀 파일을 선택하세요.");
-      return;
-    }
+  /** Uploads and reads the file as soon as it is picked or dropped. */
+  const preview = (picked: File) => {
+    setFile(picked);
     const fd = new FormData();
     fd.set("kind", kind);
     fd.set("direction", direction);
-    fd.set("file", file);
+    fd.set("file", picked);
     setBusy("preview");
+    setDone(null);
+    setSummary(null);
+    setUploadError(null);
+    setError(null);
     start(async () => {
-      setDone(null);
-      setSummary(null);
-      const r = await previewImportAction(fd).finally(() => setBusy(null));
+      const r = await previewImportAction(fd)
+        .catch(() => ({ ok: false as const, error: "파일을 올리지 못했습니다. 네트워크를 확인하고 다시 선택하세요." }))
+        .finally(() => setBusy(null));
+      if (fileRef.current) fileRef.current.value = ""; // picking the same file again re-reads it
       if (!r.ok) {
-        setError(r.error);
+        setUploadError(r.error);
         setRows([]);
         setStates([]);
         return;
       }
-      setError(null);
-      setSummary(previewSummary(file.name, r.value.rows));
+      setSummary(previewSummary(picked.name, r.value.rows));
       setRows(r.value.rows);
       setStates(
         r.value.rows.map((row) => ({
@@ -244,35 +249,45 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          const dropped = e.dataTransfer.files?.[0];
+          if (dropped && !pending) preview(dropped);
+        }}
+        className={`flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
+          dragging ? "border-primary bg-primary/5" : "border-muted-foreground/25"
+        }`}
+      >
         <input
           ref={fileRef}
           type="file"
           accept=".xlsx,.xls"
           aria-label="엑셀 파일"
-          className="text-sm"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="sr-only"
+          onChange={(e) => {
+            const picked = e.target.files?.[0];
+            if (picked) preview(picked);
+          }}
         />
-        <Button type="button" onClick={preview} disabled={pending}>
-          {busy === "preview" ? (
-            <>
-              <Loader2Icon aria-hidden className="animate-spin" />
-              파일 읽는 중…
-            </>
-          ) : (
-            "미리보기"
-          )}
+        <UploadStatus busy={busy === "preview"} file={file} summary={summary} error={uploadError} />
+        <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={pending}>
+          {file ? "다른 파일 선택" : "파일 선택"}
         </Button>
+        <p className="text-xs text-muted-foreground">
+          홈택스에서 내려받은 .xlsx·.xls 파일을 여기에 끌어다 놓거나 [파일 선택]을 누르세요. 고르면 바로 올리고 읽습니다.
+        </p>
       </div>
 
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
-        </p>
-      )}
-      {summary && !error && (
-        <p role="status" className="text-sm">
-          {summary}
         </p>
       )}
       {done && (
@@ -322,4 +337,47 @@ function previewSummary(fileName: string, rows: PreviewRow[]): string {
   if (count("duplicate")) parts.push(`이미 불러온 건 ${count("duplicate")}건`);
   if (count("blocked")) parts.push(`직접 입력할 건 ${count("blocked")}건`);
   return `${fileName}에서 ${rows.length}건을 읽었습니다. ${parts.join(", ")}.`;
+}
+
+function UploadStatus({
+  busy,
+  file,
+  summary,
+  error,
+}: {
+  busy: boolean;
+  file: File | null;
+  summary: string | null;
+  error: string | null;
+}) {
+  if (busy) {
+    return (
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Loader2Icon aria-hidden className="size-5 animate-spin" />
+        {file?.name} 올리고 읽는 중…
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div role="alert" className="flex items-center gap-2 text-sm font-medium text-destructive">
+        <CircleAlertIcon aria-hidden className="size-5 shrink-0" />
+        {error}
+      </div>
+    );
+  }
+  if (summary) {
+    return (
+      <div role="status" className="flex items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+        <CircleCheckIcon aria-hidden className="size-5 shrink-0" />
+        업로드 완료 · {summary}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <FileSpreadsheetIcon aria-hidden className="size-5" />
+      아직 올린 파일이 없습니다.
+    </div>
+  );
 }
