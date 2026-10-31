@@ -192,7 +192,8 @@ describe("payroll vouchers in the package", () => {
     const journal = await texts(files.get("분개장.xlsx")!);
     expect(journal.some((t) => t.startsWith("811"))).toBe(true);
     expect(journal.some((t) => t.startsWith("802"))).toBe(false);
-    expect(journal.some((t) => t.includes("급여"))).toBe(true); // only the notice line
+    expect(journal).toContain("급여 전표 1건은 제외했습니다. 급여 합계는 합계잔액시산표에 포함되어 있습니다.");
+    expect(journal.some((t) => t.includes("권한이 있어야"))).toBe(false);
     expect(journal.filter((t) => t.includes("급여") && !t.startsWith("급여 전표 1건은"))).toEqual([]);
     const tb = await texts(files.get("합계잔액시산표.xlsx")!);
     expect(tb.some((t) => t.startsWith("802"))).toBe(true);

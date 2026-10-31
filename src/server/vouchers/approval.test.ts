@@ -146,6 +146,8 @@ describe("rejectVoucher", () => {
   });
 });
 
+// countPending (and the dashboard / voucher-list pending banner) keeps counting payroll vouchers: only
+// details are hidden from users without payroll:manage, never the pending count of approvers.
 describe("countPending", () => {
   it("counts only pending vouchers", async () => {
     expect(await countPending(db)).toBe(0);

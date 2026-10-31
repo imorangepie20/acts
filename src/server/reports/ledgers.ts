@@ -32,8 +32,12 @@ function scope(f: { siteId: number | null; departmentId: number | null; hidePayr
 }
 
 /**
- * Posted payroll vouchers the ledger leaves out for this filter: in the period, site/department and,
- * when given, account/partner (a P&L account's period is clamped like its ledger). 0 when `f.hidePayroll` is false.
+ * Posted payroll vouchers the ledger leaves out for this filter, in its site/department scope. 0 when
+ * `f.hidePayroll` is false.
+ * - Without an account (분개장): those dated in [from, to].
+ * - With an account (원장, 거래처별 원장): those with a line on it (and the partner, when given) that the
+ *   ledger's opening balance or period would include. A balance-sheet account counts from the beginning
+ *   up to `to`; a P&L account from the fiscal-year start, after the same clamp as its ledger.
  */
 export async function countHiddenPayroll(
   db: Db,
@@ -41,11 +45,17 @@ export async function countHiddenPayroll(
   opts: { accountId?: number | null; partnerId?: number | null } = {},
 ): Promise<number> {
   if (!filter.hidePayroll) return 0;
-  let f = filter;
+  const f = filter;
+  let lower: string | null = f.from;
   if (opts.accountId != null) {
     const account = await getAccountById(db, opts.accountId);
     if (!account) return 0;
-    if (isPnlGroup(account.group)) f = clampPnl(filter, (await getCompany(db)).fiscalYearStartMonth).f;
+    if (isPnlGroup(account.group)) {
+      const startMonth = (await getCompany(db)).fiscalYearStartMonth;
+      lower = fiscalYearStart(clampPnl(filter, startMonth).f.from, startMonth);
+    } else {
+      lower = null;
+    }
   }
   const [row] = await db
     .select({ n: sql<number>`count(distinct ${vouchers.id})::int` })
@@ -55,7 +65,7 @@ export async function countHiddenPayroll(
       and(
         ...scope({ ...f, hidePayroll: false }),
         eq(vouchers.kind, "payroll"),
-        gte(vouchers.date, f.from),
+        lower === null ? undefined : gte(vouchers.date, lower),
         lte(vouchers.date, f.to),
         opts.accountId == null ? undefined : eq(voucherLines.accountId, opts.accountId),
         opts.partnerId == null ? undefined : eq(voucherLines.partnerId, opts.partnerId),

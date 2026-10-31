@@ -300,4 +300,21 @@ describe("payroll vouchers for users without payroll:manage", () => {
     expect(await getPartnerSummary(db, acc["802"], H)).toEqual([]);
     expect(await getPartnerSummary(db, acc["802"], F)).toHaveLength(1);
   });
+
+  it("counts a payroll voucher before the period when the ledger's opening balance leaves it out", async () => {
+    await createPayrollVoucher(db, manager); // 2026-06-25, 103 credit (net pay), 802 debit
+    const later = { ...H, from: "2026-07-01", to: "2026-08-31" };
+    expect(await countHiddenPayroll(db, later)).toBe(0); // the journal shows the period only
+    // 103 is a balance-sheet account: its opening balance runs from the beginning.
+    const shown = (await getAccountLedger(db, acc["103"], { ...later, hidePayroll: false }))!;
+    const hidden = (await getAccountLedger(db, acc["103"], later))!;
+    expect(hidden.rows[0]).not.toEqual(shown.rows[0]);
+    expect(await countHiddenPayroll(db, later, { accountId: acc["103"] })).toBe(1);
+    // 802 is a P&L account: its opening runs from the fiscal-year start (January), so June counts in 2026 only.
+    expect(await countHiddenPayroll(db, later, { accountId: acc["802"] })).toBe(1);
+    expect(await countHiddenPayroll(db, { ...H, from: "2027-01-01", to: "2027-02-28" }, { accountId: acc["802"] })).toBe(0);
+    expect(await countHiddenPayroll(db, { ...H, from: "2027-01-01", to: "2027-02-28" }, { accountId: acc["103"] })).toBe(1);
+    // Nothing after `to` counts.
+    expect(await countHiddenPayroll(db, { ...H, from: "2026-01-01", to: "2026-05-31" }, { accountId: acc["103"] })).toBe(0);
+  });
 });

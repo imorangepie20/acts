@@ -6,6 +6,7 @@ import { POSTED_STATUSES, formatVoucherNo } from "@/lib/vouchers/types";
 import { resolveStored } from "@/server/attachments/storage";
 import type { Db } from "@/server/db/client";
 import { voucherAttachments, vouchers } from "@/server/db/schema";
+import { packagePayrollNotice } from "@/lib/reports/hidden-payroll";
 import { buildSheetSpec, buildTaxListSpecs } from "./specs";
 import { listCardPurchases, listTaxInvoices } from "./tax-lists";
 import { renderWorkbook } from "./xlsx";
@@ -75,7 +76,7 @@ function appendEntry(zip: archiver.Archiver, data: Buffer, entry: archiver.ZipEn
 
 async function fill(zip: archiver.Archiver, db: Db, from: string, to: string): Promise<void> {
   // The 세무사's journal never lists payroll vouchers (their lines name the pay); the trial balance keeps the totals.
-  const journal = await buildSheetSpec(db, "journal", { from, to }, { hidePayroll: true });
+  const journal = await buildSheetSpec(db, "journal", { from, to }, { hidePayroll: true, payrollNotice: packagePayrollNotice });
   const tb = await buildSheetSpec(db, "trial-balance", { from, to }, { hidePayroll: false });
   if (!journal || !tb) throw new Error("report spec missing");
   zip.append(await renderWorkbook([journal]), { name: "분개장.xlsx" });

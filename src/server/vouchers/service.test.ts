@@ -640,11 +640,26 @@ describe("payroll vouchers", () => {
     await create(general({ date: "2026-09-24", description: "택시비", partnerId: partnerA }));
     const hidden = await listVouchers(db, { hidePayroll: true, from: "2026-09-01", to: "2026-09-30" });
     expect(hidden.total).toBe(2);
-    expect(hidden.rows[0]).toMatchObject({ id, kind: "payroll", description: "급여 전표", amount: null, partnerName: null, hidden: true });
+    expect(hidden.rows[0]).toEqual({
+      id,
+      date: "2026-09-25",
+      no: expect.any(Number),
+      entryType: null,
+      kind: "payroll",
+      description: "급여 전표",
+      partnerName: null,
+      amount: null,
+      status: null,
+      createdByName: null,
+      hidden: true,
+    });
     expect(hidden.rows[1]).toMatchObject({ description: "택시비", amount: 10000, partnerName: "거래처A", hidden: false });
     // The real description is not searchable; the label is.
     expect((await listVouchers(db, { hidePayroll: true, q: "9월" })).total).toBe(0);
     expect((await listVouchers(db, { hidePayroll: true, q: "급여 전표" })).rows.map((r) => r.id)).toEqual([id]);
+    // Its status is not shown, so a status filter leaves it out.
+    expect((await listVouchers(db, { hidePayroll: true, status: "approved" })).rows.map((r) => r.description)).toEqual(["택시비"]);
+    expect((await listVouchers(db, { hidePayroll: false, status: "approved" })).total).toBe(2);
 
     const shown = await listVouchers(db, { hidePayroll: false, from: "2026-09-01", to: "2026-09-30" });
     expect(shown.rows[0]).toMatchObject({ id, description: "2026년 9월 급여", amount: 3_000_000, hidden: false });

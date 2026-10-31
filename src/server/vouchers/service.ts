@@ -61,15 +61,18 @@ export type VoucherListRow = {
   id: string;
   date: string;
   no: number;
-  entryType: EntryType;
+  /** null on a hidden row */
+  entryType: EntryType | null;
   kind: VoucherKind;
   description: string;
   partnerName: string | null;
   /** debit total; null on a hidden row */
   amount: number | null;
-  status: VoucherStatus;
-  createdByName: string;
-  /** A payroll voucher listed for a user without `payroll:manage`: masked and not openable. */
+  /** null on a hidden row */
+  status: VoucherStatus | null;
+  /** null on a hidden row */
+  createdByName: string | null;
+  /** A payroll voucher listed for a user without `payroll:manage`: only date, number and `급여 전표`; not openable. */
   hidden: boolean;
 };
 
@@ -639,7 +642,8 @@ const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 /**
  * 전표 목록. With `hidePayroll` (users without `payroll:manage`) payroll vouchers stay in the list, so the
- * numbering has no gaps, but as `급여 전표` with no amount or partner; `q` matches only that label for them.
+ * numbering has no gaps, but only with date, number and `급여 전표` (no type, amount, partner, status or author).
+ * `q` matches only that label for them, and a status filter leaves them out (their status is not shown).
  */
 export async function listVouchers(
   db: Db,
@@ -656,7 +660,10 @@ export async function listVouchers(
   const conds: (SQL | undefined)[] = [];
   if (f.from) conds.push(gte(vouchers.date, f.from));
   if (f.to) conds.push(lte(vouchers.date, f.to));
-  if (f.status) conds.push(eq(vouchers.status, f.status));
+  if (f.status) {
+    conds.push(eq(vouchers.status, f.status));
+    if (f.hidePayroll) conds.push(ne(vouchers.kind, "payroll"));
+  }
   if (f.kind) conds.push(eq(vouchers.kind, f.kind));
   const q = f.q?.trim();
   if (q) {
@@ -705,7 +712,16 @@ export async function listVouchers(
   const masked = rows.map((r): VoucherListRow => {
     const hidden = f.hidePayroll && r.kind === "payroll";
     return hidden
-      ? { ...r, description: HIDDEN_PAYROLL_LABEL, partnerName: null, amount: null, hidden }
+      ? {
+          ...r,
+          entryType: null,
+          description: HIDDEN_PAYROLL_LABEL,
+          partnerName: null,
+          amount: null,
+          status: null,
+          createdByName: null,
+          hidden,
+        }
       : { ...r, hidden };
   });
   return { rows: masked, total };

@@ -133,8 +133,8 @@ export function VoucherList({ rows, total, page, pageSize, filters, canCreate }:
                   )}
                 </TableCell>
                 <TableCell>
-                  {ENTRY_TYPE_LABELS[r.entryType]}
-                  {r.kind !== "general" && (
+                  {r.entryType !== null && ENTRY_TYPE_LABELS[r.entryType]}
+                  {!r.hidden && r.kind !== "general" && (
                     <Badge variant="secondary" className="ml-2">
                       {VOUCHER_KIND_LABELS[r.kind]}
                     </Badge>
@@ -144,9 +144,9 @@ export function VoucherList({ rows, total, page, pageSize, filters, canCreate }:
                 <TableCell>{r.partnerName ?? ""}</TableCell>
                 <TableCell className="text-right tabular-nums">{r.amount === null ? "" : formatWon(r.amount)}</TableCell>
                 <TableCell>
-                  <StatusBadge status={r.status} />
+                  {r.status !== null && <StatusBadge status={r.status} />}
                 </TableCell>
-                <TableCell>{r.createdByName}</TableCell>
+                <TableCell>{r.createdByName ?? ""}</TableCell>
               </TableRow>
             ))}
           </TableBody>

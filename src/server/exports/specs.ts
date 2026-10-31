@@ -125,29 +125,26 @@ const tbAmounts = (a: TbAmounts): TbAmounts => ({
   creditBalance: a.creditBalance,
 });
 
-/** The hidden-payroll notice as a meta line, when the ledger left any out. */
-async function hiddenLines(
-  db: Db,
-  f: ReportFilter,
-  opts: { accountId?: number; partnerId?: number | null } = {},
-): Promise<string[]> {
-  const n = await countHiddenPayroll(db, f, opts);
-  return n > 0 ? [hiddenPayrollNotice(n)] : [];
-}
-
 /**
  * Builds the worksheet for one report from the same services the pages use; `null` when it cannot be built.
- * `hidePayroll` comes from the requesting user (`!can(role, "payroll:manage")`) and only affects the ledgers.
+ * `hidePayroll` comes from the requesting user (`!can(role, "payroll:manage")`) and only affects the ledgers;
+ * `payrollNotice` words the meta line added when payroll vouchers were left out (default: the ledger notice).
  */
 export async function buildSheetSpec(
   db: Db,
   report: ReportKey,
   sp: SearchParams,
-  opts: { hidePayroll: boolean },
+  opts: { hidePayroll: boolean; payrollNotice?: (n: number) => string },
 ): Promise<SheetSpec | null> {
   const company = await getCompany(db);
-  const f = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth, opts);
+  const f = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth, { hidePayroll: opts.hidePayroll });
   const filters = await filterLines(db, f);
+  const notice = opts.payrollNotice ?? hiddenPayrollNotice;
+  /** The notice as a meta line, when the ledger left any payroll voucher out. */
+  const hiddenLines = async (o: { accountId?: number; partnerId?: number | null } = {}): Promise<string[]> => {
+    const n = await countHiddenPayroll(db, f, o);
+    return n > 0 ? [notice(n)] : [];
+  };
 
   switch (report) {
     case "journal": {
@@ -190,7 +187,7 @@ export async function buildSheetSpec(
       return {
         fileName: `분개장_${f.from}_${f.to}`,
         title: "분개장",
-        meta: [company.name, period(f), ...filters, ...(await hiddenLines(db, f))],
+        meta: [company.name, period(f), ...filters, ...(await hiddenLines())],
         columns: [
           { header: "일자", key: "date", width: 12 },
           { header: "전표번호", key: "no", width: 14 },
@@ -219,7 +216,7 @@ export async function buildSheetSpec(
           `계정과목: ${code} ${name}`,
           period(f),
           ...filters,
-          ...(await hiddenLines(db, f, { accountId })),
+          ...(await hiddenLines({ accountId })),
         ],
         columns: ledgerColumns,
         rows,
@@ -247,7 +244,7 @@ export async function buildSheetSpec(
             `거래처: ${partnerName}`,
             period(f),
             ...filters,
-            ...(await hiddenLines(db, f, { accountId, partnerId })),
+            ...(await hiddenLines({ accountId, partnerId })),
           ],
           columns: ledgerColumns,
           rows,
@@ -273,7 +270,7 @@ export async function buildSheetSpec(
       return {
         fileName: `거래처별원장_${account.code}${account.name}_${f.from}_${f.to}`,
         title: "거래처별 원장",
-        meta: [company.name, accountMeta, period(f), ...filters, ...(await hiddenLines(db, f, { accountId }))],
+        meta: [company.name, accountMeta, period(f), ...filters, ...(await hiddenLines({ accountId }))],
         columns: [
           { header: "거래처", key: "partner", width: 28 },
           { header: "이월", key: "opening", width: 14, money: true },
