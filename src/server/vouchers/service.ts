@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { ImportMeta } from "@/lib/imports/types";
 import { MAX_WON } from "@/lib/money";
@@ -65,11 +65,16 @@ export type VoucherListRow = {
   kind: VoucherKind;
   description: string;
   partnerName: string | null;
-  /** debit total */
-  amount: number;
+  /** debit total; null on a hidden row */
+  amount: number | null;
   status: VoucherStatus;
   createdByName: string;
+  /** A payroll voucher listed for a user without `payroll:manage`: masked and not openable. */
+  hidden: boolean;
 };
+
+/** Description of a payroll voucher row shown to users without `payroll:manage`. */
+export const HIDDEN_PAYROLL_LABEL = "급여 전표";
 
 export type HistoryEntry = {
   id: number;
@@ -580,7 +585,8 @@ export async function deleteVoucher(db: Db, actor: SessionUser, id: string, vers
 const creator = alias(users, "creator");
 const approver = alias(users, "approver");
 
-export async function getVoucher(db: Db, id: string): Promise<VoucherDetail | null> {
+/** `null` when unknown, or a payroll voucher and `opts.hidePayroll` (users without `payroll:manage`): a 404. */
+export async function getVoucher(db: Db, id: string, opts: { hidePayroll: boolean }): Promise<VoucherDetail | null> {
   if (!isUuid(id)) return null;
   const [row] = await db
     .select({
@@ -591,7 +597,7 @@ export async function getVoucher(db: Db, id: string): Promise<VoucherDetail | nu
     .from(vouchers)
     .innerJoin(creator, eq(creator.id, vouchers.createdBy))
     .leftJoin(approver, eq(approver.id, vouchers.approvedBy))
-    .where(eq(vouchers.id, id));
+    .where(and(eq(vouchers.id, id), opts.hidePayroll ? ne(vouchers.kind, "payroll") : undefined));
   if (!row) return null;
   const lines = await db
     .select({
@@ -631,9 +637,21 @@ export async function getVoucher(db: Db, id: string): Promise<VoucherDetail | nu
 
 const escapeLike = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
+/**
+ * 전표 목록. With `hidePayroll` (users without `payroll:manage`) payroll vouchers stay in the list, so the
+ * numbering has no gaps, but as `급여 전표` with no amount or partner; `q` matches only that label for them.
+ */
 export async function listVouchers(
   db: Db,
-  f: { from?: string; to?: string; status?: VoucherStatus; kind?: VoucherKind; q?: string; page?: number },
+  f: {
+    hidePayroll: boolean;
+    from?: string;
+    to?: string;
+    status?: VoucherStatus;
+    kind?: VoucherKind;
+    q?: string;
+    page?: number;
+  },
 ): Promise<{ rows: VoucherListRow[]; total: number }> {
   const conds: (SQL | undefined)[] = [];
   if (f.from) conds.push(gte(vouchers.date, f.from));
@@ -643,7 +661,15 @@ export async function listVouchers(
   const q = f.q?.trim();
   if (q) {
     const pattern = `%${escapeLike(q)}%`;
-    conds.push(or(ilike(vouchers.description, pattern), ilike(partners.name, pattern)));
+    const match = or(ilike(vouchers.description, pattern), ilike(partners.name, pattern));
+    conds.push(
+      f.hidePayroll
+        ? or(
+            and(ne(vouchers.kind, "payroll"), match),
+            and(eq(vouchers.kind, "payroll"), sql`${HIDDEN_PAYROLL_LABEL} ilike ${pattern}`),
+          )
+        : match,
+    );
   }
   const where = and(...conds);
   const page = Number.isInteger(f.page) && f.page! > 1 ? f.page! : 1;
@@ -676,7 +702,13 @@ export async function listVouchers(
       .leftJoin(partners, eq(partners.id, vouchers.partnerId))
       .where(where),
   ]);
-  return { rows, total };
+  const masked = rows.map((r): VoucherListRow => {
+    const hidden = f.hidePayroll && r.kind === "payroll";
+    return hidden
+      ? { ...r, description: HIDDEN_PAYROLL_LABEL, partnerName: null, amount: null, hidden }
+      : { ...r, hidden };
+  });
+  return { rows: masked, total };
 }
 
 export async function listHistory(db: Db, voucherId: string): Promise<HistoryEntry[]> {

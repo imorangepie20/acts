@@ -1,4 +1,4 @@
-import { can } from "@/lib/permissions";
+import { can, hidesPayroll } from "@/lib/permissions";
 import { isIsoDate } from "@/lib/vouchers/dates";
 import { verifySession } from "@/server/auth/dal";
 import { db } from "@/server/db";
@@ -59,7 +59,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
     return xlsxResponse(await renderWorkbook(specs), specs[0].fileName);
   }
 
-  const spec = await buildSheetSpec(db, report as ReportKey, sp);
+  const spec = await buildSheetSpec(db, report as ReportKey, sp, { hidePayroll: hidesPayroll(user.role) });
   if (!spec) return new Response(null, { status: 404 });
   return xlsxResponse(await renderWorkbook([spec]), spec.fileName);
 }

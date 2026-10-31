@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import type { SessionUser } from "@/server/auth/service";
 import { assertMonthsOpen, closedMonthMessage, isMonthClosed, monthOf } from "@/server/closing/periods";
 import type { Db } from "@/server/db/client";
@@ -142,9 +142,11 @@ export async function listAttachments(db: Conn, voucherId: string): Promise<Atta
     .orderBy(asc(voucherAttachments.createdAt), asc(voucherAttachments.id));
 }
 
+/** `null` when unknown, outside the upload root, or a payroll voucher's file and `opts.hidePayroll`. */
 export async function getAttachmentFile(
   db: Db,
   id: string,
+  opts: { hidePayroll: boolean },
 ): Promise<{ fileName: string; mimeType: string; absolutePath: string } | null> {
   if (!isUuid(id)) return null;
   const [a] = await db
@@ -154,7 +156,8 @@ export async function getAttachmentFile(
       storagePath: voucherAttachments.storagePath,
     })
     .from(voucherAttachments)
-    .where(eq(voucherAttachments.id, id));
+    .innerJoin(vouchers, eq(vouchers.id, voucherAttachments.voucherId))
+    .where(and(eq(voucherAttachments.id, id), opts.hidePayroll ? ne(vouchers.kind, "payroll") : undefined));
   if (!a) return null;
   const absolutePath = resolveStored(a.storagePath);
   return absolutePath ? { fileName: a.fileName, mimeType: a.mimeType, absolutePath } : null;

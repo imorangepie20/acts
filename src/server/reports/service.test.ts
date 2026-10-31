@@ -12,6 +12,7 @@ import { updateAccount } from "@/server/accounts/service";
 import { partners } from "@/server/db/schema";
 import { getAccountLedger, getPartnerSummary } from "./ledgers";
 import { getBalanceSheet, getIncomeStatement, getTrialBalance } from "./service";
+import { createPayrollVoucher } from "../../../tests/helpers/payroll";
 
 const db = getTestDb();
 let staff: SessionUser;
@@ -238,7 +239,7 @@ describe("cross-report consistency", () => {
     expect(auto.creditBalance - auto.debitBalance).toBe(1_000_000);
     expect(row(bs.lines, "이월이익잉여금(전기 손익)")?.amount).toBe(auto.creditBalance - auto.debitBalance);
 
-    const period = { from: fiscalStart, to: asOf, siteId: null, departmentId: null };
+    const period = { from: fiscalStart, to: asOf, siteId: null, departmentId: null, hidePayroll: false };
     const l103 = await getAccountLedger(db, acc["103"], period);
     const t103 = acct(tb, "103");
     if (!t103 || t103.kind !== "account") throw new Error("no 103");
@@ -250,5 +251,22 @@ describe("cross-report consistency", () => {
     expect(sum.length).toBe(2);
     expect(sum.reduce((a, r) => a + r.closing, 0)).toBe(l108!.closing);
     expect(l108!.closing).toBe(1_100_000 + 550_000 - 300_000 - 55_000);
+  });
+});
+
+describe("payroll vouchers", () => {
+  it("statements keep payroll totals whatever hidePayroll says", async () => {
+    const [m] = await db
+      .insert(users)
+      .values({ email: "m@test.kr", name: "m", role: "manager", passwordHash: "x" })
+      .returning({ id: users.id });
+    await createPayrollVoucher(db, { id: m.id, email: "m@test.kr", name: "m", role: "manager" });
+    const shown = { from: "2026-01-01", to: "2026-12-31", siteId: null, departmentId: null, hidePayroll: false };
+    const hidden = { ...shown, hidePayroll: true };
+    const tbShown = await getTrialBalance(db, shown);
+    expect((acct(tbShown, "802") as { debitTotal: number }).debitTotal).toBeGreaterThan(0);
+    expect(await getTrialBalance(db, hidden)).toEqual(tbShown);
+    expect(await getIncomeStatement(db, hidden)).toEqual(await getIncomeStatement(db, shown));
+    expect(await getBalanceSheet(db, hidden)).toEqual(await getBalanceSheet(db, shown));
   });
 });

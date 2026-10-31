@@ -74,8 +74,9 @@ function appendEntry(zip: archiver.Archiver, data: Buffer, entry: archiver.ZipEn
 }
 
 async function fill(zip: archiver.Archiver, db: Db, from: string, to: string): Promise<void> {
-  const journal = await buildSheetSpec(db, "journal", { from, to });
-  const tb = await buildSheetSpec(db, "trial-balance", { from, to });
+  // The 세무사's journal never lists payroll vouchers (their lines name the pay); the trial balance keeps the totals.
+  const journal = await buildSheetSpec(db, "journal", { from, to }, { hidePayroll: true });
+  const tb = await buildSheetSpec(db, "trial-balance", { from, to }, { hidePayroll: false });
   if (!journal || !tb) throw new Error("report spec missing");
   zip.append(await renderWorkbook([journal]), { name: "분개장.xlsx" });
   zip.append(await renderWorkbook([tb]), { name: "합계잔액시산표.xlsx" });

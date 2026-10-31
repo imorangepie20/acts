@@ -7,7 +7,8 @@ import { accounts, partners, sites, users, voucherLines } from "@/server/db/sche
 import { createSite } from "@/server/sites/service";
 import { approveVoucher, createVoucher } from "@/server/vouchers/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
-import { getAccountLedger, getJournal, getPartnerSummary } from "./ledgers";
+import { createPayrollVoucher } from "../../../tests/helpers/payroll";
+import { countHiddenPayroll, getAccountLedger, getJournal, getPartnerSummary } from "./ledgers";
 
 const db = getTestDb();
 let staff: SessionUser;
@@ -43,7 +44,7 @@ async function create(date: string, lines: LineInput[], description = "t") {
   if (!r.ok) throw new Error(r.error);
   return r.value.id;
 }
-const F = { from: "2026-01-01", to: "2026-12-31", siteId: null, departmentId: null };
+const F = { from: "2026-01-01", to: "2026-12-31", siteId: null, departmentId: null, hidePayroll: false };
 
 describe("getJournal", () => {
   it("orders by date then no and excludes pending vouchers", async () => {
@@ -264,5 +265,39 @@ describe("getPartnerSummary", () => {
     await db.insert(partners).values({ name: "무활동" });
     expect(await getPartnerSummary(db, 999999, F)).toEqual([]);
     expect(await getPartnerSummary(db, acc["108"], F)).toEqual([]);
+  });
+});
+
+describe("payroll vouchers for users without payroll:manage", () => {
+  const H = { ...F, hidePayroll: true };
+
+  it("the journal leaves them out and countHiddenPayroll counts them; without the flag they show", async () => {
+    await create("2026-06-01", [line("811", "debit", 10), line("101", "credit", 10)], "general");
+    const payrollId = await createPayrollVoucher(db, manager);
+    const hidden = await getJournal(db, H, 1);
+    expect(hidden.entries.map((e) => e.description)).toEqual(["general"]);
+    expect(hidden.total).toBe(1);
+    expect(hidden.debitSum).toBe(10);
+    expect(await countHiddenPayroll(db, H)).toBe(1);
+    expect(await countHiddenPayroll(db, { ...H, from: "2026-07-01" })).toBe(0);
+
+    const shown = await getJournal(db, F, 1);
+    expect(shown.entries.map((e) => e.voucherId)).toContain(payrollId);
+    expect(shown.total).toBe(2);
+    expect(await countHiddenPayroll(db, F)).toBe(0);
+  });
+
+  it("the 802 account ledger and the partner summary have no rows from them", async () => {
+    await createPayrollVoucher(db, manager);
+    const hidden = (await getAccountLedger(db, acc["802"], H))!;
+    expect(hidden.rows).toEqual([{ kind: "opening", balance: 0 }]);
+    expect(hidden.totalLines).toBe(0);
+    expect(await countHiddenPayroll(db, H, { accountId: acc["802"] })).toBe(1);
+    expect(await countHiddenPayroll(db, H, { accountId: acc["101"] })).toBe(0);
+    const shown = (await getAccountLedger(db, acc["802"], F))!;
+    expect(shown.rows.filter((r) => r.kind === "line")).toHaveLength(1);
+    expect(shown.closing).toBe(3_200_000);
+    expect(await getPartnerSummary(db, acc["802"], H)).toEqual([]);
+    expect(await getPartnerSummary(db, acc["802"], F)).toHaveLength(1);
   });
 });

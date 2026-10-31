@@ -1,6 +1,6 @@
 import { isIsoDate } from "@/lib/vouchers/dates";
 import { defaultPeriod, fiscalYearStart } from "./fiscal";
-import type { ReportFilter } from "./types";
+import type { ReportFilter, ReportScope } from "./types";
 
 export type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -19,7 +19,13 @@ export function pageParam(sp: SearchParams): number {
   return positiveInt(first(sp.page)) ?? 1;
 }
 
-export function parseReportParams(sp: SearchParams, today: string, startMonth: number): ReportFilter {
+/** Ledger filter from the query string; `hidePayroll` comes from the requesting user, never from the URL. */
+export function parseReportParams(
+  sp: SearchParams,
+  today: string,
+  startMonth: number,
+  opts: { hidePayroll: boolean },
+): ReportFilter {
   const def = defaultPeriod(today, startMonth);
   const f = first(sp.from);
   const t = first(sp.to);
@@ -36,11 +42,17 @@ export function parseReportParams(sp: SearchParams, today: string, startMonth: n
   } else {
     ({ from, to } = def);
   }
-  return { from, to, siteId: positiveInt(first(sp.site)), departmentId: positiveInt(first(sp.dept)) };
+  return {
+    from,
+    to,
+    siteId: positiveInt(first(sp.site)),
+    departmentId: positiveInt(first(sp.dept)),
+    hidePayroll: opts.hidePayroll,
+  };
 }
 
 /** `/api/exports/<report>` link for the current filters; `extra` carries account/partner (empty values are dropped). */
-export function exportHref(report: string, f: ReportFilter, extra: Record<string, string | null | undefined> = {}): string {
+export function exportHref(report: string, f: ReportScope, extra: Record<string, string | null | undefined> = {}): string {
   const q = new URLSearchParams({ from: f.from, to: f.to });
   if (f.siteId !== null) q.set("site", String(f.siteId));
   if (f.departmentId !== null) q.set("dept", String(f.departmentId));

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { eq } from "drizzle-orm";
+import ExcelJS from "exceljs";
 import unzipper from "unzipper";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
@@ -10,6 +11,7 @@ import { accounts, sites, users, voucherAttachments, vouchers } from "@/server/d
 import { addAttachment } from "@/server/attachments/service";
 import { createVoucher } from "@/server/vouchers/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
+import { createPayrollVoucher } from "../../../tests/helpers/payroll";
 import { buildTaxPackage, getPackageSummary, safeFileName } from "./package";
 
 const db = getTestDb();
@@ -167,5 +169,32 @@ describe("getPackageSummary", () => {
     );
     const s = await getPackageSummary(db, "2026-10-01", "2026-10-31");
     expect(s.attachments.bytes).toBe(PNG.length + 3_800_000_000);
+  });
+});
+
+describe("payroll vouchers in the package", () => {
+  async function texts(buf: Buffer): Promise<string[]> {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    const out: string[] = [];
+    wb.worksheets[0].eachRow((row) => row.eachCell((c) => out.push(String(c.value))));
+    return out;
+  }
+
+  it("the journal never shows payroll vouchers; the trial balance keeps their totals", async () => {
+    await mkVoucher("2026-06-10");
+    const [m] = await db
+      .insert(users)
+      .values({ email: "m@test.kr", name: "m", role: "manager", passwordHash: "x" })
+      .returning({ id: users.id });
+    await createPayrollVoucher(db, { id: m.id, email: "m@test.kr", name: "m", role: "manager" });
+    const files = await unpack("2026-06-01", "2026-06-30");
+    const journal = await texts(files.get("분개장.xlsx")!);
+    expect(journal.some((t) => t.startsWith("811"))).toBe(true);
+    expect(journal.some((t) => t.startsWith("802"))).toBe(false);
+    expect(journal.some((t) => t.includes("급여"))).toBe(true); // only the notice line
+    expect(journal.filter((t) => t.includes("급여") && !t.startsWith("급여 전표 1건은"))).toEqual([]);
+    const tb = await texts(files.get("합계잔액시산표.xlsx")!);
+    expect(tb.some((t) => t.startsWith("802"))).toBe(true);
   });
 });

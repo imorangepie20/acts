@@ -1,5 +1,5 @@
 import { VoucherList, type VoucherFilters } from "@/components/vouchers/voucher-list";
-import { can } from "@/lib/permissions";
+import { can, hidesPayroll } from "@/lib/permissions";
 import { isIsoDate, monthRange, todayInSeoul } from "@/lib/vouchers/dates";
 import { VOUCHER_KIND_LABELS, VOUCHER_STATUS_LABELS, type VoucherKind, type VoucherStatus } from "@/lib/vouchers/types";
 import Link from "next/link";
@@ -38,6 +38,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const showPending = can(user.role, "voucher:approve") && (await getCompany(db)).approvalRequired;
   const pendingCount = showPending ? await countPending(db) : 0;
   const { rows, total } = await listVouchers(db, {
+    hidePayroll: hidesPayroll(user.role),
     from: filters.from,
     to: filters.to,
     status: filters.status ?? undefined,

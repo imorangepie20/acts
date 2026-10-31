@@ -5,7 +5,8 @@ import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
 import type { SessionUser } from "@/server/auth/service";
-import { accounts, sites, users, voucherAttachments } from "@/server/db/schema";
+import { eq } from "drizzle-orm";
+import { accounts, sites, users, voucherAttachments, vouchers } from "@/server/db/schema";
 import { createVoucher, deleteVoucher, getVoucher, listHistory } from "@/server/vouchers/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
 import { addAttachment, getAttachmentFile, listAttachments, removeAttachment } from "./service";
@@ -95,7 +96,7 @@ beforeEach(async () => {
 
 describe("addAttachment", () => {
   it("stores a PNG under yyyy/mm/<uuid>.png with a row and an `attached` history entry", async () => {
-    const before = await getVoucher(db, voucherId);
+    const before = await getVoucher(db, voucherId, { hidePayroll: false });
     const r = await addAttachment(db, staff, voucherId, { name: "영수증.png", bytes: PNG });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -119,14 +120,14 @@ describe("addAttachment", () => {
     expect(h.at(-1)!.snapshot.attachments).toEqual(["영수증.png"]);
 
     // the voucher itself is untouched
-    const after = await getVoucher(db, voucherId);
+    const after = await getVoucher(db, voucherId, { hidePayroll: false });
     expect(after!.version).toBe(before!.version);
     expect(after!.status).toBe(before!.status);
 
     expect(await listAttachments(db, voucherId)).toEqual([
       { id: r.value.id, fileName: "영수증.png", mimeType: "image/png", size: PNG.length, createdAt: expect.any(Date) },
     ]);
-    const file = await getAttachmentFile(db, r.value.id);
+    const file = await getAttachmentFile(db, r.value.id, { hidePayroll: false });
     expect(file).toEqual({
       fileName: "영수증.png",
       mimeType: "image/png",
@@ -211,7 +212,7 @@ describe("removeAttachment", () => {
     const h = await listHistory(db, voucherId);
     expect(h.at(-1)).toMatchObject({ action: "detached", note: "a.png" });
     expect(h.at(-1)!.snapshot.attachments).toEqual([]);
-    expect(await getAttachmentFile(db, r.value.id)).toBeNull();
+    expect(await getAttachmentFile(db, r.value.id, { hidePayroll: false })).toBeNull();
   });
 
   it("still succeeds when the file is already gone", async () => {
@@ -228,7 +229,7 @@ describe("deleteVoucher", () => {
     await addAttachment(db, staff, voucherId, { name: "a.png", bytes: PNG });
     await addAttachment(db, staff, voucherId, { name: "b.pdf", bytes: PDF });
     expect(await filesOnDisk()).toHaveLength(2);
-    const v = await getVoucher(db, voucherId);
+    const v = await getVoucher(db, voucherId, { hidePayroll: false });
     const r = await deleteVoucher(db, staff, voucherId, v!.version);
     expect(r.ok).toBe(true);
     expect(await filesOnDisk()).toEqual([]);
@@ -239,7 +240,7 @@ describe("deleteVoucher", () => {
 
   it("keeps the files when the delete is refused", async () => {
     await addAttachment(db, staff, voucherId, { name: "a.png", bytes: PNG });
-    const v = await getVoucher(db, voucherId);
+    const v = await getVoucher(db, voucherId, { hidePayroll: false });
     expect((await deleteVoucher(db, staff2, voucherId, v!.version)).ok).toBe(false);
     expect(await filesOnDisk()).toHaveLength(1);
   });
@@ -250,14 +251,23 @@ describe("getAttachmentFile", () => {
     const r = await addAttachment(db, staff, voucherId, { name: "a.png", bytes: PNG });
     if (!r.ok) throw new Error(r.error);
     await db.update(voucherAttachments).set({ storagePath: "../../etc/passwd" });
-    expect(await getAttachmentFile(db, r.value.id)).toBeNull();
+    expect(await getAttachmentFile(db, r.value.id, { hidePayroll: false })).toBeNull();
     await db.update(voucherAttachments).set({ storagePath: path.resolve(os.tmpdir(), "x.png") });
-    expect(await getAttachmentFile(db, r.value.id)).toBeNull();
+    expect(await getAttachmentFile(db, r.value.id, { hidePayroll: false })).toBeNull();
     expect(existsSync(dir)).toBe(true);
   });
 
   it("returns null for unknown or malformed ids", async () => {
-    expect(await getAttachmentFile(db, "00000000-0000-0000-0000-000000000000")).toBeNull();
-    expect(await getAttachmentFile(db, "../x")).toBeNull();
+    expect(await getAttachmentFile(db, "00000000-0000-0000-0000-000000000000", { hidePayroll: false })).toBeNull();
+    expect(await getAttachmentFile(db, "../x", { hidePayroll: false })).toBeNull();
+  });
+
+  it("returns null for a payroll voucher's file when hidePayroll is set", async () => {
+    const r = await addAttachment(db, staff, voucherId, { name: "a.png", bytes: PNG });
+    if (!r.ok) throw new Error(r.error);
+    // Payroll vouchers refuse attachments; flip the kind afterwards to pin the route's guard anyway.
+    await db.update(vouchers).set({ kind: "payroll" }).where(eq(vouchers.id, voucherId));
+    expect(await getAttachmentFile(db, r.value.id, { hidePayroll: true })).toBeNull();
+    expect(await getAttachmentFile(db, r.value.id, { hidePayroll: false })).not.toBeNull();
   });
 });

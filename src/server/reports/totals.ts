@@ -5,6 +5,7 @@ import { POSTED_STATUSES } from "@/lib/vouchers/types";
 import { isPnlGroup } from "@/lib/accounts";
 import type { AccountTotal } from "@/lib/reports/types";
 
+/** No payroll flag on purpose: totals include payroll vouchers for every user (statements, dashboard, closing). */
 export type TotalsFilter = {
   from: string | null;
   to: string;

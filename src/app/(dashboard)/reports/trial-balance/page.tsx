@@ -3,6 +3,7 @@ import { TrialBalanceTable } from "@/components/reports/trial-balance-table";
 import { formatWon } from "@/lib/money";
 import { exportHref, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
+import { hidesPayroll } from "@/lib/permissions";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
@@ -10,10 +11,12 @@ import { getTrialBalance } from "@/server/reports/service";
 import { getReportFilterOptions } from "@/server/sites/service";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requirePermission("ledger:view");
+  const user = await requirePermission("ledger:view");
   const sp = await searchParams;
   const company = await getCompany(db);
-  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
+  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth, {
+    hidePayroll: hidesPayroll(user.role),
+  });
   const [tb, options] = await Promise.all([getTrialBalance(db, filter), getReportFilterOptions(db)]);
   const filtered = filter.siteId !== null || filter.departmentId !== null;
   const diff = formatWon(Math.abs(tb.total.debitTotal - tb.total.creditTotal));

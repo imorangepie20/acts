@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, lt, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, lte, ne, sql, type SQL } from "drizzle-orm";
 import { isPnlGroup, normalSideOf } from "@/lib/accounts";
 import { fiscalYearStart } from "@/lib/reports/fiscal";
 import type { ReportFilter } from "@/lib/reports/types";
@@ -18,13 +18,50 @@ export type JournalEntry = {
   lines: { code: string; name: string; side: Side; amount: number; partnerName: string | null; description: string }[];
 };
 
-/** Posted-voucher and site/department conditions shared by the ledger queries. */
-function scope(f: { siteId: number | null; departmentId: number | null }): (SQL | undefined)[] {
+/**
+ * Posted-voucher and site/department conditions shared by the ledger queries; `hidePayroll` also leaves
+ * out payroll vouchers (users without `payroll:manage`).
+ */
+function scope(f: { siteId: number | null; departmentId: number | null; hidePayroll: boolean }): (SQL | undefined)[] {
   return [
     inArray(vouchers.status, [...POSTED_STATUSES]),
     f.siteId === null ? undefined : eq(voucherLines.siteId, f.siteId),
     f.departmentId === null ? undefined : eq(voucherLines.departmentId, f.departmentId),
+    f.hidePayroll ? ne(vouchers.kind, "payroll") : undefined,
   ];
+}
+
+/**
+ * Posted payroll vouchers the ledger leaves out for this filter: in the period, site/department and,
+ * when given, account/partner (a P&L account's period is clamped like its ledger). 0 when `f.hidePayroll` is false.
+ */
+export async function countHiddenPayroll(
+  db: Db,
+  filter: ReportFilter,
+  opts: { accountId?: number | null; partnerId?: number | null } = {},
+): Promise<number> {
+  if (!filter.hidePayroll) return 0;
+  let f = filter;
+  if (opts.accountId != null) {
+    const account = await getAccountById(db, opts.accountId);
+    if (!account) return 0;
+    if (isPnlGroup(account.group)) f = clampPnl(filter, (await getCompany(db)).fiscalYearStartMonth).f;
+  }
+  const [row] = await db
+    .select({ n: sql<number>`count(distinct ${vouchers.id})::int` })
+    .from(voucherLines)
+    .innerJoin(vouchers, eq(vouchers.id, voucherLines.voucherId))
+    .where(
+      and(
+        ...scope({ ...f, hidePayroll: false }),
+        eq(vouchers.kind, "payroll"),
+        gte(vouchers.date, f.from),
+        lte(vouchers.date, f.to),
+        opts.accountId == null ? undefined : eq(voucherLines.accountId, opts.accountId),
+        opts.partnerId == null ? undefined : eq(voucherLines.partnerId, opts.partnerId),
+      ),
+    );
+  return Number(row.n);
 }
 
 const debitSum = sql<number>`coalesce(sum(case when ${voucherLines.side} = 'debit' then ${voucherLines.amount} else 0 end), 0)::bigint`;

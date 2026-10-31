@@ -1,3 +1,4 @@
+import { hiddenPayrollNotice } from "@/lib/reports/hidden-payroll";
 import { first, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import type { StatementLine } from "@/lib/reports/statements";
 import type { ReportFilter } from "@/lib/reports/types";
@@ -7,7 +8,13 @@ import { getAccountById } from "@/server/accounts/service";
 import { getCompany } from "@/server/company/service";
 import type { Db } from "@/server/db/client";
 import { listPartnersByIds } from "@/server/partners/service";
-import { getAccountLedger, getJournal, getPartnerSummary, type LedgerRow } from "@/server/reports/ledgers";
+import {
+  countHiddenPayroll,
+  getAccountLedger,
+  getJournal,
+  getPartnerSummary,
+  type LedgerRow,
+} from "@/server/reports/ledgers";
 import { getBalanceSheet, getIncomeStatement, getTrialBalance } from "@/server/reports/service";
 import { listDepartments, listSites } from "@/server/sites/service";
 import type { Permission } from "@/lib/permissions";
@@ -118,10 +125,28 @@ const tbAmounts = (a: TbAmounts): TbAmounts => ({
   creditBalance: a.creditBalance,
 });
 
-/** Builds the worksheet for one report from the same services the pages use; `null` when it cannot be built. */
-export async function buildSheetSpec(db: Db, report: ReportKey, sp: SearchParams): Promise<SheetSpec | null> {
+/** The hidden-payroll notice as a meta line, when the ledger left any out. */
+async function hiddenLines(
+  db: Db,
+  f: ReportFilter,
+  opts: { accountId?: number; partnerId?: number | null } = {},
+): Promise<string[]> {
+  const n = await countHiddenPayroll(db, f, opts);
+  return n > 0 ? [hiddenPayrollNotice(n)] : [];
+}
+
+/**
+ * Builds the worksheet for one report from the same services the pages use; `null` when it cannot be built.
+ * `hidePayroll` comes from the requesting user (`!can(role, "payroll:manage")`) and only affects the ledgers.
+ */
+export async function buildSheetSpec(
+  db: Db,
+  report: ReportKey,
+  sp: SearchParams,
+  opts: { hidePayroll: boolean },
+): Promise<SheetSpec | null> {
   const company = await getCompany(db);
-  const f = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
+  const f = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth, opts);
   const filters = await filterLines(db, f);
 
   switch (report) {
@@ -165,7 +190,7 @@ export async function buildSheetSpec(db: Db, report: ReportKey, sp: SearchParams
       return {
         fileName: `분개장_${f.from}_${f.to}`,
         title: "분개장",
-        meta: [company.name, period(f), ...filters],
+        meta: [company.name, period(f), ...filters, ...(await hiddenLines(db, f))],
         columns: [
           { header: "일자", key: "date", width: 12 },
           { header: "전표번호", key: "no", width: 14 },
@@ -189,7 +214,13 @@ export async function buildSheetSpec(db: Db, report: ReportKey, sp: SearchParams
       return {
         fileName: `계정별원장_${code}${name}_${f.from}_${f.to}`,
         title: "계정별 원장",
-        meta: [company.name, `계정과목: ${code} ${name}`, period(f), ...filters],
+        meta: [
+          company.name,
+          `계정과목: ${code} ${name}`,
+          period(f),
+          ...filters,
+          ...(await hiddenLines(db, f, { accountId })),
+        ],
         columns: ledgerColumns,
         rows,
         emphasis,
@@ -210,7 +241,14 @@ export async function buildSheetSpec(db: Db, report: ReportKey, sp: SearchParams
         return {
           fileName: `거래처별원장_${account.code}${account.name}${partnerName}_${f.from}_${f.to}`,
           title: "거래처별 원장",
-          meta: [company.name, accountMeta, `거래처: ${partnerName}`, period(f), ...filters],
+          meta: [
+            company.name,
+            accountMeta,
+            `거래처: ${partnerName}`,
+            period(f),
+            ...filters,
+            ...(await hiddenLines(db, f, { accountId, partnerId })),
+          ],
           columns: ledgerColumns,
           rows,
           emphasis,
@@ -235,7 +273,7 @@ export async function buildSheetSpec(db: Db, report: ReportKey, sp: SearchParams
       return {
         fileName: `거래처별원장_${account.code}${account.name}_${f.from}_${f.to}`,
         title: "거래처별 원장",
-        meta: [company.name, accountMeta, period(f), ...filters],
+        meta: [company.name, accountMeta, period(f), ...filters, ...(await hiddenLines(db, f, { accountId }))],
         columns: [
           { header: "거래처", key: "partner", width: 28 },
           { header: "이월", key: "opening", width: 14, money: true },

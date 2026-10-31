@@ -3,6 +3,7 @@ import { formatWon } from "@/lib/money";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { exportHref, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
+import { hidesPayroll } from "@/lib/permissions";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
@@ -10,10 +11,12 @@ import { getBalanceSheet } from "@/server/reports/service";
 import { getReportFilterOptions } from "@/server/sites/service";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requirePermission("ledger:view");
+  const user = await requirePermission("ledger:view");
   const sp = await searchParams;
   const company = await getCompany(db);
-  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
+  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth, {
+    hidePayroll: hidesPayroll(user.role),
+  });
   const [bs, options] = await Promise.all([getBalanceSheet(db, filter), getReportFilterOptions(db)]);
   const total = (key: string) => bs.lines.find((l) => l.kind === "computed" && l.key === key)?.amount ?? 0;
   const diff = total("total_assets") - total("total_liabilities_equity");

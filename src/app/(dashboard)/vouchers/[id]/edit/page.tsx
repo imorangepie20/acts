@@ -5,6 +5,7 @@ import { todayInSeoul } from "@/lib/vouchers/dates";
 import { toSimpleInput, type VatAccounts } from "@/lib/vouchers/simple";
 import type { VoucherInput } from "@/lib/vouchers/types";
 import { getVatAccountIds, listAccounts } from "@/server/accounts/service";
+import { hidesPayroll } from "@/lib/permissions";
 import { requirePermission } from "@/server/auth/dal";
 import { isMonthClosed, monthOf } from "@/server/closing/periods";
 import { db } from "@/server/db";
@@ -70,7 +71,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const user = await requirePermission("voucher:create");
   const { id } = await params;
   if (!isUuid(id)) notFound();
-  const voucher = await getVoucher(db, id);
+  const voucher = await getVoucher(db, id, { hidePayroll: hidesPayroll(user.role) });
   if (!voucher) notFound();
   // Opening balances have their own screen and rules.
   if (voucher.kind === "opening") redirect("/closing/opening");

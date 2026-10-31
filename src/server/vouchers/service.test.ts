@@ -143,7 +143,7 @@ describe("createVoucher", () => {
     const r = await createVoucher(db, staff, general());
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const v = await getVoucher(db, r.value.id);
+    const v = await getVoucher(db, r.value.id, { hidePayroll: false });
     expect(v).toMatchObject({
       id: r.value.id,
       date: "2026-10-30",
@@ -177,13 +177,13 @@ describe("createVoucher", () => {
   it("is pending with no approver when approval is required", async () => {
     await setApproval(true);
     const id = await create(general());
-    const v = await getVoucher(db, id);
+    const v = await getVoucher(db, id, { hidePayroll: false });
     expect(v).toMatchObject({ status: "pending", approvedBy: null, approvedAt: null });
   });
 
   it("returns null for unknown or malformed ids", async () => {
-    expect(await getVoucher(db, "00000000-0000-0000-0000-000000000000")).toBeNull();
-    expect(await getVoucher(db, "not-a-uuid")).toBeNull();
+    expect(await getVoucher(db, "00000000-0000-0000-0000-000000000000", { hidePayroll: false })).toBeNull();
+    expect(await getVoucher(db, "not-a-uuid", { hidePayroll: false })).toBeNull();
   });
 });
 
@@ -297,7 +297,7 @@ describe("simple entry types", () => {
     );
     if (!b.ok) throw new Error(b.error);
     const id = await create(b.value);
-    const v = await getVoucher(db, id);
+    const v = await getVoucher(db, id, { hidePayroll: false });
     expect(v).toMatchObject({ entryType: "purchase", supplyAmount: 10000, vatAmount: 1000, vatDeductible: true });
     expect(v!.lines.map((l) => [l.account.code, l.side, l.amount, l.partnerName])).toEqual([
       ["811", "debit", 10000, "거래처A"],
@@ -360,9 +360,9 @@ describe("simple entry types", () => {
 describe("numbering", () => {
   it("numbers per date", async () => {
     const nos = [];
-    for (let i = 0; i < 3; i++) nos.push((await getVoucher(db, await create(general())))!.no);
+    for (let i = 0; i < 3; i++) nos.push((await getVoucher(db, await create(general()), { hidePayroll: false }))!.no);
     expect(nos).toEqual([1, 2, 3]);
-    expect((await getVoucher(db, await create(general({ date: "2026-10-31" }))))!.no).toBe(1);
+    expect((await getVoucher(db, await create(general({ date: "2026-10-31" })), { hidePayroll: false }))!.no).toBe(1);
   });
 
   it("gives concurrent creates on the same date distinct numbers", async () => {
@@ -370,7 +370,7 @@ describe("numbering", () => {
     const nos = [];
     for (const r of rs) {
       if (!r.ok) throw new Error(r.error);
-      nos.push((await getVoucher(db, r.value.id))!.no);
+      nos.push((await getVoucher(db, r.value.id, { hidePayroll: false }))!.no);
     }
     expect(nos.sort()).toEqual([1, 2, 3, 4]);
   });
@@ -380,7 +380,7 @@ describe("numbering", () => {
     const id = await create(general());
     const r = await updateVoucher(db, staff, id, 1, general({ date: "2026-10-31" }));
     expect(r.ok).toBe(true);
-    expect((await getVoucher(db, id))!.no).toBe(2);
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.no).toBe(2);
   });
 });
 
@@ -389,10 +389,10 @@ describe("updateVoucher", () => {
     const id = await create(general());
     const first = await updateVoucher(db, staff, id, 1, general({ description: "첫 수정" }));
     expect(first.ok).toBe(true);
-    expect((await getVoucher(db, id))!.version).toBe(2);
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.version).toBe(2);
     const second = await updateVoucher(db, staff, id, 1, general({ description: "둘째 수정" }));
     expect(second).toEqual({ ok: false, error: MSG.conflict });
-    expect((await getVoucher(db, id))!.description).toBe("첫 수정");
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.description).toBe("첫 수정");
   });
 
   it("replaces the lines, clears the reject reason and records history", async () => {
@@ -407,7 +407,7 @@ describe("updateVoucher", () => {
       general({ lines: [line("812", "debit", 3000), line("811", "debit", 2000), line("103", "credit", 5000)] }),
     );
     expect(r.ok).toBe(true);
-    const v = await getVoucher(db, id);
+    const v = await getVoucher(db, id, { hidePayroll: false });
     expect(v).toMatchObject({ status: "pending", rejectReason: null, approvedBy: null, version: 2 });
     expect(v!.lines.map((l) => l.account.code)).toEqual(["812", "811", "103"]);
     const h = await listHistory(db, id);
@@ -472,7 +472,7 @@ describe("deleteVoucher", () => {
     const id = await create(general({ description: "삭제 대상" }));
     expect(await deleteVoucher(db, staff, id, 2)).toEqual({ ok: false, error: MSG.conflict });
     expect(await deleteVoucher(db, staff, id, 1)).toEqual({ ok: true, value: undefined });
-    expect(await getVoucher(db, id)).toBeNull();
+    expect(await getVoucher(db, id, { hidePayroll: false })).toBeNull();
     const [{ n }] = await db
       .select({ n: sql<number>`count(*)::int` })
       .from(voucherLines)
@@ -495,7 +495,7 @@ describe("listVouchers", () => {
   });
 
   it("lists newest first with the debit total", async () => {
-    const { rows, total } = await listVouchers(db, {});
+    const { rows, total } = await listVouchers(db, { hidePayroll: false });
     expect(total).toBe(3);
     expect(rows.map((r) => r.description)).toEqual(["간식", "점심", "택시비"]);
     expect(rows[1]).toMatchObject({
@@ -510,20 +510,20 @@ describe("listVouchers", () => {
   });
 
   it("filters by date range, status and q", async () => {
-    expect((await listVouchers(db, { from: "2026-10-10", to: "2026-10-31" })).total).toBe(2);
-    expect((await listVouchers(db, { to: "2026-10-14" })).rows.map((r) => r.description)).toEqual(["택시비"]);
-    expect((await listVouchers(db, { status: "pending" })).rows.map((r) => r.description)).toEqual(["간식"]);
-    expect((await listVouchers(db, { q: "택시" })).rows.map((r) => r.description)).toEqual(["택시비"]);
-    expect((await listVouchers(db, { q: "거래처" })).rows.map((r) => r.description)).toEqual(["점심"]);
-    expect((await listVouchers(db, { q: "%" })).total).toBe(0);
+    expect((await listVouchers(db, { hidePayroll: false, from: "2026-10-10", to: "2026-10-31" })).total).toBe(2);
+    expect((await listVouchers(db, { hidePayroll: false, to: "2026-10-14" })).rows.map((r) => r.description)).toEqual(["택시비"]);
+    expect((await listVouchers(db, { hidePayroll: false, status: "pending" })).rows.map((r) => r.description)).toEqual(["간식"]);
+    expect((await listVouchers(db, { hidePayroll: false, q: "택시" })).rows.map((r) => r.description)).toEqual(["택시비"]);
+    expect((await listVouchers(db, { hidePayroll: false, q: "거래처" })).rows.map((r) => r.description)).toEqual(["점심"]);
+    expect((await listVouchers(db, { hidePayroll: false, q: "%" })).total).toBe(0);
   });
 
   it("pages 50 rows while total counts every match", async () => {
     for (let i = 0; i < 50; i++) await create(general({ date: "2026-09-01" }));
-    const p1 = await listVouchers(db, {});
+    const p1 = await listVouchers(db, { hidePayroll: false });
     expect(p1.total).toBe(53);
     expect(p1.rows).toHaveLength(50);
-    const p2 = await listVouchers(db, { page: 2 });
+    const p2 = await listVouchers(db, { hidePayroll: false, page: 2 });
     expect(p2.rows).toHaveLength(3);
     expect(p2.rows.at(-1)).toMatchObject({ date: "2026-09-01", no: 1 });
   });
@@ -549,7 +549,7 @@ describe("결산 (closing) vouchers", () => {
       (await getIncomeStatement(db, f)).lines.find((l) => l.kind === "computed" && l.key === "operating")!.amount;
     const before = await operating();
     const id = await create(closing());
-    const v = await getVoucher(db, id);
+    const v = await getVoucher(db, id, { hidePayroll: false });
     expect(v).toMatchObject({ kind: "closing", status: "approved" });
     expect(await operating()).toBe(before - 500_000);
   });
@@ -557,24 +557,24 @@ describe("결산 (closing) vouchers", () => {
   it("filters the list by kind", async () => {
     await create(general({ description: "일반" }));
     await create(closing());
-    expect((await listVouchers(db, { kind: "closing" })).rows.map((r) => r.description)).toEqual(["감가상각"]);
-    expect((await listVouchers(db, { kind: "closing" })).rows[0].kind).toBe("closing");
-    expect((await listVouchers(db, { kind: "general" })).rows.map((r) => r.description)).toEqual(["일반"]);
-    expect((await listVouchers(db, {})).total).toBe(2);
+    expect((await listVouchers(db, { hidePayroll: false, kind: "closing" })).rows.map((r) => r.description)).toEqual(["감가상각"]);
+    expect((await listVouchers(db, { hidePayroll: false, kind: "closing" })).rows[0].kind).toBe("closing");
+    expect((await listVouchers(db, { hidePayroll: false, kind: "general" })).rows.map((r) => r.description)).toEqual(["일반"]);
+    expect((await listVouchers(db, { hidePayroll: false })).total).toBe(2);
   });
 
   it("switches kind on update, writes history with kind, and still requires a general entry type", async () => {
     const id = await create(general());
-    const v = await getVoucher(db, id);
+    const v = await getVoucher(db, id, { hidePayroll: false });
     const r = await updateVoucher(db, staff, id, v!.version, closing({ description: "회식비" }));
     expect(r.ok).toBe(true);
-    expect((await getVoucher(db, id))!.kind).toBe("closing");
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.kind).toBe("closing");
     const h = await listHistory(db, id);
     expect(h.map((x) => x.snapshot.kind)).toEqual(["general", "closing"]);
-    const v2 = await getVoucher(db, id);
+    const v2 = await getVoucher(db, id, { hidePayroll: false });
     const back = await updateVoucher(db, staff, id, v2!.version, general());
     expect(back.ok).toBe(true);
-    expect((await getVoucher(db, id))!.kind).toBe("general");
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.kind).toBe("general");
   });
 });
 
@@ -599,12 +599,12 @@ describe("payroll vouchers", () => {
   it("writePayrollVoucher numbers and validates like createVoucher and follows the approval setting", async () => {
     await create(general({ date: "2026-09-25" }));
     const id = await writePayroll();
-    const v = (await getVoucher(db, id))!;
+    const v = (await getVoucher(db, id, { hidePayroll: false }))!;
     expect(v).toMatchObject({ kind: "payroll", no: 2, status: "approved", entryType: "general" });
     expect((await listHistory(db, id)).map((h) => h.action)).toEqual(["created"]);
 
     await setApproval(true);
-    expect((await getVoucher(db, await writePayroll()))!.status).toBe("pending");
+    expect((await getVoucher(db, await writePayroll(), { hidePayroll: false }))!.status).toBe("pending");
 
     const vat = await getVatAccountIds(db);
     const bad = await db.transaction((tx) =>
@@ -618,7 +618,7 @@ describe("payroll vouchers", () => {
 
   it("refuses update, delete, attach from the voucher screens and decide without payroll:manage", async () => {
     const id = await writePayroll();
-    const v = (await getVoucher(db, id))!;
+    const v = (await getVoucher(db, id, { hidePayroll: false }))!;
     expect(await updateVoucher(db, manager, id, v.version, general())).toEqual({ ok: false, error: ERR_PAYROLL_ONLY });
     expect(await deleteVoucher(db, manager, id, v.version)).toEqual({ ok: false, error: ERR_PAYROLL_ONLY });
     expect(canDecidePayroll("manager")).toBe(true);
@@ -629,9 +629,33 @@ describe("payroll vouchers", () => {
     const id = await writePayroll();
     const r = await db.transaction((tx) => deletePayrollVoucher(tx, manager, id));
     expect(r.ok).toBe(true);
-    expect(await getVoucher(db, id)).toBeNull();
+    expect(await getVoucher(db, id, { hidePayroll: false })).toBeNull();
     expect((await listHistory(db, id)).map((h) => h.action)).toEqual(["created", "deleted"]);
     const general1 = await create(general());
     expect((await db.transaction((tx) => deletePayrollVoucher(tx, manager, general1))).ok).toBe(false);
+  });
+
+  it("listVouchers with hidePayroll masks the row: 급여 전표, no amount, no partner, not openable", async () => {
+    const id = await writePayroll();
+    await create(general({ date: "2026-09-24", description: "택시비", partnerId: partnerA }));
+    const hidden = await listVouchers(db, { hidePayroll: true, from: "2026-09-01", to: "2026-09-30" });
+    expect(hidden.total).toBe(2);
+    expect(hidden.rows[0]).toMatchObject({ id, kind: "payroll", description: "급여 전표", amount: null, partnerName: null, hidden: true });
+    expect(hidden.rows[1]).toMatchObject({ description: "택시비", amount: 10000, partnerName: "거래처A", hidden: false });
+    // The real description is not searchable; the label is.
+    expect((await listVouchers(db, { hidePayroll: true, q: "9월" })).total).toBe(0);
+    expect((await listVouchers(db, { hidePayroll: true, q: "급여 전표" })).rows.map((r) => r.id)).toEqual([id]);
+
+    const shown = await listVouchers(db, { hidePayroll: false, from: "2026-09-01", to: "2026-09-30" });
+    expect(shown.rows[0]).toMatchObject({ id, description: "2026년 9월 급여", amount: 3_000_000, hidden: false });
+    expect((await listVouchers(db, { hidePayroll: false, q: "9월" })).rows.map((r) => r.id)).toEqual([id]);
+  });
+
+  it("getVoucher with hidePayroll is null for a payroll voucher only", async () => {
+    const id = await writePayroll();
+    expect(await getVoucher(db, id, { hidePayroll: true })).toBeNull();
+    expect(await getVoucher(db, id, { hidePayroll: false })).not.toBeNull();
+    const g = await create(general());
+    expect(await getVoucher(db, g, { hidePayroll: true })).not.toBeNull();
   });
 });

@@ -117,12 +117,20 @@ export function VoucherList({ rows, total, page, pageSize, filters, canCreate }:
               </TableRow>
             )}
             {rows.map((r) => (
-              <TableRow key={r.id} className="cursor-pointer" onClick={() => router.push(`/vouchers/${r.id}`)}>
+              <TableRow
+                key={r.id}
+                className={r.hidden ? undefined : "cursor-pointer"}
+                onClick={r.hidden ? undefined : () => router.push(`/vouchers/${r.id}`)}
+              >
                 <TableCell className="tabular-nums">{r.date}</TableCell>
                 <TableCell className="tabular-nums">
-                  <Link href={`/vouchers/${r.id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
-                    {formatVoucherNo(r.date, r.no)}
-                  </Link>
+                  {r.hidden ? (
+                    formatVoucherNo(r.date, r.no)
+                  ) : (
+                    <Link href={`/vouchers/${r.id}`} className="hover:underline" onClick={(e) => e.stopPropagation()}>
+                      {formatVoucherNo(r.date, r.no)}
+                    </Link>
+                  )}
                 </TableCell>
                 <TableCell>
                   {ENTRY_TYPE_LABELS[r.entryType]}
@@ -134,7 +142,7 @@ export function VoucherList({ rows, total, page, pageSize, filters, canCreate }:
                 </TableCell>
                 <TableCell className="max-w-72 truncate">{r.description}</TableCell>
                 <TableCell>{r.partnerName ?? ""}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatWon(r.amount)}</TableCell>
+                <TableCell className="text-right tabular-nums">{r.amount === null ? "" : formatWon(r.amount)}</TableCell>
                 <TableCell>
                   <StatusBadge status={r.status} />
                 </TableCell>

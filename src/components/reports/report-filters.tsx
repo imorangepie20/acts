@@ -1,14 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
-import type { ReportFilter, ReportMode } from "@/lib/reports/types";
+import type { ReportMode, ReportScope } from "@/lib/reports/types";
 
 type Option = { id: number; name: string };
 
 const RESERVED = new Set(["from", "to", "site", "dept"]);
 
 export type ReportFiltersProps = {
-  filter: ReportFilter;
+  filter: ReportScope;
   mode: ReportMode;
   sites: Option[];
   departments: Option[];

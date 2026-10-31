@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { VoucherAttachments } from "@/components/vouchers/voucher-attachments";
 import { VoucherDetail } from "@/components/vouchers/voucher-detail";
 import { VoucherHistory } from "@/components/vouchers/voucher-history";
-import { can } from "@/lib/permissions";
+import { can, hidesPayroll } from "@/lib/permissions";
 import { listAccounts } from "@/server/accounts/service";
 import { listAttachments } from "@/server/attachments/service";
 import { requirePermission } from "@/server/auth/dal";
@@ -16,13 +16,14 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
   const user = await requirePermission("ledger:view");
   const { id } = await params;
   if (!isUuid(id)) notFound();
-  const [voucher, attachments, history, accounts] = await Promise.all([
-    getVoucher(db, id),
+  // A payroll voucher is a 404 without payroll:manage; nothing else (attachments, history) is read first.
+  const voucher = await getVoucher(db, id, { hidePayroll: hidesPayroll(user.role) });
+  if (!voucher) notFound();
+  const [attachments, history, accounts] = await Promise.all([
     listAttachments(db, id),
     listHistory(db, id),
     listAccounts(db),
   ]);
-  if (!voucher) notFound();
   // Only partners named in this voucher's history snapshots, not the whole partner list.
   const partnerIds = history.flatMap((h) =>
     [h.snapshot.partnerId, ...h.snapshot.lines.map((l) => l.partnerId)].filter((p): p is number => p !== null),

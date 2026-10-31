@@ -1,26 +1,30 @@
 import Link from "next/link";
 import { AccountLedgerTable } from "@/components/reports/account-ledger-table";
 import { AccountSelect } from "@/components/reports/account-select";
+import { HiddenPayrollNotice } from "@/components/reports/hidden-payroll-notice";
 import { LedgerPager } from "@/components/reports/ledger-pager";
 import { PartnerSummaryTable } from "@/components/reports/partner-summary-table";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { exportHref, first, pageParam, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { listAccounts } from "@/server/accounts/service";
+import { hidesPayroll } from "@/lib/permissions";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
 import { listPartnersByIds } from "@/server/partners/service";
-import { getAccountLedger, getPartnerSummary } from "@/server/reports/ledgers";
+import { countHiddenPayroll, getAccountLedger, getPartnerSummary } from "@/server/reports/ledgers";
 import { getReportFilterOptions } from "@/server/sites/service";
 
 const toId = (v: string | undefined) => (v && /^\d+$/.test(v) ? Number(v) : null);
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requirePermission("ledger:view");
+  const user = await requirePermission("ledger:view");
   const sp = await searchParams;
   const company = await getCompany(db);
-  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
+  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth, {
+    hidePayroll: hidesPayroll(user.role),
+  });
   const [allAccounts, options] = await Promise.all([listAccounts(db), getReportFilterOptions(db)]);
   const accounts = allAccounts;
   const requested = toId(first(sp.account));
@@ -40,6 +44,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
   const detail =
     account && partnerId !== null ? await getAccountLedger(db, account.id, filter, { partnerId, page: pageParam(sp) }) : null;
   const summary = account && !detail ? await getPartnerSummary(db, account.id, filter) : null;
+  const hidden = account
+    ? await countHiddenPayroll(db, filter, { accountId: account.id, partnerId: detail ? partnerId : null })
+    : 0;
   const partnerName = detail && partnerId !== null ? ((await listPartnersByIds(db, [partnerId]))[0]?.name ?? "") : "";
 
   return (
@@ -55,6 +62,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
           extraParams={{ account: account ? String(account.id) : undefined, partner: detail ? String(partnerId) : undefined }}
         />
       </div>
+      <HiddenPayrollNotice count={hidden} />
       {!account ? (
         <p className="rounded-xl border border-dashed py-16 text-center text-muted-foreground">
           계정과목이 없습니다.

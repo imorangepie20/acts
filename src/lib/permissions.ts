@@ -31,6 +31,11 @@ export function can(role: Role, p: Permission): boolean {
   return MATRIX[p].includes(role);
 }
 
+/** Payroll voucher details (ledgers, voucher list and detail, attachments) are hidden without `payroll:manage`. */
+export function hidesPayroll(role: Role): boolean {
+  return !can(role, "payroll:manage");
+}
+
 export function homePathFor(role: Role): string {
   return role === "staff" ? "/vouchers" : "/overview";
 }

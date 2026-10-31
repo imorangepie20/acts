@@ -2,6 +2,7 @@ import { IncomeStatementTable } from "@/components/reports/income-statement-tabl
 import { ReportFilters } from "@/components/reports/report-filters";
 import { exportHref, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
+import { hidesPayroll } from "@/lib/permissions";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
@@ -9,10 +10,12 @@ import { getIncomeStatement } from "@/server/reports/service";
 import { getReportFilterOptions } from "@/server/sites/service";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requirePermission("ledger:view");
+  const user = await requirePermission("ledger:view");
   const sp = await searchParams;
   const company = await getCompany(db);
-  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
+  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth, {
+    hidePayroll: hidesPayroll(user.role),
+  });
   const [is, options] = await Promise.all([getIncomeStatement(db, filter), getReportFilterOptions(db)]);
   return (
     <div className="space-y-4">

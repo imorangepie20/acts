@@ -86,10 +86,10 @@ async function pendingVoucher(description?: string): Promise<string> {
 describe("approveVoucher", () => {
   it("approves a pending voucher and records approver and history", async () => {
     const id = await pendingVoucher();
-    expect((await getVoucher(db, id))!.status).toBe("pending");
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.status).toBe("pending");
     const r = await approveVoucher(db, manager, id, 1);
     expect(r).toEqual({ ok: true });
-    const v = (await getVoucher(db, id))!;
+    const v = (await getVoucher(db, id, { hidePayroll: false }))!;
     expect(v).toMatchObject({ status: "approved", approvedBy: { id: manager.id }, version: 2 });
     expect(v.approvedAt).toBeInstanceOf(Date);
     const h = await listHistory(db, id);
@@ -106,7 +106,7 @@ describe("approveVoucher", () => {
     const id = await pendingVoucher();
     expect(await approveVoucher(db, staff, id, 1)).toEqual({ ok: false, error: MSG.forbidden });
     expect(await rejectVoucher(db, staff, id, 1, "x")).toEqual({ ok: false, error: MSG.forbidden });
-    expect((await getVoucher(db, id))!.status).toBe("pending");
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.status).toBe("pending");
   });
   it("only approves pending vouchers", async () => {
     const id = await pendingVoucher();
@@ -118,7 +118,7 @@ describe("approveVoucher", () => {
     const id = await pendingVoucher();
     expect(await approveVoucher(db, manager, id, 5)).toEqual({ ok: false, error: MSG.conflict });
     expect(await approveVoucher(db, manager, "nope", 1)).toEqual({ ok: false, error: MSG.notFound });
-    expect((await getVoucher(db, id))!.status).toBe("pending");
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.status).toBe("pending");
   });
 });
 
@@ -126,7 +126,7 @@ describe("rejectVoucher", () => {
   it("stores the trimmed reason and history note", async () => {
     const id = await pendingVoucher();
     expect(await rejectVoucher(db, manager, id, 1, "  증빙 누락  ")).toEqual({ ok: true });
-    const v = (await getVoucher(db, id))!;
+    const v = (await getVoucher(db, id, { hidePayroll: false }))!;
     expect(v).toMatchObject({ status: "rejected", rejectReason: "증빙 누락", approvedBy: null, version: 2 });
     const h = await listHistory(db, id);
     expect(h.map((e) => e.action)).toEqual(["created", "rejected"]);
@@ -135,13 +135,13 @@ describe("rejectVoucher", () => {
   it("requires a non-blank reason", async () => {
     const id = await pendingVoucher();
     expect(await rejectVoucher(db, manager, id, 1, "   ")).toEqual({ ok: false, error: MSG.reason });
-    expect((await getVoucher(db, id))!.status).toBe("pending");
+    expect((await getVoucher(db, id, { hidePayroll: false }))!.status).toBe("pending");
   });
   it("editing a rejected voucher returns it to pending and clears the reason", async () => {
     const id = await pendingVoucher();
     await rejectVoucher(db, manager, id, 1, "증빙 누락");
     expect(await updateVoucher(db, staff, id, 2, input("수정"))).toEqual({ ok: true });
-    const v = (await getVoucher(db, id))!;
+    const v = (await getVoucher(db, id, { hidePayroll: false }))!;
     expect(v).toMatchObject({ status: "pending", rejectReason: null, description: "수정" });
   });
 });
@@ -165,13 +165,13 @@ describe("turning approval off", () => {
     await rejectVoucher(db, manager, rej, 1, "사유");
     await setApproval(false);
 
-    const v = (await getVoucher(db, p))!;
+    const v = (await getVoucher(db, p, { hidePayroll: false }))!;
     expect(v).toMatchObject({ status: "approved", approvedBy: { id: manager.id }, version: 2 });
     const h = await listHistory(db, p);
     expect(h.map((e) => e.action)).toEqual(["created", "approved"]);
     expect(h[1]).toMatchObject({ note: MSG.auto, userName: "팀장" });
 
-    expect((await getVoucher(db, rej))!).toMatchObject({ status: "rejected", rejectReason: "사유" });
+    expect((await getVoucher(db, rej, { hidePayroll: false }))!).toMatchObject({ status: "rejected", rejectReason: "사유" });
     expect(await countPending(db)).toBe(0);
   });
   it("turning it on changes nothing that exists", async () => {
@@ -179,7 +179,7 @@ describe("turning approval off", () => {
     const r = await createVoucher(db, staff, input());
     if (!r.ok) throw new Error(r.error);
     await setApproval(true);
-    expect((await getVoucher(db, r.value.id))!.status).toBe("approved");
+    expect((await getVoucher(db, r.value.id, { hidePayroll: false }))!.status).toBe("approved");
     expect((await db.select().from(vouchers).where(eq(vouchers.id, r.value.id)))[0].version).toBe(1);
   });
   it("saving with approval already off does not touch vouchers", async () => {

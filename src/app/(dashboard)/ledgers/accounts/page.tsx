@@ -1,27 +1,32 @@
 import { AccountLedgerTable } from "@/components/reports/account-ledger-table";
 import { AccountSelect } from "@/components/reports/account-select";
+import { HiddenPayrollNotice } from "@/components/reports/hidden-payroll-notice";
 import { LedgerPager } from "@/components/reports/ledger-pager";
 import { ReportFilters } from "@/components/reports/report-filters";
 import { exportHref, first, pageParam, parseReportParams, type SearchParams } from "@/lib/reports/params";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { listAccounts } from "@/server/accounts/service";
+import { hidesPayroll } from "@/lib/permissions";
 import { requirePermission } from "@/server/auth/dal";
 import { getCompany } from "@/server/company/service";
 import { db } from "@/server/db";
-import { getAccountLedger } from "@/server/reports/ledgers";
+import { countHiddenPayroll, getAccountLedger } from "@/server/reports/ledgers";
 import { getReportFilterOptions } from "@/server/sites/service";
 
 export default async function Page({ searchParams }: { searchParams: Promise<SearchParams> }) {
-  await requirePermission("ledger:view");
+  const user = await requirePermission("ledger:view");
   const sp = await searchParams;
   const company = await getCompany(db);
-  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth);
+  const filter = parseReportParams(sp, todayInSeoul(), company.fiscalYearStartMonth, {
+    hidePayroll: hidesPayroll(user.role),
+  });
   const raw = first(sp.account);
   const accountId = raw && /^\d+$/.test(raw) ? Number(raw) : null;
-  const [accounts, options, ledger] = await Promise.all([
+  const [accounts, options, ledger, hidden] = await Promise.all([
     listAccounts(db),
     getReportFilterOptions(db),
     accountId === null ? null : getAccountLedger(db, accountId, filter, { page: pageParam(sp) }),
+    accountId === null ? 0 : countHiddenPayroll(db, filter, { accountId }),
   ]);
   const pageHref = (p: number) => {
     const q = new URLSearchParams({ account: String(accountId), from: filter.from, to: filter.to, page: String(p) });
@@ -49,6 +54,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
               손익 계정은 회계연도 단위로 조회합니다. ({ledger.clampedFrom}부터)
             </p>
           )}
+          <HiddenPayrollNotice count={hidden} />
           <AccountLedgerTable rows={ledger.rows} />
           <LedgerPager page={ledger.page ?? 1} pages={ledger.pages} totalLines={ledger.totalLines} href={pageHref} />
         </>

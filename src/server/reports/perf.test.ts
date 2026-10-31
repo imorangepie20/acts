@@ -15,7 +15,7 @@ import { getBalanceSheet, getIncomeStatement, getTrialBalance } from "./service"
  */
 const db = getTestDb();
 const VOUCHERS = 200_000;
-const F = { from: "2026-01-01", to: "2026-12-31", siteId: null, departmentId: null };
+const F = { from: "2026-01-01", to: "2026-12-31", siteId: null, departmentId: null, hidePayroll: false };
 
 /** Prints a result line; also appends it to $PERF_LOG when set (vitest may swallow console output). */
 function log(line: string): void {

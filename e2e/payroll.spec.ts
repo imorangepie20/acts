@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { expect, test, type Page } from "@playwright/test";
+import { login } from "./helpers/login";
 
 // One 정기 급여 대장 for 귀속월 2026-01 (rates exist for it). The e2e DB is shared, so the spec cleans
 // up any leftover 2026-01 정기 run before and after, creates its own employee per run (unique 사번
@@ -169,4 +170,54 @@ test("정기 대장: 계산, 소득세 직접 입력, 확정, 명세서, 확정 
   expect(all).toContain(EMP_NO);
   expect(all).not.toContain(RRN);
   expect(all).not.toContain(RRN_DIGITS);
+});
+
+test("실무자에게는 급여 전표의 내용이 보이지 않는다", async ({ page, browser }) => {
+  // Confirm the draft run the previous test left (its confirm was cancelled), as admin.
+  await page.goto(runUrl);
+  await page.getByRole("button", { name: "확정", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "확정", exact: true }).click();
+  await expect(page.getByRole("button", { name: "확정 취소", exact: true })).toBeVisible();
+  await page.goto(`/vouchers?from=${PAY_DATE}&to=${PAY_DATE}&kind=payroll`);
+  const adminRow = page.getByRole("row").filter({ hasText: "2026년 1월 급여" });
+  await expect(adminRow).toHaveCount(1);
+  await expect(adminRow).toContainText("승인");
+  const voucherHref = await adminRow.getByRole("link").first().getAttribute("href");
+  expect(voucherHref).toMatch(/^\/vouchers\/[0-9a-f-]{36}$/);
+
+  // A staff user (no payroll:manage), made through the user admin screen.
+  const email = `e2e-payroll-staff-${Date.now()}@acts.kr`;
+  const password = "staff-pass-1234";
+  await page.goto("/admin/users");
+  await page.getByRole("button", { name: "사용자 추가" }).click();
+  const dlg = page.getByRole("dialog");
+  await dlg.getByLabel("이메일").fill(email);
+  await dlg.getByLabel("이름").fill("E2E 급여 미권한");
+  await dlg.getByLabel("역할").selectOption("staff");
+  await dlg.getByLabel("초기 비밀번호").fill(password);
+  await dlg.getByRole("button", { name: "추가" }).click();
+  await expect(page.getByRole("cell", { name: email })).toBeVisible();
+
+  const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const staff = await ctx.newPage();
+  await login(staff, email, password);
+
+  // 분개장: the payroll voucher is left out, with the notice.
+  await staff.goto(`/ledgers/journal?from=${PAY_DATE}&to=${PAY_DATE}`);
+  await expect(
+    staff.getByText(/^급여 전표 \d+건은 권한이 있어야 볼 수 있습니다\. 이 때문에 잔액이 합계잔액시산표와 다를 수 있습니다\.$/),
+  ).toBeVisible();
+  await expect(staff.getByText("2026년 1월 급여")).toHaveCount(0);
+
+  // 전표 목록: a masked row without a link; the voucher URL is a 404.
+  await staff.goto(`/vouchers?from=${PAY_DATE}&to=${PAY_DATE}&kind=payroll`);
+  await expect(staff.getByText("2026년 1월 급여")).toHaveCount(0);
+  const masked = staff.getByRole("row").filter({ hasText: "급여 전표" });
+  await expect(masked.first()).toBeVisible();
+  await expect(staff.locator(`a[href="${voucherHref}"]`)).toHaveCount(0);
+  const res = await staff.goto(voucherHref!);
+  expect(res?.status()).toBe(404);
+  const edit = await staff.goto(`${voucherHref}/edit`);
+  expect(edit?.status()).toBe(404);
+  await ctx.close();
 });

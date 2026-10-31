@@ -7,7 +7,9 @@ import {
   type StatementLine,
 } from "@/lib/reports/statements";
 import { buildTrialBalance, type TrialBalance } from "@/lib/reports/trial-balance";
-import type { ReportFilter } from "@/lib/reports/types";
+// Statements take a ReportScope, not a ReportFilter: payroll vouchers always count here, whoever asks
+// (only the ledgers hide them from users without payroll:manage).
+import type { ReportScope } from "@/lib/reports/types";
 import { listAccounts } from "@/server/accounts/service";
 import { getCompany } from "@/server/company/service";
 import type { Db } from "@/server/db/client";
@@ -16,7 +18,7 @@ import { accountTotals, profitBetween } from "./totals";
 /** 합계잔액시산표 as of `f.to` (f.from is ignored). */
 export async function getTrialBalance(
   db: Db,
-  f: ReportFilter,
+  f: ReportScope,
 ): Promise<TrialBalance & { asOf: string; fiscalStart: string }> {
   const asOf = f.to;
   const company = await getCompany(db);
@@ -45,7 +47,7 @@ type Scope = { siteId: number | null; departmentId: number | null };
 /** 손익계산서 for [f.from, f.to], compared with the same period one year earlier. */
 export async function getIncomeStatement(
   db: Db,
-  f: ReportFilter,
+  f: ReportScope,
 ): Promise<{ lines: StatementLine[]; period: Period; priorPeriod: Period }> {
   const period = { from: f.from, to: f.to };
   const priorPeriod = priorYearPeriod(period);
@@ -72,7 +74,7 @@ async function bsColumn(db: Db, asOf: string, startMonth: number, scope: Scope):
 /** 재무상태표 as of `f.to` (f.from is ignored), compared with the end of the prior fiscal year. */
 export async function getBalanceSheet(
   db: Db,
-  f: ReportFilter,
+  f: ReportScope,
 ): Promise<{ lines: StatementLine[]; asOf: string; priorAsOf: string; fiscalStart: string }> {
   const asOf = f.to;
   const company = await getCompany(db);
