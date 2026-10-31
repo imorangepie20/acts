@@ -121,9 +121,13 @@ For an individual business, B8 needs the 대표자 주민등록번호: typed int
 time, never stored.
 
 Add to `payroll_items`: `excludeFromTotalPaid` (boolean) — the 비과세 items of 시행령 제214조제1항
-제2호의2·제2호의3 that ⑤ 총지급액 leaves out. Seed values for 식대 and 자가운전보조금 must be checked
-against the 시행령 text on law.go.kr before seeding; if they cannot be confirmed, seed `false`
-and mark the value `// UNVERIFIED` like `bonus.ts`.
+제2호의2·제2호의3 that ⑤ 총지급액 leaves out. Checked on law.go.kr (2026-11-01, 시행령 제214조
+current through the 2025. 12. 30. revision):
+- 제2호의2 lists 법 제12조제3호 가–사, 카, 타, 하, 너, 버, 저목. 식사대 is 러목 → **not excluded**:
+  `meal` seeds `false`.
+- 제2호의3 lists 시행령 제12조제2호–제4호 and 제8호. 제12조제3호 is 일직료·숙직료·여비 including
+  the 자가운전보조금 → **excluded**: `car` seeds `true`.
+Other built-in items are taxable, so `false`.
 
 So that ⑤ for a filed month does not drift when item settings change later, the run calc stores
 the excluded 비과세 amount on each line: `LineResult.excludedNontaxable` (sum over items with
