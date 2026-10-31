@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { VoucherSnapshot } from "@/lib/vouchers/types";
 import type { ImportMeta } from "@/lib/imports/types";
 import type { TemplateBody } from "@/lib/vouchers/templates";
+import type { WithholdingTable } from "@/lib/payroll/types";
 import {
   bigint,
   boolean,
@@ -451,15 +452,14 @@ export const payrollRates = pgTable(
     kind: payrollRateKind("kind").notNull(),
     effectiveFrom: date("effective_from", { mode: "string" }).notNull(),
     /** Percent rates are stored as percent (4.75); caps and floors in won. */
-    value: numeric("value", { precision: 12, scale: 6 }).notNull(),
+    value: numeric("value", { precision: 15, scale: 6 }).notNull(),
   },
   (t) => [uniqueIndex("payroll_rates_kind_from").on(t.kind, t.effectiveFrom)],
 );
 
 export const withholdingTables = pgTable("withholding_tables", {
   effectiveFrom: date("effective_from", { mode: "string" }).primaryKey(),
-  /** A WithholdingTable (see src/lib/payroll). */
-  data: jsonb("data").$type<Record<string, unknown>>().notNull(),
+  data: jsonb("data").$type<WithholdingTable>().notNull(),
 });
 
 export const payrollRuns = pgTable(

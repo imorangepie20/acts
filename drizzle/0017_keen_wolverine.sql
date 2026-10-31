@@ -1,0 +1,1 @@
+ALTER TABLE "payroll_rates" ALTER COLUMN "value" SET DATA TYPE numeric(15, 6);
