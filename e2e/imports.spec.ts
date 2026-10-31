@@ -50,6 +50,7 @@ test("매입 세금계산서: 일괄 계정 지정 후 전표 생성, 재업로�
   });
   await page.getByRole("button", { name: "미리보기" }).click();
   await expect(page.getByText(nameA)).toBeVisible();
+  await expect(page.getByText("purchase.xlsx에서 2건을 읽었습니다. 전표로 만들 수 있는 건 2건.")).toBeVisible();
   await expect(page.getByText("새 거래처")).toHaveCount(2);
 
   const create = page.getByRole("button", { name: /전표 만들기/ });
@@ -75,6 +76,7 @@ test("매입 세금계산서: 일괄 계정 지정 후 전표 생성, 재업로�
   });
   await page.getByRole("button", { name: "미리보기" }).click();
   await expect(page.getByText("이미 불러온 자료")).toHaveCount(2);
+  await expect(page.getByText("전표로 만들 수 있는 건 0건, 이미 불러온 건 2건.", { exact: false })).toBeVisible();
 });
 
 test("카드 사용내역: 봉사료 행은 비활성과 사유가 보인다", async ({ page }) => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { Loader2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -40,6 +41,8 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
   const [states, setStates] = useState<RowState[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [busy, setBusy] = useState<"preview" | "commit" | null>(null);
   const [bulk, setBulk] = useState<number | null>(null);
   const [pending, start] = useTransition();
 
@@ -48,6 +51,7 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
     setStates([]);
     setError(null);
     setDone(null);
+    setSummary(null);
     setFile(null);
     if (fileRef.current) fileRef.current.value = "";
   };
@@ -70,9 +74,11 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
     fd.set("kind", kind);
     fd.set("direction", direction);
     fd.set("file", file);
+    setBusy("preview");
     start(async () => {
       setDone(null);
-      const r = await previewImportAction(fd);
+      setSummary(null);
+      const r = await previewImportAction(fd).finally(() => setBusy(null));
       if (!r.ok) {
         setError(r.error);
         setRows([]);
@@ -80,6 +86,7 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
         return;
       }
       setError(null);
+      setSummary(previewSummary(file.name, r.value.rows));
       setRows(r.value.rows);
       setStates(
         r.value.rows.map((row) => ({
@@ -108,6 +115,7 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
   const commit = () => {
     if (counter === null) return;
     const picked = checkedIdx.map((i) => ({ i, row: rows[i], st: states[i] }));
+    setBusy("commit");
     start(async () => {
       const r = await commitImportAction({
         kind,
@@ -137,7 +145,7 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
           vatAmount: row.vatAmount,
           meta: row.meta,
         })),
-      });
+      }).finally(() => setBusy(null));
       if (!r.ok) {
         setError(r.error);
         return;
@@ -246,13 +254,25 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         />
         <Button type="button" onClick={preview} disabled={pending}>
-          미리보기
+          {busy === "preview" ? (
+            <>
+              <Loader2Icon aria-hidden className="animate-spin" />
+              파일 읽는 중…
+            </>
+          ) : (
+            "미리보기"
+          )}
         </Button>
       </div>
 
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
+        </p>
+      )}
+      {summary && !error && (
+        <p role="status" className="text-sm">
+          {summary}
         </p>
       )}
       {done && (
@@ -278,7 +298,14 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
               <AccountPicker label="계정 일괄 지정" id="import-bulk" accounts={accounts} value={bulk} onChange={assignBulk} />
             </div>
             <Button type="button" onClick={commit} disabled={!canCommit}>
-              선택한 {checkedIdx.length}건 전표 만들기
+              {busy === "commit" ? (
+                <>
+                  <Loader2Icon aria-hidden className="animate-spin" />
+                  {checkedIdx.length}건 전표 만드는 중…
+                </>
+              ) : (
+                <>선택한 {checkedIdx.length}건 전표 만들기</>
+              )}
             </Button>
           </div>
           <PreviewTable rows={rows} states={states} accounts={accounts} onChange={patch} onToggleAll={toggleAll} />
@@ -286,4 +313,13 @@ export function ImportScreen({ accounts, options }: { accounts: AccountOption[];
       )}
     </div>
   );
+}
+
+function previewSummary(fileName: string, rows: PreviewRow[]): string {
+  if (rows.length === 0) return `${fileName}에서 불러올 자료를 찾지 못했습니다.`;
+  const count = (status: PreviewRow["status"]) => rows.filter((r) => r.status === status).length;
+  const parts = [`전표로 만들 수 있는 건 ${count("ready")}건`];
+  if (count("duplicate")) parts.push(`이미 불러온 건 ${count("duplicate")}건`);
+  if (count("blocked")) parts.push(`직접 입력할 건 ${count("blocked")}건`);
+  return `${fileName}에서 ${rows.length}건을 읽었습니다. ${parts.join(", ")}.`;
 }
