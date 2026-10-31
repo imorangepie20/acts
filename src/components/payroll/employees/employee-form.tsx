@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -33,12 +33,17 @@ function SecretInput({ id, name, placeholder, required }: { id: string; name: st
       <Input
         id={id}
         name={name}
-        type={shown ? "text" : "password"}
+        // Not type="password": browsers then treat the form as a login form and autofill the
+        // saved admin email/password into the name and secret fields. Mask with CSS instead.
+        type="text"
         autoComplete="off"
+        data-1p-ignore
+        data-lpignore="true"
         inputMode="numeric"
         placeholder={placeholder}
         required={required}
         className="font-mono"
+        style={shown ? undefined : ({ WebkitTextSecurity: "disc" } as CSSProperties)}
       />
       <Button
         type="button"
