@@ -12,6 +12,8 @@ import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
 import { searchPartners } from "@/server/partners/service";
 import { recommendAccounts } from "@/server/recommend/service";
+import { parseTemplateBody } from "@/server/templates/form";
+import { deleteTemplate, saveTemplate } from "@/server/templates/service";
 import { fail, type Result } from "@/server/result";
 import { parseVoucherPayload } from "@/server/vouchers/form";
 import { approveVoucher, createVoucher, deleteVoucher, rejectVoucher, updateVoucher } from "@/server/vouchers/service";
@@ -121,4 +123,22 @@ export async function recommendAccountsAction(input: unknown): Promise<Result<Re
   const p = recommendSchema.safeParse(input);
   if (!p.success) return fail(INVALID);
   return { ok: true, value: await recommendAccounts(db, p.data) };
+}
+
+export async function saveTemplateAction(name: string, body: unknown): Promise<Result<{ id: number }>> {
+  const user = await requirePermission("voucher:create");
+  if (typeof name !== "string") return fail(INVALID);
+  const p = parseTemplateBody(body);
+  if (!p.ok) return fail(INVALID);
+  const r = await saveTemplate(db, user, name, p.data);
+  if (r.ok) revalidatePath("/vouchers/new");
+  return r;
+}
+
+export async function deleteTemplateAction(id: number): Promise<Result> {
+  await requirePermission("voucher:create");
+  if (!Number.isInteger(id) || id <= 0) return fail(INVALID);
+  const r = await deleteTemplate(db, id);
+  if (r.ok) revalidatePath("/vouchers/new");
+  return r;
 }

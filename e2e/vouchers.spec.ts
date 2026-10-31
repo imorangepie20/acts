@@ -41,7 +41,7 @@ test("전표: 매입·비용 입력 → 목록 → 수정 이력 → 삭제", as
   await expect(preview.getByRole("row", { name: /135 부가세대급금/ })).toContainText("909");
   await expect(preview.getByRole("row", { name: /253 미지급금/ })).toContainText("10,000");
 
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
   // form resets but stays on the tab
   await expect(page.getByLabel("적요")).toHaveValue("");
@@ -65,7 +65,7 @@ test("전표: 매입·비용 입력 → 목록 → 수정 이력 → 삭제", as
   await expect(page.getByLabel("합계")).toHaveValue("10,000");
   const edited = `${desc} 회식`;
   await page.getByLabel("적요").fill(edited);
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page).toHaveURL(/\/vouchers\/[0-9a-f-]{36}$/);
   await expect(page.getByText(`적요: ${desc} → ${edited}`)).toBeVisible();
 
@@ -85,7 +85,7 @@ test("일반 전표: 차액이 있으면 저장할 수 없다", async ({ page })
   await pick(page, "2행 계정", "101");
   await page.getByLabel("2행 대변").fill("900");
   await expect(page.getByLabel("차액")).toHaveText("100");
-  await expect(page.getByRole("button", { name: "저장" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "저장", exact: true })).toBeDisabled();
 });
 
 test("결산 전표: 입력 후 구분 필터로 조회", async ({ page }) => {
@@ -99,7 +99,7 @@ test("결산 전표: 입력 후 구분 필터로 조회", async ({ page }) => {
   await page.getByLabel("2행 대변").fill("50000");
   await expect(page.getByText("세무사 결산 수정 내역(감가상각·대손·미지급비용·법인세 등)을 입력할 때 켭니다.")).toBeVisible();
   await page.getByRole("switch", { name: "결산 전표" }).click();
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
 
   await page.goto("/vouchers");
@@ -133,7 +133,7 @@ test("계정 추천: 같은 거래처의 이전 계정이 칩으로 나온다", 
   await page.getByRole("dialog", { name: "새 거래처 추가" }).getByRole("button", { name: "추가" }).click();
   await expect(page.getByRole("combobox", { name: "거래처" })).toContainText(partner);
   await page.getByLabel("합계").fill("10000");
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
 
   // a fresh purchase: picking the same partner suggests the account used before
@@ -147,4 +147,60 @@ test("계정 추천: 같은 거래처의 이전 계정이 칩으로 나온다", 
   await chip.click();
   await expect(page.getByRole("combobox", { name: "계정", exact: true })).toContainText("811 복리후생비");
   await expect(chip).toHaveCount(0);
+});
+
+test("전표: 템플릿으로 저장 → 새로고침 후 불러오기 → 전표 저장", async ({ page }) => {
+  const ts = Date.now();
+  const name = `월 임차료 ${ts}`;
+  const partner = `E2E건물주 ${ts}`;
+  const desc = `E2E 임차료 ${ts}`;
+
+  await page.goto("/vouchers/new");
+  await page.getByLabel("적요").fill(desc);
+  await pick(page, "계정", "819");
+  await pick(page, "결제 계정", "253");
+  await page.getByRole("combobox", { name: "거래처" }).click();
+  await page.getByPlaceholder("거래처명 또는 사업자등록번호").fill(partner);
+  await page.getByRole("option", { name: /새 거래처 추가/ }).click();
+  await page
+    .getByRole("dialog", { name: "새 거래처 추가" })
+    .getByRole("button", { name: "추가" })
+    .click();
+  await expect(page.getByRole("combobox", { name: "거래처" })).toContainText(partner);
+  await page.getByLabel("합계").fill("1100000");
+  await expect(page.getByLabel("공급가액")).toHaveValue("1,000,000");
+
+  await page.getByRole("button", { name: "템플릿으로 저장" }).click();
+  const dialog = page.getByRole("dialog", { name: "템플릿으로 저장" });
+  await expect(dialog.getByText("같은 이름이 있으면 덮어씁니다.")).toBeVisible();
+  await dialog.getByLabel("템플릿 이름").fill(name);
+  await dialog.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText("템플릿으로 저장했습니다.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel("적요")).toHaveValue("");
+  await page.getByRole("button", { name: "템플릿", exact: true }).click();
+  await page.getByLabel("템플릿 검색").fill(name);
+  await page.getByRole("button", { name: `${name} 불러오기` }).click();
+
+  await expect(page.getByLabel("적요")).toHaveValue(desc);
+  await expect(page.getByRole("combobox", { name: "계정", exact: true })).toContainText("819");
+  await expect(page.getByRole("combobox", { name: "결제 계정" })).toContainText("253");
+  await expect(page.getByRole("combobox", { name: "거래처" })).toContainText(partner);
+  await expect(page.getByLabel("합계")).toHaveValue("1,100,000");
+  await expect(page.getByLabel("공급가액")).toHaveValue("1,000,000");
+  await expect(page.getByLabel("부가세")).toHaveValue("100,000");
+
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+  await page.goto(`/vouchers?q=${encodeURIComponent(desc)}`);
+  await expect(page.getByRole("row", { name: new RegExp(desc) })).toHaveCount(1);
+
+  // delete the template again (confirm first)
+  await page.goto("/vouchers/new");
+  await page.getByRole("button", { name: "템플릿", exact: true }).click();
+  await page.getByLabel("템플릿 검색").fill(name);
+  await page.getByRole("button", { name: `${name} 삭제` }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "삭제" }).click();
+  await expect(page.getByText("템플릿을 삭제했습니다.")).toBeVisible();
 });

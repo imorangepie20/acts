@@ -49,7 +49,16 @@ const COUNTER_GROUPS: AccountGroup[] = [
   "noncurrent_liability",
 ];
 
-export type TradeInitial = { simple: TradeInput; partner: PartnerValue };
+/** What a form reads to pre-fill itself: an edited voucher (complete) or a template (possibly not). */
+export type TradeInitial = {
+  simple: Pick<TradeInput, "evidenceType" | "vatType" | "vatDeductible"> & {
+    mainAccountId: number | null;
+    counterAccountId: number | null;
+    supplyAmount: number | null;
+    vatAmount: number | null;
+  };
+  partner: PartnerValue;
+};
 
 type Amounts = { total: number | null; supply: number | null; vat: number | null };
 
@@ -72,7 +81,11 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
   const [deductibleOn, setDeductibleOn] = useState(init ? init.vatDeductible : true);
   const [amounts, setAmounts] = useState<Amounts>(
     init
-      ? { total: init.supplyAmount + init.vatAmount, supply: init.supplyAmount, vat: init.vatAmount }
+      ? {
+          total: init.supplyAmount === null || init.vatAmount === null ? null : init.supplyAmount + init.vatAmount,
+          supply: init.supplyAmount,
+          vat: init.vatAmount,
+        }
       : { total: null, supply: null, vat: null },
   );
 
@@ -263,7 +276,27 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
         <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">{built.error}</p>
       )}
 
-      <SaveBar error={ctx.error} pending={ctx.pending} />
+      <SaveBar
+        error={ctx.error}
+        pending={ctx.pending}
+        onSaveTemplate={
+          ctx.canSaveTemplate
+            ? () =>
+                ctx.saveAsTemplate({
+                  type: kind,
+                  description: ctx.common.description,
+                  mainAccountId: mainId,
+                  counterAccountId: counterId,
+                  partnerId: partner?.id ?? null,
+                  evidenceType: evidence,
+                  vatType: effectiveVatType,
+                  vatDeductible: deductibleOn,
+                  supplyAmount: amounts.supply,
+                  vatAmount: amounts.vat,
+                })
+            : undefined
+        }
+      />
     </form>
   );
 }

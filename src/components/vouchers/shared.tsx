@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { formatWon } from "@/lib/money";
 import type { SimpleInput, VatAccounts } from "@/lib/vouchers/simple";
+import type { TemplateBody } from "@/lib/vouchers/templates";
 import {
   VOUCHER_STATUS_LABELS,
   type LineInput,
@@ -40,6 +41,10 @@ export type FormContext = {
   fail: (message: string) => void;
   pending: boolean;
   error: string | null;
+  /** Opens the 템플릿으로 저장 dialog with a form's current, possibly incomplete, state. */
+  saveAsTemplate: (body: TemplateBody) => void;
+  /** False while editing: templates are saved from new entries only. */
+  canSaveTemplate: boolean;
 };
 
 export const selectClass =
@@ -64,7 +69,18 @@ export function Field({
   );
 }
 
-export function SaveBar({ error, pending, disabled }: { error: string | null; pending: boolean; disabled?: boolean }) {
+export function SaveBar({
+  error,
+  pending,
+  disabled,
+  onSaveTemplate,
+}: {
+  error: string | null;
+  pending: boolean;
+  disabled?: boolean;
+  /** Offered on new entries only. */
+  onSaveTemplate?: () => void;
+}) {
   return (
     <div className="flex flex-col items-end gap-2">
       {error && (
@@ -72,9 +88,16 @@ export function SaveBar({ error, pending, disabled }: { error: string | null; pe
           {error}
         </p>
       )}
-      <Button type="submit" disabled={pending || disabled} className="min-w-24">
-        저장
-      </Button>
+      <div className="flex gap-2">
+        {onSaveTemplate && (
+          <Button type="button" variant="outline" onClick={onSaveTemplate}>
+            템플릿으로 저장
+          </Button>
+        )}
+        <Button type="submit" disabled={pending || disabled} className="min-w-24">
+          저장
+        </Button>
+      </div>
     </div>
   );
 }

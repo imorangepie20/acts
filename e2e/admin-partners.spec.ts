@@ -29,6 +29,6 @@ test("거래처: 추가(사업자번호 형식), 검색, 중지", async ({ page 
 
   await page.getByRole("row", { name: new RegExp(name) }).getByRole("button", { name: "수정" }).click();
   await page.getByRole("dialog").getByRole("switch", { name: "사용" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "저장" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("row", { name: new RegExp(name) })).toContainText("중지");
 });

@@ -8,7 +8,7 @@ async function setApproval(page: Page, on: boolean) {
   const sw = page.getByRole("switch", { name: "전표 승인 사용" });
   if ((await sw.isChecked()) === on) return;
   await sw.click();
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.").first()).toBeVisible();
   await page.reload();
   if (on) await expect(page.getByRole("switch", { name: "전표 승인 사용" })).toBeChecked();
@@ -31,7 +31,7 @@ async function createVoucher(page: Page, desc: string) {
   await pick(page, "계정", "811");
   await pick(page, "결제 계정", "101");
   await page.getByLabel("합계").fill("5000");
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
   await page.goto(`/vouchers?q=${encodeURIComponent(desc)}`);
   const row = page.getByRole("row", { name: new RegExp(desc) });

@@ -198,7 +198,30 @@ export function GeneralForm({
         </div>
       </div>
 
-      <SaveBar error={ctx.error} pending={ctx.pending} disabled={!canSave} />
+      <SaveBar
+        error={ctx.error}
+        pending={ctx.pending}
+        disabled={!canSave}
+        onSaveTemplate={
+          ctx.canSaveTemplate
+            ? () =>
+                ctx.saveAsTemplate({
+                  type: "general",
+                  description: ctx.common.description,
+                  closing,
+                  lines: rows
+                    .filter((r) => !isBlank(r))
+                    .map((r) => ({
+                      accountId: r.accountId,
+                      side: r.debit === null && r.credit !== null ? "credit" : "debit",
+                      amount: r.debit ?? r.credit,
+                      partnerId: r.partner?.id ?? null,
+                      description: r.description.trim(),
+                    })),
+                })
+            : undefined
+        }
+      />
     </form>
   );
 }

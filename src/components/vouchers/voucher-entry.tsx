@@ -7,10 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { VatAccounts } from "@/lib/vouchers/simple";
 import { ENTRY_TYPE_LABELS, type EntryType } from "@/lib/vouchers/types";
+import type { TemplateBody } from "@/lib/vouchers/templates";
+import type { TemplateRow } from "@/server/templates/service";
 import { createVoucherAction, updateVoucherAction } from "@/app/(dashboard)/vouchers/actions";
 import type { AccountOption } from "./account-picker";
 import { GeneralForm, type GeneralRow } from "./general-form";
 import { Field, selectClass, type Common, type FormContext, type VoucherPayloadInput } from "./shared";
+import { SaveTemplateDialog, TemplateMenu, type Loaded } from "./template-menu";
 import { TradeForm, type TradeInitial } from "./trade-form";
 import { TransferForm, type TransferInitial } from "./transfer-form";
 
@@ -41,9 +44,11 @@ type Props = {
   /** YYYY-MM-DD in Asia/Seoul, computed on the server. */
   today: string;
   edit?: EditTarget;
+  /** Saved templates (new entries only). */
+  templates?: TemplateRow[];
 };
 
-export function VoucherEntry({ accounts, vat, options, today, edit }: Props) {
+export function VoucherEntry({ accounts, vat, options, today, edit, templates = [] }: Props) {
   const router = useRouter();
   const [tab, setTab] = useState<EntryType>(edit?.tab ?? "purchase");
   const [common, setCommon] = useState<Common>(
@@ -55,6 +60,8 @@ export function VoucherEntry({ accounts, vat, options, today, edit }: Props) {
     },
   );
   const [resetKey, setResetKey] = useState(0);
+  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [templateBody, setTemplateBody] = useState<TemplateBody | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const descriptionRef = useRef<HTMLInputElement>(null);
@@ -78,6 +85,7 @@ export function VoucherEntry({ accounts, vat, options, today, edit }: Props) {
       });
       // Fast repeated entry: keep tab, date and 사업장/부서; clear the rest.
       setCommon((c) => ({ ...c, description: "" }));
+      setLoaded(null);
       setResetKey((k) => k + 1);
       descriptionRef.current?.focus();
     } catch {
@@ -87,7 +95,28 @@ export function VoucherEntry({ accounts, vat, options, today, edit }: Props) {
     }
   };
 
-  const ctx: FormContext = { accounts, vat, common, submit, fail: setError, pending, error };
+  const ctx: FormContext = {
+    accounts,
+    vat,
+    common,
+    submit,
+    fail: setError,
+    pending,
+    error,
+    saveAsTemplate: setTemplateBody,
+    canSaveTemplate: !edit,
+  };
+
+  // Date, 사업장 and 부서 keep their values; the template sets 적요 and refills its tab.
+  const loadTemplate = (l: Loaded) => {
+    setLoaded(l);
+    setTab(l.tab);
+    setCommon((c) => ({ ...c, description: l.description }));
+    setError(null);
+    setResetKey((k) => k + 1);
+  };
+  const fill = <K extends keyof Loaded>(t: EntryType, key: K): Loaded[K] | undefined =>
+    loaded?.tab === t ? loaded[key] : undefined;
   const formKey = `${tab}-${resetKey}`;
 
   return (
@@ -99,13 +128,16 @@ export function VoucherEntry({ accounts, vat, options, today, edit }: Props) {
       }}
       className="gap-4"
     >
-      <TabsList>
-        {TABS.map((t) => (
-          <TabsTrigger key={t} value={t} disabled={edit !== undefined && t !== edit.tab} className="px-3">
-            {ENTRY_TYPE_LABELS[t]}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <TabsList>
+          {TABS.map((t) => (
+            <TabsTrigger key={t} value={t} disabled={edit !== undefined && t !== edit.tab} className="px-3">
+              {ENTRY_TYPE_LABELS[t]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {!edit && <TemplateMenu templates={templates} onLoad={loadTemplate} />}
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-[10rem_1fr] lg:grid-cols-[10rem_1fr_12rem_12rem]">
         <Field label="날짜" htmlFor="voucher-date">
@@ -164,17 +196,23 @@ export function VoucherEntry({ accounts, vat, options, today, edit }: Props) {
       </div>
 
       <TabsContent value="purchase">
-        <TradeForm key={formKey} kind="purchase" ctx={ctx} initial={edit?.trade} />
+        <TradeForm key={formKey} kind="purchase" ctx={ctx} initial={edit?.trade ?? fill("purchase", "trade")} />
       </TabsContent>
       <TabsContent value="sale">
-        <TradeForm key={formKey} kind="sale" ctx={ctx} initial={edit?.trade} />
+        <TradeForm key={formKey} kind="sale" ctx={ctx} initial={edit?.trade ?? fill("sale", "trade")} />
       </TabsContent>
       <TabsContent value="transfer">
-        <TransferForm key={formKey} ctx={ctx} initial={edit?.transfer} />
+        <TransferForm key={formKey} ctx={ctx} initial={edit?.transfer ?? fill("transfer", "transfer")} />
       </TabsContent>
       <TabsContent value="general">
-        <GeneralForm key={formKey} ctx={ctx} initial={edit?.general} initialClosing={edit?.closing} />
+        <GeneralForm
+          key={formKey}
+          ctx={ctx}
+          initial={edit?.general ?? fill("general", "general")}
+          initialClosing={edit?.closing ?? fill("general", "closing")}
+        />
       </TabsContent>
+      <SaveTemplateDialog body={templateBody} onClose={() => setTemplateBody(null)} />
     </Tabs>
   );
 }

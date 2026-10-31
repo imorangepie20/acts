@@ -26,7 +26,7 @@ test("계정과목: 표준 계정 목록, 추가(구분 자동 선택), 숨김",
       await expect(row).toContainText("판매비와관리비");
       await row.getByRole("button", { name: "수정" }).click();
       await page.getByRole("dialog").getByRole("switch", { name: "사용" }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "저장" }).click();
+      await page.getByRole("dialog").getByRole("button", { name: "저장", exact: true }).click();
       await expect(page.getByRole("row", { name: new RegExp(`${code} ${name}`) })).toContainText("숨김");
     }
   }

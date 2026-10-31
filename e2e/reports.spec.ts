@@ -16,7 +16,7 @@ test("합계잔액시산표: 전표 입력 후 합계 행이 보이고 차액 �
   await pick(page, "계정", "811");
   await pick(page, "결제 계정", "101");
   await page.getByLabel("합계").fill("5000");
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
 
   await page.goto("/reports/trial-balance");
@@ -45,7 +45,7 @@ test("재무상태표: 자산총계와 부채와자본총계가 같다", async (
   await pick(page, "계정", "811");
   await pick(page, "결제 계정", "101");
   await page.getByLabel("합계").fill("7000");
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
 
   await page.goto("/reports/balance-sheet");
@@ -71,7 +71,7 @@ test("분개장·계정별 원장: 전표가 분개장에 보이고 103 원장�
   await pick(page, "계정", "811");
   await pick(page, "결제 계정", "103");
   await page.getByLabel("합계").fill("3000");
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
 
   // The journal pages 100 vouchers at a time in ascending order, and re-runs pile up vouchers
@@ -111,7 +111,7 @@ test("거래처별 원장: 계정별 거래처 요약에서 거래처를 눌러 
   await page.getByRole("dialog", { name: "새 거래처 추가" }).getByRole("button", { name: "추가" }).click();
   await expect(page.getByRole("combobox", { name: "거래처" })).toContainText(partner);
   await page.getByLabel("합계").fill("4000");
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
 
   await page.goto("/ledgers/partners");

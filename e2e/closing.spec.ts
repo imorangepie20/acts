@@ -96,7 +96,7 @@ test("월 마감: 2000-01 → 2000-02 마감, 마감된 월의 전표는 수정�
   await expect(page.getByLabel("날짜")).toHaveValue("2000-02-15");
   await page.getByLabel("적요").fill(desc);
   await page.getByLabel("합계").fill("5000");
-  await page.getByRole("button", { name: "저장" }).click();
+  await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
 
   await page.goto(`/vouchers?from=2000-02-01&to=2000-02-29&q=${encodeURIComponent(desc)}`);

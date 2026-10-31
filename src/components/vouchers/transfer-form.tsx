@@ -8,7 +8,14 @@ import { MoneyInput } from "./money-input";
 import { PartnerPicker, type PartnerValue } from "./partner-picker";
 import { Field, LinesPreview, SaveBar, selectClass, type FormContext } from "./shared";
 
-export type TransferInitial = { simple: TransferInput; partner: PartnerValue };
+export type TransferInitial = {
+  simple: Pick<TransferInput, "evidenceType"> & {
+    debitAccountId: number | null;
+    creditAccountId: number | null;
+    amount: number | null;
+  };
+  partner: PartnerValue;
+};
 
 const FIRST = ["101", "103"];
 
@@ -93,7 +100,24 @@ export function TransferForm({ ctx, initial }: { ctx: FormContext; initial?: Tra
         <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">{built.error}</p>
       )}
 
-      <SaveBar error={ctx.error} pending={ctx.pending} />
+      <SaveBar
+        error={ctx.error}
+        pending={ctx.pending}
+        onSaveTemplate={
+          ctx.canSaveTemplate
+            ? () =>
+                ctx.saveAsTemplate({
+                  type: "transfer",
+                  description: ctx.common.description,
+                  debitAccountId: debitId,
+                  creditAccountId: creditId,
+                  partnerId: partner?.id ?? null,
+                  evidenceType: evidence,
+                  amount,
+                })
+            : undefined
+        }
+      />
     </form>
   );
 }

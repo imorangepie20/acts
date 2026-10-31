@@ -4,13 +4,15 @@ import { getVatAccountIds, listAccounts } from "@/server/accounts/service";
 import { requirePermission } from "@/server/auth/dal";
 import { db } from "@/server/db";
 import { getEntryOptions } from "@/server/sites/service";
+import { listTemplates } from "@/server/templates/service";
 
 export default async function Page() {
   await requirePermission("voucher:create");
-  const [accounts, vat, options] = await Promise.all([
+  const [accounts, vat, options, templates] = await Promise.all([
     listAccounts(db, { activeOnly: true }),
     getVatAccountIds(db),
     getEntryOptions(db),
+    listTemplates(db),
   ]);
   return (
     <div className="flex flex-col gap-4">
@@ -20,6 +22,7 @@ export default async function Page() {
         vat={vat}
         options={options}
         today={todayInSeoul()}
+        templates={templates}
       />
     </div>
   );

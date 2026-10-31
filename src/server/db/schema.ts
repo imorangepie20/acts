@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { VoucherSnapshot } from "@/lib/vouchers/types";
+import type { TemplateBody } from "@/lib/vouchers/templates";
 import {
   bigint,
   boolean,
@@ -300,4 +301,15 @@ export const fiscalYearCloses = pgTable("fiscal_year_closes", {
     totalEquity: number;
     netIncome: number;
   }>(),
+});
+
+/** A reusable entry pre-fill. Date, site and department are never stored; body is a TemplateBody. */
+export const voucherTemplates = pgTable("voucher_templates", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  name: text("name").notNull().unique(),
+  entryType: entryType("entry_type").notNull(),
+  body: jsonb("body").$type<TemplateBody>().notNull(),
+  createdBy: uuid("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

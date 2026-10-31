@@ -85,6 +85,13 @@
       "when": 1793326601521,
       "tag": "0011_magenta_swordsman",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793404594006,
+      "tag": "0012_simple_chameleon",
+      "breakpoints": true
     }
   ]
 }
