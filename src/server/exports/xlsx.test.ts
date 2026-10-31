@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
-import { renderXlsx, type SheetSpec } from "./xlsx";
+import { renderWorkbook, renderXlsx, type SheetSpec } from "./xlsx";
 
 const spec: SheetSpec = {
   fileName: "테스트",
@@ -58,5 +58,13 @@ describe("renderXlsx", () => {
   it("leaves null money cells empty", async () => {
     const ws = await read({ ...spec, rows: [{ name: "x", amount: null }] });
     expect(ws.getCell("B6").value).toBeNull();
+  });
+});
+
+describe("renderWorkbook", () => {
+  it("writes one sheet per spec named by its title", async () => {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load((await renderWorkbook([spec, { ...spec, title: "매출" }])) as unknown as ArrayBuffer);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(["합계잔액시산표", "매출"]);
   });
 });

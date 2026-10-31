@@ -16,9 +16,8 @@ export type SheetSpec = {
 
 export const MONEY_FORMAT = "#,##0;-#,##0";
 
-/** Renders one worksheet: title, meta lines, a blank row, a frozen bold header, then data rows. */
-export async function renderXlsx(spec: SheetSpec): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
+/** Renders one worksheet into `wb`: title, meta lines, a blank row, a frozen bold header, then data rows. */
+function addSheet(wb: ExcelJS.Workbook, spec: SheetSpec): void {
   const ws = wb.addWorksheet(spec.title.slice(0, 31));
   spec.columns.forEach((c, i) => {
     ws.getColumn(i + 1).width = c.width;
@@ -53,5 +52,14 @@ export async function renderXlsx(spec: SheetSpec): Promise<Buffer> {
   });
 
   ws.views = [{ state: "frozen", ySplit: headerRowNo }];
+}
+
+/** One sheet per spec, named by its title (max 31 characters). */
+export async function renderWorkbook(specs: SheetSpec[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  for (const spec of specs) addSheet(wb, spec);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+export const renderXlsx = (spec: SheetSpec): Promise<Buffer> => renderWorkbook([spec]);
+

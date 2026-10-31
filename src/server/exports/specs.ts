@@ -10,6 +10,8 @@ import { listPartnersByIds } from "@/server/partners/service";
 import { getAccountLedger, getJournal, getPartnerSummary, type LedgerRow } from "@/server/reports/ledgers";
 import { getBalanceSheet, getIncomeStatement, getTrialBalance } from "@/server/reports/service";
 import { listDepartments, listSites } from "@/server/sites/service";
+import type { Permission } from "@/lib/permissions";
+import { listCardPurchases, listTaxInvoices, type TaxInvoiceRow } from "./tax-lists";
 import type { SheetColumn, SheetSpec } from "./xlsx";
 
 export type ReportKey =
@@ -312,4 +314,82 @@ export async function buildSheetSpec(db: Db, report: ReportKey, sp: SearchParams
       };
     }
   }
+}
+
+export type TaxListKey = "tax-invoices" | "card-purchases";
+export const TAX_LIST_KEYS: readonly TaxListKey[] = ["tax-invoices", "card-purchases"];
+
+/** Permission an export key needs: tax lists are `export:tax`, the 1C reports `ledger:view`. */
+export function exportPermission(key: string): Permission {
+  return (TAX_LIST_KEYS as readonly string[]).includes(key) ? "export:tax" : "ledger:view";
+}
+
+const sumOf = (rows: { supplyAmount: number; vatAmount: number }[]) => ({
+  supplyAmount: rows.reduce((s, r) => s + r.supplyAmount, 0),
+  vatAmount: rows.reduce((s, r) => s + r.vatAmount, 0),
+});
+
+function taxInvoiceSheet(title: "매출" | "매입", rows: TaxInvoiceRow[], meta: string[], fileName: string): SheetSpec {
+  const mine = rows.filter((r) => r.direction === title);
+  const t = sumOf(mine);
+  return {
+    fileName,
+    title,
+    meta,
+    columns: [
+      { header: "일자", key: "date", width: 12 },
+      { header: "전표번호", key: "voucherNo", width: 14 },
+      { header: "구분", key: "evidence", width: 12 },
+      { header: "거래처", key: "partnerName", width: 26 },
+      { header: "사업자등록번호", key: "businessNumber", width: 16 },
+      { header: "공급가액", key: "supplyAmount", width: 14, money: true },
+      { header: "부가세", key: "vatAmount", width: 14, money: true },
+      { header: "합계", key: "total", width: 14, money: true },
+      { header: "승인번호", key: "approvalNo", width: 28 },
+      { header: "사업장", key: "siteName", width: 14 },
+    ],
+    rows: [
+      ...mine.map((r): Row => ({ ...r })),
+      { partnerName: "합계", ...t, total: t.supplyAmount + t.vatAmount },
+    ],
+    emphasis: [mine.length],
+  };
+}
+
+/** Worksheets of a tax list for the 세무사 (posted vouchers only); the file name is `specs[0].fileName`. */
+export async function buildTaxListSpecs(db: Db, key: TaxListKey, from: string, to: string): Promise<SheetSpec[]> {
+  const company = await getCompany(db);
+  const meta = [company.name, `기간: ${from} ~ ${to}`];
+  if (key === "tax-invoices") {
+    const rows = await listTaxInvoices(db, from, to);
+    const fileName = `세금계산서_${from}_${to}`;
+    return [taxInvoiceSheet("매출", rows, meta, fileName), taxInvoiceSheet("매입", rows, meta, fileName)];
+  }
+  const rows = await listCardPurchases(db, from, to);
+  const t = sumOf(rows);
+  return [
+    {
+      fileName: `카드·현금영수증 매입_${from}_${to}`,
+      title: "카드·현금영수증 매입",
+      meta,
+      columns: [
+        { header: "일자", key: "date", width: 12 },
+        { header: "전표번호", key: "voucherNo", width: 14 },
+        { header: "구분", key: "evidence", width: 12 },
+        { header: "가맹점", key: "merchantName", width: 26 },
+        { header: "사업자등록번호", key: "merchantBusinessNumber", width: 16 },
+        { header: "공급가액", key: "supplyAmount", width: 14, money: true },
+        { header: "부가세", key: "vatAmount", width: 14, money: true },
+        { header: "공제", key: "deductible", width: 10 },
+        { header: "카드번호", key: "cardNo", width: 22 },
+        { header: "적요", key: "description", width: 30 },
+        { header: "사업장", key: "siteName", width: 14 },
+      ],
+      rows: [
+        ...rows.map((r): Row => ({ ...r, deductible: r.deductible ? "공제" : "불공제" })),
+        { merchantName: "합계", ...t },
+      ],
+      emphasis: [rows.length],
+    },
+  ];
 }
