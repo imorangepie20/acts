@@ -1,5 +1,5 @@
 import { desc, lte } from "drizzle-orm";
-import type { Db } from "@/server/db/client";
+import type { Conn } from "@/server/vouchers/snapshot";
 import { payrollRateKind, payrollRates, withholdingTables } from "@/server/db/schema";
 import type { Rates, WithholdingTable } from "@/lib/payroll/types";
 import type { RateKind } from "./seed-data/rates";
@@ -18,7 +18,7 @@ const FIELD: Record<RateKind, keyof Rates> = {
 };
 
 /** Per kind, the row with the latest effective_from <= date (the 귀속월 1일). */
-export async function loadRates(db: Db, date: string): Promise<Rates> {
+export async function loadRates(db: Conn, date: string): Promise<Rates> {
   const rows = await db
     .selectDistinctOn([payrollRates.kind], { kind: payrollRates.kind, value: payrollRates.value })
     .from(payrollRates)
@@ -35,7 +35,7 @@ export async function loadRates(db: Db, date: string): Promise<Rates> {
 }
 
 /** The 간이세액표 in force on date (the run's 지급일). */
-export async function loadWithholdingTable(db: Db, date: string): Promise<WithholdingTable> {
+export async function loadWithholdingTable(db: Conn, date: string): Promise<WithholdingTable> {
   const [row] = await db
     .select({ data: withholdingTables.data })
     .from(withholdingTables)

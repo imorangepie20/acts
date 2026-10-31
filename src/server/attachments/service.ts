@@ -4,7 +4,7 @@ import { assertMonthsOpen, closedMonthMessage, isMonthClosed, monthOf } from "@/
 import type { Db } from "@/server/db/client";
 import { voucherAttachments, vouchers } from "@/server/db/schema";
 import { fail, ok, type Result } from "@/server/result";
-import { canModify, ERR_CONFLICT } from "@/server/vouchers/service";
+import { canModify, ERR_CONFLICT, ERR_PAYROLL_ONLY } from "@/server/vouchers/service";
 import { addHistory, loadSnapshot, type Conn } from "@/server/vouchers/snapshot";
 import { MAX_ATTACHMENT_BYTES, removeStored, resolveStored, sniffType, writeStored } from "./storage";
 import { isUuid } from "@/lib/uuid";
@@ -31,7 +31,7 @@ function displayName(name: string): string {
 
 /**
  * Checks the voucher exists and the actor may modify it, returning its date; `lock` takes the row
- * lock (FOR UPDATE).
+ * lock (FOR UPDATE). Payroll vouchers are refused: they change only through their run.
  */
 async function checkVoucher(
   conn: Conn,
@@ -40,11 +40,12 @@ async function checkVoucher(
   lock: boolean,
 ): Promise<Result<{ date: string }>> {
   const q = conn
-    .select({ createdBy: vouchers.createdBy, date: vouchers.date })
+    .select({ createdBy: vouchers.createdBy, date: vouchers.date, kind: vouchers.kind })
     .from(vouchers)
     .where(eq(vouchers.id, voucherId));
   const [v] = lock ? await q.for("update") : await q;
   if (!v) return fail(ERR_VOUCHER);
+  if (v.kind === "payroll") return fail(ERR_PAYROLL_ONLY);
   return canModify(actor, v) ? ok({ date: v.date }) : fail(ERR_FORBIDDEN);
 }
 

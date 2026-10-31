@@ -2,7 +2,7 @@ import { and, asc, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from 
 import { alias } from "drizzle-orm/pg-core";
 import type { ImportMeta } from "@/lib/imports/types";
 import { MAX_WON } from "@/lib/money";
-import { can } from "@/lib/permissions";
+import { can, type Role } from "@/lib/permissions";
 import { isUuid } from "@/lib/uuid";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import { buildSimpleVoucher, toSimpleInput, type VatAccounts } from "@/lib/vouchers/simple";
@@ -97,6 +97,7 @@ const ERR_FORBIDDEN = "이 전표를 수정할 권한이 없습니다.";
 const ERR_NOT_PENDING = "승인 대기 중인 전표가 아닙니다.";
 const ERR_REASON = "반려 사유를 입력하세요.";
 const ERR_NO_APPROVE = "승인 권한이 없습니다.";
+export const ERR_PAYROLL_ONLY = "급여 전표는 급여 대장에서 확정을 취소해야 고칠 수 있습니다.";
 
 export const PAGE_SIZE = 50;
 /** First key of the two-key advisory lock taken while numbering vouchers (second key: the date). */
@@ -104,6 +105,11 @@ const NUMBERING_LOCK = 0x76_6f_75_63; // "vouc"
 
 export function canModify(actor: SessionUser, v: { createdBy: string }): boolean {
   return can(actor.role, "voucher:create") && (v.createdBy === actor.id || can(actor.role, "voucher:approve"));
+}
+
+/** Approving or rejecting a payroll voucher needs `payroll:manage` on top of `voucher:approve`. */
+export function canDecidePayroll(role: Role): boolean {
+  return can(role, "voucher:approve") && can(role, "payroll:manage");
 }
 
 const MIN_YEAR = 2000;
@@ -451,6 +457,41 @@ export async function writeOpeningVoucher(
 }
 
 /**
+ * Writes the payroll voucher of a run being confirmed (`confirmRun`), with the same validation,
+ * numbering and `created` history as `createVoucher`; the status follows the approval setting.
+ * The caller holds the period lock shared (`assertMonthsOpen`) and the run row; this takes the
+ * company row FOR SHARE, then the numbering lock.
+ */
+export async function writePayrollVoucher(
+  tx: Tx,
+  actor: SessionUser,
+  vat: VatAccounts,
+  input: StoredVoucherInput & { kind: "payroll" },
+): Promise<Result<{ id: string }>> {
+  if (input.kind !== "payroll") return fail(ERR_INVALID);
+  const ctx: Context = { vat, approvalRequired: await readApproval(tx) };
+  const error = await validate(tx, ctx, input, NONE_ALLOWED);
+  if (error) return fail(error);
+  return ok({ id: await insertVoucher(tx, actor, input, statusFields(ctx, actor)) });
+}
+
+/**
+ * Deletes a payroll voucher for `cancelConfirm`: locks the row, writes the `deleted` history row
+ * and deletes. No version check: the run's version guards it. The caller holds the period lock
+ * shared and the run row. Attachments are refused on payroll vouchers, so there are no files.
+ */
+export async function deletePayrollVoucher(tx: Tx, actor: SessionUser, id: string): Promise<Result> {
+  if (!isUuid(id)) return fail(ERR_NOT_FOUND);
+  const [v] = await tx.select({ kind: vouchers.kind }).from(vouchers).where(eq(vouchers.id, id)).for("update");
+  if (!v) return fail(ERR_NOT_FOUND);
+  if (v.kind !== "payroll") return fail(ERR_INVALID);
+  const snapshot = (await loadSnapshot(tx, id))!;
+  await tx.delete(vouchers).where(eq(vouchers.id, id));
+  await addHistory(tx, id, "deleted", actor.id, snapshot);
+  return ok();
+}
+
+/**
  * Locks the stored voucher and checks existence, permission (default: may modify), version, and
  * that its date is still `expectedDate` (the pre-transaction read the closed-month check was made for).
  */
@@ -463,6 +504,8 @@ async function lockForWrite(
   permitted: (v: { createdBy: string; kind: VoucherKind }) => Result = (v) => {
     // The opening voucher is written only by saveOpening (its own rules and screen).
     if (v.kind === "opening") return fail(ERR_OPENING_ONLY);
+    // A payroll voucher changes only through its run (cancel the confirm, edit, confirm again).
+    if (v.kind === "payroll") return fail(ERR_PAYROLL_ONLY);
     return canModify(actor, v) ? ok() : fail(ERR_FORBIDDEN);
   },
 ): Promise<Result<{ date: string; status: VoucherStatus }>> {
@@ -668,7 +711,9 @@ async function decide(
   return db.transaction(async (tx) => {
     const closed = await assertMonthsOpen(tx, oldDate === null ? [] : [oldDate]);
     if (closed) return fail(closed);
-    const locked = await lockForWrite(tx, actor, id, version, oldDate, () => ok());
+    const locked = await lockForWrite(tx, actor, id, version, oldDate, (v) =>
+      v.kind === "payroll" && !canDecidePayroll(actor.role) ? fail(ERR_NO_APPROVE) : ok(),
+    );
     if (!locked.ok) return locked;
     if (locked.value.status !== "pending") return fail(ERR_NOT_PENDING);
     const updated = await tx

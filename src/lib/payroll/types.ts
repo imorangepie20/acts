@@ -90,3 +90,40 @@ export type LineResult = {
   totalDeductions: number;
   netPay: number;
 };
+
+/** The 상여 지급대상기간 basis a bonus line was computed with (소득세법 제136조, 시행령 제194조). */
+export type BonusBasis = {
+  from: string;
+  to: string;
+  months: number;
+  /** 과세 급여 of the confirmed 정기 runs whose 귀속월 is in the period. */
+  regularTaxable: number;
+  /** 소득세 withheld on those runs. */
+  withheld: number;
+};
+
+/**
+ * Employee facts and rates at compute time (`payroll_run_lines.snapshot`), so payslips stay stable
+ * after employee edits. Masked 주민등록번호 and account only; the plain values never go here.
+ */
+export type RunLineSnapshot = {
+  employeeNo: string;
+  name: string;
+  rrnMasked: string;
+  hiredOn: string;
+  leftOn: string | null;
+  isExecutive: boolean;
+  siteId: number;
+  siteName: string;
+  departmentId: number | null;
+  departmentName: string | null;
+  bank: string | null;
+  accountMasked: string | null;
+  calc: EmployeeCalcInput;
+  /** Rates of the 귀속월 1일. */
+  rates: Rates;
+  /** The deductions before overrides (the 계산값 shown next to an overridden cell). */
+  calculated: Record<DeductionKey, number>;
+  /** Bonus runs only. */
+  bonus: BonusBasis | null;
+};

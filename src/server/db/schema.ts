@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import type { VoucherSnapshot } from "@/lib/vouchers/types";
 import type { ImportMeta } from "@/lib/imports/types";
 import type { TemplateBody } from "@/lib/vouchers/templates";
-import type { LineResult, WithholdingTable } from "@/lib/payroll/types";
+import type { DeductionKey, LineResult, RunLineSnapshot, WithholdingTable } from "@/lib/payroll/types";
 import {
   bigint,
   boolean,
@@ -499,12 +499,11 @@ export const payrollRunLines = pgTable(
       .notNull()
       .references(() => employees.id),
     amounts: jsonb("amounts").$type<Record<string, number>>().notNull().default({}),
-    /** Partial<Record<DeductionKey, number>> */
-    overrides: jsonb("overrides").$type<Record<string, number>>().notNull().default({}),
+    overrides: jsonb("overrides").$type<Partial<Record<DeductionKey, number>>>().notNull().default({}),
     /** LineResult: the last computed values with overrides applied. */
     result: jsonb("result").$type<LineResult>().notNull().default({} as LineResult),
     /** Employee facts at compute time, so payslips stay stable after edits. */
-    snapshot: jsonb("snapshot").$type<Record<string, unknown>>().notNull().default({}),
+    snapshot: jsonb("snapshot").$type<RunLineSnapshot>().notNull().default({} as RunLineSnapshot),
   },
   (t) => [primaryKey({ columns: [t.runId, t.employeeId] })],
 );

@@ -11,14 +11,19 @@ import { getIncomeStatement } from "@/server/reports/service";
 import { accounts, departments, partners, sites, users, voucherImports, voucherLines, vouchers } from "@/server/db/schema";
 import { createPartner } from "@/server/partners/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
+import { assertMonthsOpen } from "@/server/closing/periods";
 import {
+  canDecidePayroll,
   canModify,
   createVoucher,
+  deletePayrollVoucher,
   deleteVoucher,
+  ERR_PAYROLL_ONLY,
   getVoucher,
   listHistory,
   listVouchers,
   updateVoucher,
+  writePayrollVoucher,
 } from "./service";
 
 const db = getTestDb();
@@ -570,5 +575,63 @@ describe("결산 (closing) vouchers", () => {
     const back = await updateVoucher(db, staff, id, v2!.version, general());
     expect(back.ok).toBe(true);
     expect((await getVoucher(db, id))!.kind).toBe("general");
+  });
+});
+
+describe("payroll vouchers", () => {
+  const payroll = (over: Partial<VoucherInput> = {}) => ({
+    ...general({ description: "2026년 9월 급여", ...over }),
+    kind: "payroll" as const,
+    lines: [line("802", "debit", 3_000_000), line("103", "credit", 3_000_000)],
+  });
+
+  async function writePayroll(actor = manager) {
+    const vat = await getVatAccountIds(db);
+    const r = await db.transaction(async (tx) => {
+      const closed = await assertMonthsOpen(tx, ["2026-09-25"]);
+      if (closed) throw new Error(closed);
+      return writePayrollVoucher(tx, actor, vat, { ...payroll(), date: "2026-09-25" });
+    });
+    if (!r.ok) throw new Error(r.error);
+    return r.value.id;
+  }
+
+  it("writePayrollVoucher numbers and validates like createVoucher and follows the approval setting", async () => {
+    await create(general({ date: "2026-09-25" }));
+    const id = await writePayroll();
+    const v = (await getVoucher(db, id))!;
+    expect(v).toMatchObject({ kind: "payroll", no: 2, status: "approved", entryType: "general" });
+    expect((await listHistory(db, id)).map((h) => h.action)).toEqual(["created"]);
+
+    await setApproval(true);
+    expect((await getVoucher(db, await writePayroll()))!.status).toBe("pending");
+
+    const vat = await getVatAccountIds(db);
+    const bad = await db.transaction((tx) =>
+      writePayrollVoucher(tx, manager, vat, {
+        ...payroll(),
+        lines: [line("802", "debit", 3_000_000), line("103", "credit", 2_000_000)],
+      }),
+    );
+    expect(bad).toEqual({ ok: false, error: "차변 합계와 대변 합계가 일치하지 않습니다." });
+  });
+
+  it("refuses update, delete, attach from the voucher screens and decide without payroll:manage", async () => {
+    const id = await writePayroll();
+    const v = (await getVoucher(db, id))!;
+    expect(await updateVoucher(db, manager, id, v.version, general())).toEqual({ ok: false, error: ERR_PAYROLL_ONLY });
+    expect(await deleteVoucher(db, manager, id, v.version)).toEqual({ ok: false, error: ERR_PAYROLL_ONLY });
+    expect(canDecidePayroll("manager")).toBe(true);
+    expect(canDecidePayroll("staff")).toBe(false);
+  });
+
+  it("deletePayrollVoucher writes the deleted history row and ignores the version", async () => {
+    const id = await writePayroll();
+    const r = await db.transaction((tx) => deletePayrollVoucher(tx, manager, id));
+    expect(r.ok).toBe(true);
+    expect(await getVoucher(db, id)).toBeNull();
+    expect((await listHistory(db, id)).map((h) => h.action)).toEqual(["created", "deleted"]);
+    const general1 = await create(general());
+    expect((await db.transaction((tx) => deletePayrollVoucher(tx, manager, general1))).ok).toBe(false);
   });
 });
