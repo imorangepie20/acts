@@ -600,6 +600,46 @@ describe("confirm refuses figures that moved since the last edit", () => {
     expect((await recomputeRun(db, admin, bonus, (await detail(bonus)).version)).ok).toBe(true);
     expect((await confirm(bonus)).status).toBe("confirmed");
   });
+
+  it("refuses to cancel a 정기 run inside a confirmed 상여's period until the 상여 is cancelled", async () => {
+    const e = await emp();
+    const feb = await run(regular("2026-02", "2026-02-25"));
+    const confirmedFeb = await confirm(feb);
+    const bonus = await run({ type: "bonus", yearMonth: "2026-04", payDate: "2026-04-10", bonusFrom: "2026-01", bonusTo: "2026-04" });
+    await updateRunLines(db, admin, bonus, (await detail(bonus)).version, [{ employeeId: e, amounts: { bonus: 6_000_000 } }]);
+    const confirmedBonus = await confirm(bonus);
+
+    expect(await cancelConfirm(db, admin, feb, confirmedFeb.version)).toEqual({
+      ok: false,
+      error: "지급일 2026-04-10 상여 대장이 이 대장을 기준으로 확정됐습니다. 상여 대장의 확정을 먼저 취소하세요.",
+    });
+    expect(await detail(feb)).toMatchObject({ status: "confirmed", voucherId: confirmedFeb.voucherId });
+
+    expect((await cancelConfirm(db, admin, bonus, confirmedBonus.version)).ok).toBe(true);
+    expect((await cancelConfirm(db, admin, feb, confirmedFeb.version)).ok).toBe(true);
+  });
+
+  it("refuses to cancel an earlier 상여 that set a later confirmed 상여's period start", async () => {
+    const e = await emp();
+    const first = await run({ type: "bonus", yearMonth: "2026-02", payDate: "2026-02-10" });
+    await updateRunLines(db, admin, first, (await detail(first)).version, [{ employeeId: e, amounts: { bonus: 1_000_000 } }]);
+    const confirmedFirst = await confirm(first);
+    const second = await run({ type: "bonus", yearMonth: "2026-06", payDate: "2026-06-10" });
+    await updateRunLines(db, admin, second, (await detail(second)).version, [{ employeeId: e, amounts: { bonus: 1_000_000 } }]);
+    await confirm(second);
+
+    expect((await cancelConfirm(db, admin, first, confirmedFirst.version)).error).toContain("지급일 2026-06-10 상여 대장");
+  });
+
+  it("cancels a 정기 run outside every confirmed 상여's period", async () => {
+    const e = await emp();
+    const bonus = await run({ type: "bonus", yearMonth: "2026-04", payDate: "2026-04-10", bonusFrom: "2026-01", bonusTo: "2026-04" });
+    await updateRunLines(db, admin, bonus, (await detail(bonus)).version, [{ employeeId: e, amounts: { bonus: 6_000_000 } }]);
+    await confirm(bonus);
+    const june = await run(regular("2026-06", "2026-06-25"));
+    const confirmedJune = await confirm(june);
+    expect((await cancelConfirm(db, admin, june, confirmedJune.version)).ok).toBe(true);
+  });
 });
 
 describe("prefill and the 상여 period edge cases", () => {

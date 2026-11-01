@@ -135,6 +135,8 @@ const errDuplicate = (yearMonth: string) => {
 const errAccount = (label: string) => `급여 설정의 ${label} 계정을 사용할 수 없습니다. 급여 설정에서 계정을 다시 고르세요.`;
 const errPartner = (code: string, name: string) =>
   `${code} ${name} 계정은 거래처가 필요합니다. 급여 설정에서 기관 거래처를 지정하세요.`;
+const errBonusDepends = (payDate: string) =>
+  `지급일 ${payDate} 상여 대장이 이 대장을 기준으로 확정됐습니다. 상여 대장의 확정을 먼저 취소하세요.`;
 const errNegativeNet = (name: string) => `${name}의 실지급액이 0원보다 적습니다. 공제액을 확인하세요.`;
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -246,8 +248,11 @@ const ymOf = (i: number) => `${Math.floor(i / 12)}-${pad((i % 12) + 1)}`;
  *   computed); one in the pay month itself leaves a one-month period.
  * Then the employee's confirmed 정기 runs whose 귀속월 is in the period give the 과세 급여 and the
  * 소득세 already withheld.
+ * `excludeRunId` leaves one confirmed run out, as if it were a draft (the 확정 취소 check).
+ * Both reads take FOR SHARE on the runs they count, so a concurrent 확정 취소 of one of them waits
+ * for this transaction, and this read waits for a 확정 취소 already in progress.
  */
-async function bonusBases(conn: Conn, run: RunHead, ids: number[]): Promise<Map<number, BonusBasis>> {
+async function bonusBases(conn: Conn, run: RunHead, ids: number[], excludeRunId?: string): Promise<Map<number, BonusBasis>> {
   const out = new Map<number, BonusBasis>();
   if (run.type !== "bonus" || ids.length === 0) return out;
   const periods = new Map<number, { from: string; to: string; months: number }>();
@@ -265,11 +270,13 @@ async function bonusBases(conn: Conn, run: RunHead, ids: number[]): Promise<Map<
           eq(payrollRuns.type, "bonus"),
           eq(payrollRuns.status, "confirmed"),
           ne(payrollRuns.id, run.id),
+          excludeRunId === undefined ? undefined : ne(payrollRuns.id, excludeRunId),
           gte(payrollRuns.payDate, `${run.payDate.slice(0, 4)}-01-01`),
           lte(payrollRuns.payDate, run.payDate),
           inArray(payrollRunLines.employeeId, ids),
         ),
-      );
+      )
+      .for("share", { of: payrollRuns });
     const lastPaid = new Map<number, string>();
     for (const r of earlier) {
       if ((r.result.gross ?? 0) <= 0) continue; // a zero line paid no 상여
@@ -300,9 +307,11 @@ async function bonusBases(conn: Conn, run: RunHead, ids: number[]): Promise<Map<
         eq(payrollRuns.status, "confirmed"),
         gte(payrollRuns.yearMonth, minFrom),
         lte(payrollRuns.yearMonth, maxTo),
+        excludeRunId === undefined ? undefined : ne(payrollRuns.id, excludeRunId),
         inArray(payrollRunLines.employeeId, ids),
       ),
-    );
+    )
+    .for("share", { of: payrollRuns });
   for (const id of ids) {
     const p = periods.get(id)!;
     let regularTaxable = 0;
@@ -921,10 +930,57 @@ export async function confirmRun(db: Db, actor: SessionUser, runId: string, vers
   });
 }
 
+const sameBasis = (a: BonusBasis | null | undefined, b: BonusBasis | undefined) =>
+  a?.from === b?.from &&
+  a?.to === b?.to &&
+  a?.months === b?.months &&
+  a?.regularTaxable === b?.regularTaxable &&
+  a?.withheld === b?.withheld;
+
+/**
+ * The pay date of a confirmed 상여 run whose stored 상여 basis would change if `run` went back to
+ * draft (it counted `run`'s 정기 급여, or `run` is an earlier 상여 that set its period start), or null.
+ */
+async function dependentBonus(tx: Tx, run: StoredRun): Promise<string | null> {
+  const ids = (await storedLines(tx, run.id)).map((l) => l.employeeId);
+  if (ids.length === 0) return null;
+  const candidates = await tx
+    .selectDistinct({
+      id: payrollRuns.id,
+      type: payrollRuns.type,
+      yearMonth: payrollRuns.yearMonth,
+      payDate: payrollRuns.payDate,
+      bonusFrom: payrollRuns.bonusFrom,
+      bonusTo: payrollRuns.bonusTo,
+    })
+    .from(payrollRuns)
+    .innerJoin(payrollRunLines, eq(payrollRunLines.runId, payrollRuns.id))
+    .where(
+      and(
+        eq(payrollRuns.type, "bonus"),
+        eq(payrollRuns.status, "confirmed"),
+        ne(payrollRuns.id, run.id),
+        inArray(payrollRunLines.employeeId, ids),
+      ),
+    )
+    .orderBy(payrollRuns.payDate);
+  for (const b of candidates) {
+    const lines = await storedLines(tx, b.id);
+    const bases = await bonusBases(
+      tx,
+      b,
+      lines.map((l) => l.employeeId),
+      run.id,
+    );
+    if (lines.some((l) => !sameBasis(l.snapshot.bonus, bases.get(l.employeeId)))) return b.payDate;
+  }
+  return null;
+}
+
 /**
  * Cancels a confirmed run: deletes its payroll voucher (same rules as a voucher delete: refused in
  * a closed month) and returns the run to draft, in one transaction. A run whose voucher is already
- * gone just goes back to draft.
+ * gone just goes back to draft. Refused while a confirmed 상여 run's basis depends on this run.
  * Lock order: period lock shared → the run row → the voucher row.
  */
 export async function cancelConfirm(db: Db, actor: SessionUser, runId: string, version: number): Promise<Result> {
@@ -942,6 +998,8 @@ export async function cancelConfirm(db: Db, actor: SessionUser, runId: string, v
     const locked = await lockRun(tx, runId, version);
     if (!locked.ok) return locked;
     if (locked.value.status !== "confirmed") return fail(ERR_NOT_CONFIRMED);
+    const dependent = await dependentBonus(tx, locked.value);
+    if (dependent) return fail(errBonusDepends(dependent));
     const voucherId = locked.value.voucherId;
     if (voucherId !== pre.voucherId) return fail(ERR_CONFLICT);
     if (voucherId !== null) {
