@@ -88,7 +88,7 @@ describe("buildVatSheets", () => {
     const [, sales, purchases] = sheets;
     const text = (rows: typeof purchases.rows) => rows.map((r) => Object.values(r).join(" "));
     const notice = purchasesWithoutBusinessNumberNotice(1);
-    expect(notice).toBe("사업자등록번호가 없는 매입 세금계산서 1건 — 거래처 정보를 확인하세요");
+    expect(notice).toBe("사업자등록번호가 없거나 올바르지 않은 매입 세금계산서 1건 — 거래처 정보를 확인하세요");
     expect(text(purchases.rows)).toContainEqual(expect.stringContaining(notice));
     expect(text(purchases.rows)).toContainEqual(expect.stringMatching(/20030115-0002.*2003-01-15.*무번호/));
     expect(purchases.emphasis).toContain(purchases.rows.findIndex((r) => r.label === notice));

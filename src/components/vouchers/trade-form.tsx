@@ -209,6 +209,7 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
             onChange={(e) => {
               const ev = e.target.value as EvidenceType;
               setEvidence(ev);
+              if (ev === "invoice") setDeductibleOn(false);
               setAmounts((a) => fromTotal(a.total, vatApplies(ev, vatType)));
             }}
           >
