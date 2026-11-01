@@ -100,15 +100,16 @@ const partnerRow = (label: string, t: PartnerTally): Row => ({
 });
 
 function invoiceSheet(title: string, side: "매출처" | "매입처", s: InvoiceSummary, fileName: string, meta: string[]): SheetSpec {
+  const issued = side === "매입처" ? "발급받은 분" : "발급분";
   const rows: Row[] = [
     partnerRow("합계", s.total),
-    partnerRow("전자 발급분 사업자등록번호 발급분", s.electronic.bn),
-    partnerRow("전자 발급분 주민등록번호 발급분", s.electronic.rrn),
-    partnerRow("전자 발급분 소계", s.electronic.subtotal),
-    partnerRow("전자 외 발급분 사업자등록번호 발급분", s.other.bn),
-    partnerRow("전자 외 발급분 주민등록번호 발급분", s.other.rrn),
-    partnerRow("전자 외 발급분 소계", s.other.subtotal),
-    { label: `전자 외 발급분 ${side}별 명세 (사업자등록번호 발급분)` },
+    partnerRow(`전자 ${issued} 사업자등록번호 ${issued}`, s.electronic.bn),
+    partnerRow(`전자 ${issued} 주민등록번호 ${issued}`, s.electronic.rrn),
+    partnerRow(`전자 ${issued} 소계`, s.electronic.subtotal),
+    partnerRow(`전자 외 ${issued} 사업자등록번호 ${issued}`, s.other.bn),
+    partnerRow(`전자 외 ${issued} 주민등록번호 ${issued}`, s.other.rrn),
+    partnerRow(`전자 외 ${issued} 소계`, s.other.subtotal),
+    { label: `전자 외 ${issued} ${side}별 명세 (사업자등록번호 ${issued})` },
     ...s.otherByPartner.map(
       (p, i): Row => ({
         label: String(i + 1),

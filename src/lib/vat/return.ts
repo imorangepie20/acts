@@ -32,6 +32,9 @@ const taxOnly = (tax: number): Amounts => ({ amount: 0, tax });
 
 const isCardLike = (e: VatEntry) => e.evidenceType === "card" || e.evidenceType === "cash_receipt";
 
+/** Card / 현금영수증 purchase that counts for (44)/(45) and the 수령명세서: deductible and taxable. */
+const isDeductibleCardPurchase = (e: VatEntry) => isCardLike(e) && e.vatDeductible === true && e.vatType === "taxable";
+
 /** (1)/(3)/(4)/(5)/(6) for a taxable or zero-rated sale; null for an exempt one. */
 function saleRow(e: VatEntry): 1 | 3 | 4 | 5 | 6 | null {
   if (e.vatType === "taxable") return e.evidenceType === "tax_invoice" ? 1 : isCardLike(e) ? 3 : 4;
@@ -89,7 +92,7 @@ function invoiceSummary(entries: VatEntry[]): InvoiceSummary {
 
 /** 신용카드매출전표등 수령명세서(갑): deductible `card` / `cash_receipt` purchases. */
 function cardStatement(purchases: VatEntry[]): CardStatement {
-  const list = purchases.filter((e) => isCardLike(e) && e.vatDeductible === true);
+  const list = purchases.filter(isDeductibleCardPurchase);
   const other = list.filter((e) => e.evidenceType === "card" && e.unregisteredCard);
 
   const detail = new Map<string, CardStatement["otherDetail"][number]>();
@@ -131,7 +134,7 @@ export function buildVatReturn(entries: VatEntry[], s: VatSelection): VatReturn 
     if (e.evidenceType === "tax_invoice") {
       add(at(e.fixedAsset ? 12 : 10), e);
       if (e.vatDeductible === false) add(at(53), e);
-    } else if (isCardLike(e) && e.vatDeductible === true) {
+    } else if (isDeductibleCardPurchase(e)) {
       add(at(e.fixedAsset ? 45 : 44), e);
     } else if (e.evidenceType === "invoice") {
       add(at(90), e);

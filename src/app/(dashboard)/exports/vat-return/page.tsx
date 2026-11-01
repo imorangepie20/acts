@@ -61,6 +61,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
               {company.name}
               {company.businessNumber ? ` · ${formatBusinessNumber(company.businessNumber)}` : ""} · {view.period.from} ~ {view.period.to}
             </p>
+            <p className="hidden text-center text-neutral-600 print:block">{VAT_SOURCE_NOTICE}</p>
           </header>
           <VatReturnForm title="제1쪽 ① 신고내용 · 과세표준명세" groups={PAGE1_GROUPS} result={result} />
           <VatReturnForm title="제4쪽 명세" groups={PAGE4_GROUPS} result={result} />

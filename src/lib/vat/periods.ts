@@ -68,7 +68,8 @@ export function parseVatParams(
   const rawKind = one(sp.kind);
   const rawPrelim = one(sp.prelim);
 
-  const year = rawYear !== undefined && /^\d{4}$/.test(rawYear) ? Number(rawYear) : d.year;
+  const parsedYear = rawYear !== undefined && /^\d{4}$/.test(rawYear) ? Number(rawYear) : NaN;
+  const year = parsedYear >= 2000 && parsedYear <= 2100 ? parsedYear : d.year;
   const term: 1 | 2 = rawTerm === "1" ? 1 : rawTerm === "2" ? 2 : d.term;
   const kind: VatKind = rawKind === "prelim" || rawKind === "final" ? rawKind : d.kind;
   const prelimFiled = rawPrelim === "1" ? true : rawPrelim === "0" ? false : ctx.businessType === "corporation";

@@ -50,9 +50,9 @@ test("부가세 신고 자료: 종이 세금계산서 매입이 매입처별 명
 
   await page.goto("/exports/vat-return?year=2003&term=1&kind=prelim");
   await expect(page.getByRole("heading", { name: "부가세 신고 자료" })).toBeVisible();
-  await expect(page.getByText(VAT_SOURCE_NOTICE)).toBeVisible();
+  await expect(page.getByText(VAT_SOURCE_NOTICE).first()).toBeVisible();
 
-  const detail = page.getByRole("table", { name: "매입처별 전자 외 발급분 명세" });
+  const detail = page.getByRole("table", { name: "매입처별 전자 외 발급받은 분 명세" });
   await expect(detail.getByRole("row", { name: new RegExp(formatBusinessNumber(bn)) })).toContainText(partner);
 
   const amount10 = page.locator('tr[data-row="10"] td[data-col="amount"]');

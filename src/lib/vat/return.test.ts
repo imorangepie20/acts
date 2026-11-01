@@ -82,6 +82,22 @@ describe("buildVatReturn", () => {
     expect(r.payable).toBe(-250_000);
   });
 
+  it("exempt / zero-rated card purchases never reach (44)/(45)/(15) or the card statement", () => {
+    const r = buildVatReturn(
+      [
+        purchase({ evidenceType: "card", vatType: "exempt", supplyAmount: 7_000, vatAmount: 0 }),
+        purchase({ evidenceType: "cash_receipt", vatType: "zero_rated", supplyAmount: 8_000, vatAmount: 0 }),
+        purchase({ evidenceType: "card", supplyAmount: 30_000, vatAmount: 3_000 }),
+      ],
+      sel(),
+    );
+    expect(r.rows.get(44)).toEqual(amt(30_000, 3_000));
+    expect(r.rows.get(45)).toEqual(amt(0, 0));
+    expect(r.rows.get(52)).toEqual(amt(30_000, 3_000));
+    expect(r.rows.get(15)).toEqual(amt(30_000, 3_000));
+    expect(r.card.total).toEqual({ count: 1, supplyAmount: 30_000, vatAmount: 3_000 });
+  });
+
   it("puts deductible card/현금영수증 into (44)/(45) and skips non-deductible", () => {
     const r = buildVatReturn(
       [

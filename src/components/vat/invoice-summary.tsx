@@ -6,6 +6,7 @@ import { cell, num } from "./vat-return-form";
 
 /** 매출처별 / 매입처별 세금계산서합계표(갑): 총합계 and the 전자 외 발급분 처별 명세. */
 export function InvoiceSummary({ side, summary: s }: { side: "매출처" | "매입처"; summary: Summary }) {
+  const issued = side === "매입처" ? "발급받은 분" : "발급분";
   const tally = (label: string, t: PartnerTally, sub?: boolean) => (
     <tr key={label} className={sub ? "font-semibold" : undefined}>
       <td className={cell}>{label}</td>
@@ -21,8 +22,8 @@ export function InvoiceSummary({ side, summary: s }: { side: "매출처" | "매�
         {label}
       </th>
     </tr>,
-    tally(`${label} 사업자등록번호 발급분`, g.bn),
-    tally(`${label} 주민등록번호 발급분`, g.rrn),
+    tally(`${label} 사업자등록번호 ${issued}`, g.bn),
+    tally(`${label} 주민등록번호 ${issued}`, g.rrn),
     tally(`${label} 소계`, g.subtotal, true),
   ];
   return (
@@ -40,12 +41,12 @@ export function InvoiceSummary({ side, summary: s }: { side: "매출처" | "매�
         </thead>
         <tbody>
           {tally("합계", s.total, true)}
-          {group("전자 발급분", s.electronic)}
-          {group("전자 외 발급분", s.other)}
+          {group(`전자 ${issued}`, s.electronic)}
+          {group(`전자 외 ${issued}`, s.other)}
         </tbody>
       </table>
-      <p className="font-medium">전자 외 발급분 {side}별 명세 (사업자등록번호 발급분)</p>
-      <table className="w-full border-collapse" aria-label={`${side}별 전자 외 발급분 명세`}>
+      <p className="font-medium">전자 외 {issued} {side}별 명세 (사업자등록번호 {issued})</p>
+      <table className="w-full border-collapse" aria-label={`${side}별 전자 외 ${issued} 명세`}>
         <thead>
           <tr className="bg-neutral-100">
             <th className={cell}>번호</th>

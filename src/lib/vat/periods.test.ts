@@ -43,6 +43,11 @@ describe("parseVatParams", () => {
     expect(s).toMatchObject({ year: 2026, term: 1, kind: "final", prelimFiled: false, efile: true, notice: 0, prelimRefund: 0 });
     expect(s.errors).toEqual({});
   });
+  it("year outside 2000-2100 falls back to the default year", () => {
+    expect(parseVatParams({ year: "0000" }, ind).year).toBe(2026);
+    expect(parseVatParams({ year: "2101" }, ind).year).toBe(2026);
+    expect(parseVatParams({ year: "2100" }, ind).year).toBe(2100);
+  });
   it("corporation defaults to prelimFiled", () => {
     expect(parseVatParams({}, corp).prelimFiled).toBe(true);
   });
