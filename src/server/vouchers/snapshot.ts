@@ -19,6 +19,8 @@ export const header = <H extends StoredVoucherHeader>(input: H): StoredVoucherHe
   vatDeductible: input.vatDeductible,
   supplyAmount: input.supplyAmount,
   vatAmount: input.vatAmount,
+  paperTaxInvoice: input.paperTaxInvoice ?? false,
+  unregisteredCard: input.unregisteredCard ?? false,
 });
 
 export const lineColumns = {

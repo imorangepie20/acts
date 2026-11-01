@@ -219,6 +219,10 @@ export const vouchers = pgTable(
     vatDeductible: boolean("vat_deductible"),
     supplyAmount: bigint("supply_amount", { mode: "number" }),
     vatAmount: bigint("vat_amount", { mode: "number" }),
+    /** 종이(전자 외) 세금계산서; the VAT return counts these apart from 전자세금계산서. */
+    paperTaxInvoice: boolean("paper_tax_invoice").notNull().default(false),
+    /** A card not registered with 홈택스 (그 밖의 신용카드 등 on the VAT return). */
+    unregisteredCard: boolean("unregistered_card").notNull().default(false),
     status: voucherStatus("status").notNull(),
     rejectReason: text("reject_reason"),
     version: integer("version").notNull().default(1),
@@ -239,6 +243,14 @@ export const vouchers = pgTable(
     index("vouchers_status_date_idx").on(t.status, t.date),
     // At most one 기초 (opening) voucher: the pre-adoption balances as of the cut-off.
     uniqueIndex("vouchers_single_opening_uq").on(t.kind).where(sql`${t.kind} = 'opening'`),
+    check(
+      "vouchers_paper_tax_invoice_evidence",
+      sql`not ${t.paperTaxInvoice} or (${t.evidenceType} = 'tax_invoice' and ${t.entryType} in ('purchase','sale'))`,
+    ),
+    check(
+      "vouchers_unregistered_card_evidence",
+      sql`not ${t.unregisteredCard} or (${t.evidenceType} = 'card' and ${t.entryType} = 'purchase')`,
+    ),
   ],
 );
 

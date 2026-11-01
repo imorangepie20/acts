@@ -247,7 +247,9 @@ async function validate(
       input.vatType !== null ||
       input.vatDeductible !== null ||
       input.supplyAmount !== null ||
-      input.vatAmount !== null
+      input.vatAmount !== null ||
+      input.paperTaxInvoice === true ||
+      input.unregisteredCard === true
     ) {
       return ERR_INVALID;
     }
@@ -276,9 +278,12 @@ function sameVoucher(a: VoucherInput, b: VoucherInput): boolean {
     "supplyAmount",
     "vatAmount",
   ] as const;
+  // Optional flags: absent and false are the same.
+  const flagKeys = ["paperTaxInvoice", "unregisteredCard"] as const;
   const lineKeys = ["accountId", "side", "amount", "partnerId", "siteId", "departmentId", "description"] as const;
   return (
     headerKeys.every((k) => a[k] === b[k]) &&
+    flagKeys.every((k) => (a[k] ?? false) === (b[k] ?? false)) &&
     a.lines.length === b.lines.length &&
     a.lines.every((x, i) => lineKeys.every((k) => x[k] === b.lines[i][k]))
   );

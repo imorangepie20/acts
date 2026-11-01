@@ -69,6 +69,10 @@ export type VoucherHeaderInput = {
   vatDeductible: boolean | null;
   supplyAmount: number | null;
   vatAmount: number | null;
+  /** 종이(전자 외) 세금계산서: only on a purchase or sale with `tax_invoice` evidence. Absent = false. */
+  paperTaxInvoice?: boolean;
+  /** 홈택스에 등록하지 않은 카드: only on a purchase with `card` evidence. Absent = false. */
+  unregisteredCard?: boolean;
 };
 
 export type VoucherInput = VoucherHeaderInput & { lines: LineInput[] };

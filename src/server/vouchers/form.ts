@@ -37,6 +37,8 @@ export const voucherInputSchema = z.object({
   vatDeductible: z.boolean().nullable(),
   supplyAmount: headerAmount.nullable(),
   vatAmount: headerAmount.nullable(),
+  paperTaxInvoice: z.boolean().optional(),
+  unregisteredCard: z.boolean().optional(),
   lines: z.array(lineSchema).max(500),
 }) satisfies z.ZodType<VoucherInput>;
 
@@ -51,6 +53,8 @@ const tradeSchema = z.object({
   vatDeductible: z.boolean(),
   supplyAmount: amount,
   vatAmount: amount,
+  paperTaxInvoice: z.boolean().optional(),
+  unregisteredCard: z.boolean().optional(),
 });
 const transferSchema = z.object({
   type: z.literal("transfer"),

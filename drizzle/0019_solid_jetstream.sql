@@ -1,0 +1,4 @@
+ALTER TABLE "vouchers" ADD COLUMN "paper_tax_invoice" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "vouchers" ADD COLUMN "unregistered_card" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "vouchers" ADD CONSTRAINT "vouchers_paper_tax_invoice_evidence" CHECK (not "vouchers"."paper_tax_invoice" or ("vouchers"."evidence_type" = 'tax_invoice' and "vouchers"."entry_type" in ('purchase','sale')));--> statement-breakpoint
+ALTER TABLE "vouchers" ADD CONSTRAINT "vouchers_unregistered_card_evidence" CHECK (not "vouchers"."unregistered_card" or ("vouchers"."evidence_type" = 'card' and "vouchers"."entry_type" = 'purchase'));

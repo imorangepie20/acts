@@ -19,6 +19,10 @@ export type TradeInput = {
   /** Negative (with vatAmount 0 or negative too) for a 수정·취소분: the lines swap sides. */
   supplyAmount: number;
   vatAmount: number;
+  /** 종이(전자 외) 세금계산서; `tax_invoice` evidence only. Absent = false. */
+  paperTaxInvoice?: boolean;
+  /** 홈택스 미등록 카드; a purchase with `card` evidence only. Absent = false. */
+  unregisteredCard?: boolean;
 };
 
 export type TransferInput = {
@@ -49,12 +53,18 @@ export function defaultVat(supplyAmount: number): number {
 }
 
 export const ERR_SIGN = "공급가액과 부가세의 부호가 같아야 합니다.";
+export const ERR_PAPER = "종이 세금계산서는 세금계산서 증빙에만 표시할 수 있습니다.";
+export const ERR_UNREGISTERED_CARD = "홈택스 미등록 카드는 신용카드 매입에만 표시할 수 있습니다.";
 
 /** Size rules apply to the magnitudes; a 수정·취소분 has a negative supply and a VAT of 0 or less. */
 function validateTrade(input: TradeInput): string | null {
   if (!Number.isInteger(input.supplyAmount)) return "금액을 입력하세요.";
   if (!Number.isInteger(input.vatAmount)) return "부가세가 올바르지 않습니다.";
   if (input.supplyAmount < 0 ? input.vatAmount > 0 : input.vatAmount < 0) return ERR_SIGN;
+  if (input.paperTaxInvoice && input.evidenceType !== "tax_invoice") return ERR_PAPER;
+  if (input.unregisteredCard && (input.type !== "purchase" || input.evidenceType !== "card")) {
+    return ERR_UNREGISTERED_CARD;
+  }
   const i = { ...input, supplyAmount: Math.abs(input.supplyAmount), vatAmount: Math.abs(input.vatAmount) };
   if (i.supplyAmount < 1 || i.supplyAmount > MAX_WON) return "금액을 입력하세요.";
   if (i.evidenceType === "invoice" && i.vatType !== "exempt") {
@@ -116,6 +126,8 @@ function emitSimple(input: SimpleInput, vat: VatAccounts): VoucherInput {
       vatDeductible: null,
       supplyAmount: null,
       vatAmount: null,
+      paperTaxInvoice: false,
+      unregisteredCard: false,
       lines: [
         line(input.debitAccountId, "debit", input.amount),
         line(input.creditAccountId, "credit", input.amount),
@@ -154,6 +166,8 @@ function emitSimple(input: SimpleInput, vat: VatAccounts): VoucherInput {
     vatDeductible: input.type === "purchase" ? input.vatDeductible : null,
     supplyAmount: input.supplyAmount,
     vatAmount: input.vatAmount,
+    paperTaxInvoice: input.paperTaxInvoice === true,
+    unregisteredCard: input.unregisteredCard === true,
     lines,
   };
 }
@@ -225,6 +239,8 @@ export function toSimpleInput(v: VoucherInput, vat: VatAccounts): SimpleInput | 
       vatDeductible: isPurchase ? v.vatDeductible === true : false,
       supplyAmount: v.supplyAmount,
       vatAmount: v.vatAmount,
+      paperTaxInvoice: v.paperTaxInvoice === true,
+      unregisteredCard: v.unregisteredCard === true,
     };
   } else {
     return null;

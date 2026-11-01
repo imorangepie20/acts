@@ -3,6 +3,8 @@ import { MAX_WON } from "@/lib/money";
 import {
   buildSimpleVoucher,
   defaultVat,
+  ERR_PAPER,
+  ERR_UNREGISTERED_CARD,
   splitVatFromTotal,
   toSimpleInput,
   type SimpleInput,
@@ -194,7 +196,9 @@ describe("toSimpleInput", () => {
       transfer,
     ];
     for (const c of cases) {
-      expect(toSimpleInput(built(c), vat)).toEqual(c);
+      // A trade comes back with both flags spelled out (absent = false).
+      const back = c.type === "transfer" ? c : { paperTaxInvoice: false, unregisteredCard: false, ...c };
+      expect(toSimpleInput(built(c), vat)).toEqual(back);
     }
   });
   it("stays structural so VAT rule messages surface from the builder", () => {
@@ -221,5 +225,37 @@ describe("toSimpleInput", () => {
     const s = built(sale);
     const lines = s.lines.map((l, i) => (i === 2 ? { ...l, accountId: 7777 } : l));
     expect(toSimpleInput({ ...s, lines }, vat)).toBeNull();
+  });
+});
+
+describe("종이 세금계산서 and 홈택스 미등록 카드", () => {
+  it("carries 종이 세금계산서 and 미등록 카드 to the header and back", () => {
+    const paper = built({ ...purchase, evidenceType: "tax_invoice", paperTaxInvoice: true });
+    expect(paper.paperTaxInvoice).toBe(true);
+    expect(paper.unregisteredCard).toBe(false);
+    expect((toSimpleInput(paper, vat) as TradeInput).paperTaxInvoice).toBe(true);
+
+    const card = built({ ...purchase, evidenceType: "card", unregisteredCard: true });
+    expect(card.unregisteredCard).toBe(true);
+    expect(card.paperTaxInvoice).toBe(false);
+    expect((toSimpleInput(card, vat) as TradeInput).unregisteredCard).toBe(true);
+  });
+
+  it("rejects 종이 세금계산서 on a non-tax-invoice evidence", () => {
+    expect(err({ ...purchase, evidenceType: "card", paperTaxInvoice: true })).toBe(ERR_PAPER);
+  });
+
+  it("rejects 미등록 카드 on a sale or a non-card evidence", () => {
+    expect(err({ ...sale, evidenceType: "card", unregisteredCard: true })).toBe(ERR_UNREGISTERED_CARD);
+    expect(err({ ...purchase, evidenceType: "cash_receipt", unregisteredCard: true })).toBe(ERR_UNREGISTERED_CARD);
+  });
+
+  it("omitting the flags builds false", () => {
+    const v = built(purchase);
+    expect(v.paperTaxInvoice).toBe(false);
+    expect(v.unregisteredCard).toBe(false);
+    const t = built(transfer);
+    expect(t.paperTaxInvoice).toBe(false);
+    expect(t.unregisteredCard).toBe(false);
   });
 });

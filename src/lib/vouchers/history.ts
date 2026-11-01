@@ -40,6 +40,8 @@ function lineKey(s: VoucherSnapshot, l: LineInput, withAmount: boolean): string 
 }
 
 const orNone = (s: string) => s || "없음";
+// Snapshots written before these flags existed carry neither: absent reads as 아니요.
+const yes = (v?: boolean) => (v ? "예" : "아니요");
 
 /** Korean one-liners describing what changed between two history snapshots. */
 export function describeChanges(
@@ -65,6 +67,8 @@ export function describeChanges(
     prev.vatType ? VAT_TYPE_LABELS[prev.vatType] : "없음",
     next.vatType ? VAT_TYPE_LABELS[next.vatType] : "없음",
   );
+  diff("종이 세금계산서", yes(prev.paperTaxInvoice), yes(next.paperTaxInvoice));
+  diff("홈택스 미등록 카드", yes(prev.unregisteredCard), yes(next.unregisteredCard));
 
   const withAmount = ta === tb;
   const keys = (s: VoucherSnapshot) => s.lines.map((l) => lineKey(s, l, withAmount)).join("|");

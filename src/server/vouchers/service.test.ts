@@ -306,6 +306,45 @@ describe("simple entry types", () => {
     ]);
   });
 
+  it("stores 종이 세금계산서 and re-validates it", async () => {
+    const vat = await getVatAccountIds(db);
+    const input = {
+      type: "purchase" as const,
+      date: "2026-10-30",
+      description: "자재",
+      mainAccountId: acc["811"],
+      counterAccountId: acc["101"],
+      partnerId: partnerA,
+      siteId,
+      departmentId: null,
+      evidenceType: "tax_invoice" as const,
+      vatType: "taxable" as const,
+      vatDeductible: true,
+      supplyAmount: 10000,
+      vatAmount: 1000,
+    };
+    const paper = buildSimpleVoucher({ ...input, paperTaxInvoice: true }, vat);
+    if (!paper.ok) throw new Error(paper.error);
+    const id = await create(paper.value);
+    const v = await getVoucher(db, id, { hidePayroll: false });
+    expect(v).toMatchObject({ paperTaxInvoice: true, unregisteredCard: false });
+
+    const bad = await createVoucher(db, staff, general({ paperTaxInvoice: true }));
+    expect(bad).toEqual({ ok: false, error: MSG.invalid });
+
+    // A fixture without the flags still saves, as false.
+    const plain = buildSimpleVoucher(input, vat);
+    if (!plain.ok) throw new Error(plain.error);
+    const legacy: VoucherInput = { ...plain.value };
+    delete legacy.paperTaxInvoice;
+    delete legacy.unregisteredCard;
+    const id2 = await create(legacy);
+    expect(await getVoucher(db, id2, { hidePayroll: false })).toMatchObject({
+      paperTaxInvoice: false,
+      unregisteredCard: false,
+    });
+  });
+
   it("stores a 수정·취소분 purchase and refuses one whose lines were not swapped", async () => {
     const vat = await getVatAccountIds(db);
     const input = {
