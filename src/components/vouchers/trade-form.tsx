@@ -51,7 +51,7 @@ const COUNTER_GROUPS: AccountGroup[] = [
 
 /** What a form reads to pre-fill itself: an edited voucher (complete) or a template (possibly not). */
 export type TradeInitial = {
-  simple: Pick<TradeInput, "evidenceType" | "vatType" | "vatDeductible"> & {
+  simple: Pick<TradeInput, "evidenceType" | "vatType" | "vatDeductible" | "paperTaxInvoice" | "unregisteredCard"> & {
     mainAccountId: number | null;
     counterAccountId: number | null;
     supplyAmount: number | null;
@@ -81,6 +81,9 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
   const [deductibleOn, setDeductibleOn] = useState(init ? init.vatDeductible : true);
   // A 수정·취소분 is typed as positive amounts with this switch on; it is sent negated.
   const [reversal, setReversal] = useState((init?.supplyAmount ?? 0) < 0);
+  // Header flags are not part of a template: applying one starts them off.
+  const [paper, setPaper] = useState(init?.paperTaxInvoice === true);
+  const [unregistered, setUnregistered] = useState(init?.unregisteredCard === true);
   const [amounts, setAmounts] = useState<Amounts>(() => {
     if (!init) return { total: null, supply: null, vat: null };
     const supply = init.supplyAmount === null ? null : Math.abs(init.supplyAmount);
@@ -141,6 +144,8 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
     evidenceType: evidence,
     vatType: effectiveVatType,
     vatDeductible: deductible,
+    paperTaxInvoice: evidence === "tax_invoice" && paper,
+    unregisteredCard: kind === "purchase" && evidence === "card" && unregistered,
     supplyAmount: sign * (amounts.supply ?? 0),
     vatAmount: sign * (amounts.vat ?? 0),
   };
@@ -237,6 +242,18 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
           <div className="flex items-end gap-3 pb-1.5">
             <Switch id={`${p}-deductible`} checked={deductibleOn} onCheckedChange={setDeductibleOn} />
             <Label htmlFor={`${p}-deductible`}>공제 여부</Label>
+          </div>
+        )}
+        {evidence === "tax_invoice" && (
+          <div className="flex items-end gap-3 pb-1.5">
+            <Switch id={`${p}-paper`} checked={paper} onCheckedChange={setPaper} />
+            <Label htmlFor={`${p}-paper`}>종이 세금계산서</Label>
+          </div>
+        )}
+        {kind === "purchase" && evidence === "card" && (
+          <div className="flex items-end gap-3 pb-1.5">
+            <Switch id={`${p}-unregistered`} checked={unregistered} onCheckedChange={setUnregistered} />
+            <Label htmlFor={`${p}-unregistered`}>홈택스 미등록 카드</Label>
           </div>
         )}
         <div className="flex items-end gap-3 pb-1.5">

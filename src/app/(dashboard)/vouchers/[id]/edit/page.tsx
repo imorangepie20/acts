@@ -26,6 +26,8 @@ function editTarget(v: VoucherDetail, vat: VatAccounts): EditTarget {
     vatDeductible: v.vatDeductible,
     supplyAmount: v.supplyAmount,
     vatAmount: v.vatAmount,
+    paperTaxInvoice: v.paperTaxInvoice,
+    unregisteredCard: v.unregisteredCard,
     lines: v.lines.map((l) => ({
       accountId: l.accountId,
       side: l.side,

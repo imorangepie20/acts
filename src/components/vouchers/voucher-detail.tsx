@@ -199,7 +199,19 @@ export function VoucherDetail({
         <Fact label="유형">{ENTRY_TYPE_LABELS[v.entryType]}</Fact>
         <Fact label="구분">{VOUCHER_KIND_LABELS[v.kind]}</Fact>
         <Fact label="적요">{v.description || "-"}</Fact>
-        <Fact label="증빙">{EVIDENCE_TYPE_LABELS[v.evidenceType]}</Fact>
+        <Fact label="증빙">
+          {EVIDENCE_TYPE_LABELS[v.evidenceType]}
+          {v.paperTaxInvoice && (
+            <Badge variant="outline" className="ml-2">
+              종이 세금계산서
+            </Badge>
+          )}
+          {v.unregisteredCard && (
+            <Badge variant="outline" className="ml-2">
+              홈택스 미등록 카드
+            </Badge>
+          )}
+        </Fact>
         <Fact label="과세 구분">
           {v.vatType ? VAT_TYPE_LABELS[v.vatType] : "-"}
           {v.vatDeductible === false && v.entryType === "purchase" ? " (불공제)" : ""}
