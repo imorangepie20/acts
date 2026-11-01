@@ -43,10 +43,20 @@ it("one form per 귀속월 paid in the 지급월; attr narrows; default is the l
   expect(v.forms.map((f) => [f.attributionMonth, f.paymentMonth])).toEqual([["2026-06", "2026-07"]]);
   expect(v.forms[0].a01.people).toBe(1);
   const other = await loadReturnView(db, { pay: "2026-07", attr: "2026-05" });
-  expect(other.forms[0].a01).toEqual({ people: 0, totalPaid: 0, incomeTax: 0 });
+  expect(other.forms).toEqual([]);
+  expect(buildReturnSheets(other)).toBeNull();
+  const match = await loadReturnView(db, { pay: "2026-07", attr: "2026-06" });
+  expect(match.forms).toHaveLength(1);
   const empty = await loadReturnView(db, { pay: "2026-09" });
   expect(empty.forms).toEqual([]);
   expect(buildReturnSheets(empty)).toBeNull();
+});
+
+it("semiannual with no confirmed run in the half has no form and no sheets", async () => {
+  await createPayrollVoucher(db, admin, { yearMonth: "2026-06", payDate: "2026-06-25" });
+  const v = await loadReturnView(db, { mode: "semiannual", year: "2026", half: "2" });
+  expect(v.forms).toEqual([]);
+  expect(buildReturnSheets(v)).toBeNull();
 });
 
 it("semiannual covers the half and the sheet has A01/A10/A99 and the refund block", async () => {

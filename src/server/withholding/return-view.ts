@@ -70,6 +70,8 @@ export async function loadReturnView(db: Db, sp: SearchParams): Promise<ReturnVi
       payFrom: `${year}-${half === 1 ? "01" : "07"}-01`,
       payTo: `${year}-${half === 1 ? "06-30" : "12-31"}`,
     });
+    // No confirmed run in the half: no form (the page says so and the export is refused).
+    if (runs.length === 0) return { selection, company: companyInfo, forms: [] };
     const period: ReturnPeriod = { mode: "semiannual", year, half };
     return { selection, company: companyInfo, forms: [buildReturn(period, runs, selection.refund)] };
   }
@@ -79,11 +81,8 @@ export async function loadReturnView(db: Db, sp: SearchParams): Promise<ReturnVi
     payFrom: `${selection.pay}-01`,
     payTo: `${selection.pay}-${pad(lastDay(y, m))}`,
   });
-  let pairs = returnPairs(runs);
-  if (selection.attr) {
-    // An explicit 귀속월 always yields its form, even when nothing was paid for it that month.
-    pairs = [{ attributionMonth: selection.attr, paymentMonth: selection.pay }];
-  }
+  // An explicit 귀속월 keeps only its pair; no confirmed run for it means no form.
+  const pairs = returnPairs(runs).filter((p) => !selection.attr || p.attributionMonth === selection.attr);
   // One ⑫ for the whole 지급월: each form carries its ⑳ into the next, so it is never applied twice.
   let carried = selection.refund;
   const forms = pairs.map((p) => {
