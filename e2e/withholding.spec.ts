@@ -147,7 +147,6 @@ test("간이지급명세서: 미리보기와 파일 내려받기", async ({ page
   await page.getByRole("button", { name: "파일 내려받기" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText(/홈택스 검증 전/)).toBeVisible();
-  // The form posts to a new tab (target=_blank); the download event fires on that popup page.
   // The form posts to a new tab (target=_blank). Chromium opens the popup, then reports the attachment
   // as a download of the opener page and closes the popup, so assert both.
   const popupPromise = page.context().waitForEvent("page");

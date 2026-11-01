@@ -1,3 +1,4 @@
+import { EMPTY_SEMIANNUAL_NOTICE } from "./notices";
 import { validateRrn } from "@/lib/payroll/rrn";
 import { n, record, x } from "./fixed";
 
@@ -47,7 +48,7 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export function buildSimplifiedStatement(input: SimplifiedInput): SimplifiedResult {
   const { year, half, company } = input;
-  if (input.employees.length === 0) return fail("해당 반기에 확정된 급여가 없습니다.");
+  if (input.employees.length === 0) return fail(EMPTY_SEMIANNUAL_NOTICE);
 
   const required: [string, string][] = [
     [company.name, "회사명(상호)을"],

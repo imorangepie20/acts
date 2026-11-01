@@ -43,16 +43,25 @@ export default defineConfig({
       // Writes employees, 2026-01 / 2026-02 runs and their payroll vouchers; chained so it never runs alongside
       // admin.spec (which toggles 전표 승인) or the approval spec.
       name: "settings-serial-payroll",
-      testMatch: /(payroll|withholding)\.spec\.ts$/,
+      testMatch: /payroll\.spec\.ts$/,
       fullyParallel: false,
       dependencies: ["settings-serial"],
+      use: admin,
+    },
+    {
+      // Reads the 2026-02 run that payroll.spec leaves behind (a payroll.spec employee joining it would
+      // break the download), so it is its own project after settings-serial-payroll.
+      name: "settings-serial-withholding",
+      testMatch: /withholding\.spec\.ts$/,
+      fullyParallel: false,
+      dependencies: ["settings-serial-payroll"],
       use: admin,
     },
     {
       name: "settings-serial-approval",
       testMatch: /vouchers-approval\.spec\.ts$/,
       fullyParallel: false,
-      dependencies: ["settings-serial-payroll"],
+      dependencies: ["settings-serial-withholding"],
       use: admin,
     },
     {

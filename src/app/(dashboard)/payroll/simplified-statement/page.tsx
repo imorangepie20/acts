@@ -1,4 +1,5 @@
 import { DownloadDialog } from "@/components/payroll/withholding/download-dialog";
+import { EMPTY_SEMIANNUAL_NOTICE } from "@/lib/withholding/notices";
 import { KeyMissingAlert } from "@/components/payroll/key-missing";
 import { SimplifiedPreview } from "@/components/payroll/withholding/simplified-preview";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -66,7 +67,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       </p>
       {keyError && <KeyMissingAlert message={keyError} />}
       {rows && rows.length === 0 && (
-        <p className="py-8 text-center text-muted-foreground">이 반기에 확정된 급여 대장이 없습니다.</p>
+        <p className="py-8 text-center text-muted-foreground">{EMPTY_SEMIANNUAL_NOTICE}</p>
       )}
       {rows && rows.length > 0 && <SimplifiedPreview rows={rows} />}
     </div>

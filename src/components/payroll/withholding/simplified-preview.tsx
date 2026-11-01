@@ -24,7 +24,7 @@ export function SimplifiedPreview({ rows }: { rows: SimplifiedRow[] }) {
               <td className={cell}>{r.name}</td>
               <td className={`${cell} tabular-nums`}>{r.rrnMasked}</td>
               <td className={`${cell} tabular-nums`}>
-                {r.from} ~ {r.to}
+                {r.noWork ? <span className="text-destructive">해당 반기 근무 없음</span> : `${r.from} ~ ${r.to}`}
               </td>
               <td className={num}>{formatWon(r.wages)}</td>
             </tr>

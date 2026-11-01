@@ -17,6 +17,8 @@ export type SimplifiedRow = {
   from: string;
   to: string;
   wages: number;
+  /** True when the employee has no 근무기간 in the half: the file refuses such a row. */
+  noWork: boolean;
 };
 
 type RawRow = { employeeId: number; name: string; rrnEnc: string; hiredOn: string; leftOn: string | null; wages: number };
@@ -83,6 +85,7 @@ export async function loadSimplifiedRows(db: Db, year: number, half: 1 | 2): Pro
       from: wp?.from ?? r.hiredOn,
       to: wp?.to ?? r.leftOn ?? "",
       wages: r.wages,
+      noWork: wp === null,
     };
   });
 }

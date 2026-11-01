@@ -1,3 +1,4 @@
+import { EMPTY_SEMIANNUAL_NOTICE } from "@/lib/withholding/notices";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { seed } from "../../../scripts/seed";
@@ -38,7 +39,7 @@ describe("loadSimplifiedRows", () => {
   it("lists confirmed runs by 귀속월, masked, wages = taxable total", async () => {
     const rows = await loadSimplifiedRows(db, 2026, 1);
     expect(rows).toEqual([
-      { employeeId: expect.any(Number), name: "급여사원", rrnMasked: "900101-1******", from: "2026-01-01", to: "2026-06-30", wages: 3_000_000 },
+      { employeeId: expect.any(Number), name: "급여사원", rrnMasked: "900101-1******", from: "2026-01-01", to: "2026-06-30", wages: 3_000_000, noWork: false },
     ]);
     expect(await loadSimplifiedRows(db, 2026, 2)).toEqual([]);
   });
@@ -93,7 +94,7 @@ describe("buildSimplifiedDownload", () => {
   it("no confirmed run in the half: error, no audit", async () => {
     await setCompany(FILING);
     const r = await buildSimplifiedDownload(db, admin, { year: 2026, half: 2 });
-    expect(r).toEqual({ ok: false, error: "해당 반기에 확정된 급여가 없습니다." });
+    expect(r).toEqual({ ok: false, error: EMPTY_SEMIANNUAL_NOTICE });
     expect(await audits()).toHaveLength(0);
   });
 

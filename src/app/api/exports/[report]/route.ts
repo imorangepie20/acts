@@ -1,4 +1,5 @@
 import { can, hidesPayroll } from "@/lib/permissions";
+import { EMPTY_MONTHLY_NOTICE, EMPTY_SEMIANNUAL_NOTICE } from "@/lib/withholding/notices";
 import { isIsoDate } from "@/lib/vouchers/dates";
 import { verifySession } from "@/server/auth/dal";
 import { db } from "@/server/db";
@@ -64,7 +65,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
 
   if (report === WITHHOLDING_RETURN_KEY) {
     const built = buildReturnSheets(await loadReturnView(db, sp));
-    if (!built) return new Response("이 지급연월에 확정된 급여 대장이 없습니다.", { status: 404 });
+    if (!built) return new Response(sp.mode === "semiannual" ? EMPTY_SEMIANNUAL_NOTICE : EMPTY_MONTHLY_NOTICE, { status: 404 });
     const { fileName, sheets } = built;
     return xlsxResponse(await renderWorkbook(sheets), fileName);
   }
@@ -73,7 +74,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
     const { year, half } = parseSimplifiedParams(sp);
     try {
       const spec = buildSimplifiedSheet(await loadSimplifiedRows(db, year, half), (await getCompany(db)).name, year, half);
-      if (!spec) return new Response("해당 반기에 확정된 급여가 없습니다.", { status: 404 });
+      if (!spec) return new Response(EMPTY_SEMIANNUAL_NOTICE, { status: 404 });
       return xlsxResponse(await renderWorkbook([spec]), spec.fileName);
     } catch (e) {
       if (e instanceof MissingEncryptionKeyError) return new Response(encryptionKeyMessage(e), { status: 500 });

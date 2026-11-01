@@ -1,4 +1,5 @@
 import iconv from "iconv-lite";
+import { EMPTY_SEMIANNUAL_NOTICE } from "./notices";
 import { describe, expect, it } from "vitest";
 import { buildSimplifiedStatement, workPeriod, type SimplifiedInput } from "./simplified";
 
@@ -125,7 +126,7 @@ describe("errors", () => {
     expect(err({ ...base, employees: [{ ...base.employees[0], rrn: "123" }] })).toMatch(/^홍길동:/);
   });
   it("rejects an empty list", () => {
-    expect(err({ ...base, employees: [] })).toBe("해당 반기에 확정된 급여가 없습니다.");
+    expect(err({ ...base, employees: [] })).toBe(EMPTY_SEMIANNUAL_NOTICE);
   });
   it("returns, not throws, for unencodable characters", () => {
     expect(err({ ...base, employees: [{ ...base.employees[0], name: "홍\u{1F600}" }] })).toMatch(/^홍.*:/);

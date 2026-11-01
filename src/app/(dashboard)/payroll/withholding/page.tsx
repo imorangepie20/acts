@@ -1,4 +1,5 @@
 import { PrintButton } from "@/components/payroll/print-button";
+import { EMPTY_MONTHLY_NOTICE, EMPTY_SEMIANNUAL_NOTICE } from "@/lib/withholding/notices";
 import { PeriodPicker } from "@/components/payroll/withholding/period-picker";
 import { ReturnForm } from "@/components/payroll/withholding/return-form";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
         확정된 급여 대장만 집계합니다. 홈택스 입력을 돕는 참고 화면이며, 신고서는 홈택스에서 제출합니다.
       </p>
       {view.forms.length === 0 && (
-        <p className="py-8 text-center text-muted-foreground print:hidden">이 지급연월에 확정된 급여 대장이 없습니다.</p>
+        <p className="py-8 text-center text-muted-foreground print:hidden">{s.mode === "semiannual" ? EMPTY_SEMIANNUAL_NOTICE : EMPTY_MONTHLY_NOTICE}</p>
       )}
       {view.forms.map((f) => (
         <ReturnForm
