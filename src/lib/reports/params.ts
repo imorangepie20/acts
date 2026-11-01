@@ -8,7 +8,7 @@ export function first(v: string | string[] | undefined): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-function positiveInt(v: string | undefined): number | null {
+export function positiveInt(v: string | undefined): number | null {
   if (v === undefined || !/^\d+$/.test(v)) return null;
   const n = Number(v);
   return Number.isSafeInteger(n) && n > 0 ? n : null;

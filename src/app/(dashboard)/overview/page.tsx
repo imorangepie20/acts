@@ -14,6 +14,7 @@ import { getDashboard } from "@/server/dashboard/service";
 import { db } from "@/server/db";
 import { getReportFilterOptions } from "@/server/sites/service";
 import { countPending } from "@/server/vouchers/service";
+import { PENDING_HREF } from "@/lib/vouchers/links";
 
 const positiveInt = (v: string | undefined): number | null =>
   v !== undefined && /^\d+$/.test(v) && Number(v) > 0 ? Number(v) : null;
@@ -60,7 +61,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
       />
       {pendingCount > 0 && (
         <Link
-          href="/vouchers?status=pending&from=2000-01-01&to=2099-12-31"
+          href={PENDING_HREF}
           className="w-fit rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium hover:bg-amber-500/20"
         >
           승인 대기 {pendingCount}건

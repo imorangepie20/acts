@@ -628,7 +628,9 @@ describe("confirm refuses figures that moved since the last edit", () => {
     await updateRunLines(db, admin, second, (await detail(second)).version, [{ employeeId: e, amounts: { bonus: 1_000_000 } }]);
     await confirm(second);
 
-    expect((await cancelConfirm(db, admin, first, confirmedFirst.version)).error).toContain("지급일 2026-06-10 상여 대장");
+    const r = await cancelConfirm(db, admin, first, confirmedFirst.version);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("지급일 2026-06-10 상여 대장");
   });
 
   it("cancels a 정기 run outside every confirmed 상여's period", async () => {

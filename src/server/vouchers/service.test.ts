@@ -518,6 +518,24 @@ describe("listVouchers", () => {
     expect((await listVouchers(db, { hidePayroll: false, q: "%" })).total).toBe(0);
   });
 
+  it("filters by a site or department on any line", async () => {
+    const [s2] = await db.insert(sites).values({ name: "지점" }).returning();
+    const [dept] = await db.insert(departments).values({ name: "영업부" }).returning();
+    await create(
+      general({
+        date: "2026-10-20",
+        description: "지점 회식",
+        lines: [line("811", "debit", 1000, { siteId: s2.id, departmentId: dept.id }), line("101", "credit", 1000)],
+      }),
+    );
+    const names = async (f: { siteId?: number; departmentId?: number }) =>
+      (await listVouchers(db, { hidePayroll: false, ...f })).rows.map((r) => r.description);
+    expect(await names({ siteId: s2.id })).toEqual(["지점 회식"]);
+    expect(await names({ departmentId: dept.id })).toEqual(["지점 회식"]);
+    expect(await names({ siteId })).toEqual(["간식", "지점 회식", "점심", "택시비"]);
+    expect(await names({ siteId, departmentId: dept.id })).toEqual([]);
+  });
+
   it("pages 50 rows while total counts every match", async () => {
     for (let i = 0; i < 50; i++) await create(general({ date: "2026-09-01" }));
     const p1 = await listVouchers(db, { hidePayroll: false });

@@ -26,7 +26,19 @@ import {
 import type { VoucherListRow } from "@/server/vouchers/service";
 import { Field, StatusBadge, selectClass } from "./shared";
 
-export type VoucherFilters = { from: string; to: string; status: VoucherStatus | null; kind: VoucherKind | null; q: string };
+/** `from`/`to` are ISO dates, or "" for no bound on that side. */
+export type VoucherFilters = {
+  from: string;
+  to: string;
+  status: VoucherStatus | null;
+  kind: VoucherKind | null;
+  siteId: number | null;
+  departmentId: number | null;
+  q: string;
+};
+
+type Option = { id: number; name: string };
+type FilterOptions = { sites: Option[]; departments: Option[]; showSite: boolean; showDepartment: boolean };
 
 type Props = {
   rows: VoucherListRow[];
@@ -34,6 +46,7 @@ type Props = {
   page: number;
   pageSize: number;
   filters: VoucherFilters;
+  options: FilterOptions;
   canCreate: boolean;
 };
 
@@ -41,12 +54,14 @@ function pageHref(f: VoucherFilters, page: number): string {
   const sp = new URLSearchParams({ from: f.from, to: f.to });
   if (f.status) sp.set("status", f.status);
   if (f.kind) sp.set("kind", f.kind);
+  if (f.siteId !== null) sp.set("site", String(f.siteId));
+  if (f.departmentId !== null) sp.set("dept", String(f.departmentId));
   if (f.q) sp.set("q", f.q);
   if (page > 1) sp.set("page", String(page));
   return `/vouchers?${sp}`;
 }
 
-export function VoucherList({ rows, total, page, pageSize, filters, canCreate }: Props) {
+export function VoucherList({ rows, total, page, pageSize, filters, options, canCreate }: Props) {
   const router = useRouter();
   const pages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -80,6 +95,30 @@ export function VoucherList({ rows, total, page, pageSize, filters, canCreate }:
               ))}
             </select>
           </Field>
+          {options.showSite && (
+            <Field label="사업장" htmlFor="filter-site">
+              <select id="filter-site" name="site" defaultValue={filters.siteId?.toString() ?? ""} className={selectClass}>
+                <option value="">전체</option>
+                {options.sites.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          {options.showDepartment && (
+            <Field label="부서" htmlFor="filter-dept">
+              <select id="filter-dept" name="dept" defaultValue={filters.departmentId?.toString() ?? ""} className={selectClass}>
+                <option value="">전체</option>
+                {options.departments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="검색" htmlFor="filter-q">
             <Input id="filter-q" name="q" defaultValue={filters.q} placeholder="적요 또는 거래처" className="w-56" />
           </Field>

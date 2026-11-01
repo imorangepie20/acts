@@ -653,6 +653,9 @@ export async function listVouchers(
     to?: string;
     status?: VoucherStatus;
     kind?: VoucherKind;
+    /** A voucher matches when any of its lines carries this site / department. */
+    siteId?: number;
+    departmentId?: number;
     q?: string;
     page?: number;
   },
@@ -665,6 +668,12 @@ export async function listVouchers(
     if (f.hidePayroll) conds.push(ne(vouchers.kind, "payroll"));
   }
   if (f.kind) conds.push(eq(vouchers.kind, f.kind));
+  if (f.siteId !== undefined || f.departmentId !== undefined) {
+    const lineConds = [eq(voucherLines.voucherId, vouchers.id)];
+    if (f.siteId !== undefined) lineConds.push(eq(voucherLines.siteId, f.siteId));
+    if (f.departmentId !== undefined) lineConds.push(eq(voucherLines.departmentId, f.departmentId));
+    conds.push(sql`exists (select 1 from ${voucherLines} where ${and(...lineConds)})`);
+  }
   const q = f.q?.trim();
   if (q) {
     const pattern = `%${escapeLike(q)}%`;
