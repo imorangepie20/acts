@@ -127,13 +127,17 @@ test("정기 대장: 계산, 소득세 직접 입력, 확정, 명세서, 확정 
 
   // 2b. 연말정산 환급 is typed as a negative amount; an empty cell clears it back to 0.
   const settlement = page.getByLabel(`${EMP_NO} 연말정산 소득세`, { exact: true });
+  const empRow = page.getByRole("row").filter({ hasText: EMP_NO }).first();
+  const rowBefore = (await empRow.textContent()) ?? "";
   await settlement.fill("-100000");
   await settlement.press("Tab");
   await expect(settlement).toHaveValue("-100,000");
-  await expect(page.getByRole("row").filter({ hasText: EMP_NO }).first()).toContainText("-100,000");
+  // The server accepted it and recomputed the line (공제 계 and 실지급액 change).
+  await expect(empRow).not.toHaveText(rowBefore);
   await settlement.fill("");
   await settlement.press("Tab");
   await expect(settlement).toHaveValue("0");
+  await expect(empRow).toHaveText(rowBefore);
 
   // 3. 확정 shows the voucher preview, then writes a 급여 voucher.
   await page.getByRole("button", { name: "확정", exact: true }).click();
