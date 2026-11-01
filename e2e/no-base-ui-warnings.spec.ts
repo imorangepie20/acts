@@ -15,9 +15,9 @@ import { test, expect } from "@playwright/test";
  */
 
 const ROUTES = [
-  "/examples",
-  "/error/404",
-  "/error/500",
+  "/overview",
+  "/vouchers",
+  "/payroll/runs",
   // Hitting an unknown URL renders the root not-found page.
   "/a-nonexistent-url-xyz",
 ];

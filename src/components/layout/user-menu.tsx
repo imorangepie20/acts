@@ -1,4 +1,5 @@
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { LogOut, UserRound } from "lucide-react";
 import { logoutAction } from "@/app/(auth)/login/actions";
 import { ROLE_LABELS } from "@/lib/permissions";
 import type { SessionUser } from "@/server/auth/service";
@@ -28,6 +29,10 @@ export function UserMenu({ user }: { user: SessionUser }) {
           <p className="text-xs text-muted-foreground">{ROLE_LABELS[user.role]}</p>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuItem render={<Link href="/profile" />}>
+          <UserRound />
+          내 정보
+        </DropdownMenuItem>
         <form action={logoutAction}>
           <DropdownMenuItem render={<button type="submit" className="w-full" />}>
             <LogOut />

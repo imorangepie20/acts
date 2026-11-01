@@ -28,8 +28,6 @@ test.describe("인증", () => {
     await login(page, email, password);
     await expect(page).toHaveURL(/\/overview/);
 
-    // /overview does not exist until Task 5; use an existing dashboard page for the menu.
-    await page.goto("/components/button");
     await page.getByRole("button", { name: "사용자 메뉴" }).click();
     await page.getByRole("menuitem", { name: "로그아웃" }).click();
     await expect(page).toHaveURL(/\/login/);

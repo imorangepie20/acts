@@ -4,8 +4,6 @@ import { defineConfig, devices } from "@playwright/test";
 if (existsSync(".env")) process.loadEnvFile(".env");
 
 const settingsSpecs = /(admin|vouchers-approval|closing|payroll|withholding)\.spec\.ts$/;
-// Template showcase specs (components/dashboards/apps pages): flaky, so they live in their own project.
-const showcaseSpecs = /(components|dashboards|apps)-[^/]*\.spec\.ts$/;
 const admin = { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" };
 
 export default defineConfig({
@@ -18,14 +16,7 @@ export default defineConfig({
     {
       name: "chromium",
       retries: 1,
-      testIgnore: [/auth\.setup\.ts/, settingsSpecs, showcaseSpecs],
-      dependencies: ["setup"],
-      use: admin,
-    },
-    {
-      name: "showcase",
-      retries: 1,
-      testMatch: showcaseSpecs,
+      testIgnore: [/auth\.setup\.ts/, settingsSpecs],
       dependencies: ["setup"],
       use: admin,
     },
