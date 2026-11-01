@@ -50,6 +50,11 @@ const changesSchema = z
           employment: won.nullable(),
           incomeTax: won.nullable(),
           localTax: won.nullable(),
+          // Manual signed deductions (정산분, 연말정산); the service checks their range.
+          healthSettlement: won.nullable(),
+          ltcSettlement: won.nullable(),
+          settlementIncomeTax: won.nullable(),
+          settlementLocalTax: won.nullable(),
         })
         .partial()
         .strict()
