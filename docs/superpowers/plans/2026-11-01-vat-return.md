@@ -232,7 +232,7 @@ export const taxDiffNotice: (diff: number) => string; // `금액 × 10%와 ${for
     - `"nets a 수정·취소분 to zero and counts both"`: Review Focus 2.
     - `"(57) only on a 확정 with entries and efile"`: Review Focus 4. (30) = ㉰ − 5,000 − prelimRefund − notice.
     - `"exempt sales and 계산서 go to (88)/(89)/(90)"`: 면세 매출 계산서 400,000 → (88) 400,000, (89) 400,000. 면세 매입 계산서 70,000 → (90) 70,000. (1)–(18)에는 들어가지 않는다.
-    - `"taxDiff flags rows whose tax is not 10%"`: 과세 카드 매출 99,999/9,091 → `taxDiff.get(3) === 91`. 맞으면 키가 없다.
+    - `"taxDiff flags rows whose tax is not 10%"`: 과세 카드 매출 99,999/10,090 → `taxDiff.get(3) === 91` (세액 − trunc(금액 × 10 / 100)). 맞으면 키가 없다.
     - `"invoice summary splits 전자/전자 외 and 사업자/주민 and lists 전자 외 by partner"`: 매출 세금계산서
       - 전자 bn A 2건
       - 종이 bn B 1건
