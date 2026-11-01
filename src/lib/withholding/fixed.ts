@@ -5,8 +5,13 @@ export const RECORD_BYTES = 190;
 
 function encodeChar(ch: string): Buffer {
   const b = iconv.encode(ch, ENCODING);
-  // iconv-lite substitutes "?" for unmappable characters.
-  if (ch !== "?" && b.length === 1 && b[0] === 0x3f) {
+  // iconv-lite's euc-kr is CP949: it substitutes "?" for unmappable characters
+  // and encodes Hangul outside KS X 1001 to extended bytes. Accept printable
+  // ASCII or a 2-byte KS X 1001 code only.
+  const ascii = b.length === 1 && b[0] >= 0x20 && b[0] <= 0x7e;
+  const wide =
+    b.length === 2 && b[0] >= 0xa1 && b[0] <= 0xfe && b[1] >= 0xa1 && b[1] <= 0xfe;
+  if (!(ascii && (b[0] !== 0x3f || ch === "?")) && !wide) {
     throw new Error(`EUC-KR로 표현할 수 없는 문자: ${ch}`);
   }
   return b;

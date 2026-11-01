@@ -28,6 +28,15 @@ describe("x", () => {
   it("throws naming a character outside EUC-KR", () => {
     expect(() => x("A😀", 10)).toThrow(/😀/);
   });
+
+  it("rejects Hangul outside KS X 1001 (CP949 extension)", () => {
+    expect(() => x("똠", 30)).toThrow(/똠/);
+  });
+
+  it("rejects control characters", () => {
+    expect(() => x("a"+String.fromCharCode(10)+"b", 30)).toThrow();
+    expect(() => x("a"+String.fromCharCode(9)+"b", 30)).toThrow();
+  });
 });
 
 describe("n", () => {
