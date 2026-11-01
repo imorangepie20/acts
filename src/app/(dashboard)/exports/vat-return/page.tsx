@@ -66,7 +66,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
           <VatReturnForm title="제1쪽 ① 신고내용 · 과세표준명세" groups={PAGE1_GROUPS} result={result} />
           <VatReturnForm title="제4쪽 명세" groups={PAGE4_GROUPS} result={result} />
           <InvoiceSummary side="매출처" summary={result.sales} />
-          <InvoiceSummary side="매입처" summary={result.purchases} />
+          <InvoiceSummary side="매입처" summary={result.purchases} withoutBusinessNumber={result.purchasesWithoutBusinessNumber} />
           <CardStatement card={result.card} />
         </section>
       </div>

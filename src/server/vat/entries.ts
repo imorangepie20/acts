@@ -1,6 +1,6 @@
 import { and, asc, between, eq, inArray } from "drizzle-orm";
 import type { VatEntry } from "@/lib/vat/types";
-import { POSTED_STATUSES } from "@/lib/vouchers/types";
+import { formatVoucherNo, POSTED_STATUSES } from "@/lib/vouchers/types";
 import type { Db } from "@/server/db/client";
 import { accounts, partners, voucherImports, voucherLines, vouchers } from "@/server/db/schema";
 
@@ -14,6 +14,8 @@ export async function loadVatEntries(db: Db, from: string, to: string): Promise<
   const rows = await db
     .select({
       id: vouchers.id,
+      no: vouchers.no,
+      date: vouchers.date,
       entryType: vouchers.entryType,
       evidenceType: vouchers.evidenceType,
       vatType: vouchers.vatType,
@@ -56,6 +58,9 @@ export async function loadVatEntries(db: Db, from: string, to: string): Promise<
   return rows.map((r) => {
     const businessNumber = tenDigits(r.meta?.merchantBusinessNumber ?? r.partnerBn);
     return {
+      voucherId: r.id,
+      voucherNo: formatVoucherNo(r.date, r.no),
+      date: r.date,
       entryType: r.entryType === "sale" ? "sale" : "purchase",
       evidenceType: r.evidenceType,
       // Trade vouchers always carry a vat type; the fallback only keeps the type total.

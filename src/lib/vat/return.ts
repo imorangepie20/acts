@@ -4,7 +4,15 @@
 
 import { E_FILING_CREDIT } from "./notices";
 import type { VatSelection } from "./periods";
-import type { Amounts, CardStatement, InvoiceSummary, PartnerTally, Tally, VatEntry } from "./types";
+import type {
+  Amounts,
+  CardStatement,
+  InvoiceSummary,
+  PartnerTally,
+  PurchaseWithoutBusinessNumber,
+  Tally,
+  VatEntry,
+} from "./types";
 
 export type VatReturn = {
   /** computed rows only (COMPUTED_VAT_ROWS) */
@@ -16,6 +24,8 @@ export type VatReturn = {
   sales: InvoiceSummary;
   purchases: InvoiceSummary;
   card: CardStatement;
+  /** 매입 세금계산서 with no 사업자등록번호, by date then voucher number: the partner data likely needs fixing. */
+  purchasesWithoutBusinessNumber: PurchaseWithoutBusinessNumber[];
   entryCount: number;
 };
 
@@ -189,6 +199,10 @@ export function buildVatReturn(entries: VatEntry[], s: VatSelection): VatReturn 
     sales: invoiceSummary(sales),
     purchases: invoiceSummary(purchases),
     card: cardStatement(purchases),
+    purchasesWithoutBusinessNumber: purchases
+      .filter((e) => e.evidenceType === "tax_invoice" && e.businessNumber === null)
+      .map(({ voucherId, voucherNo, date, partnerName }) => ({ voucherId, voucherNo, date, partnerName }))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.voucherNo.localeCompare(b.voucherNo)),
     entryCount: entries.length,
   };
 }

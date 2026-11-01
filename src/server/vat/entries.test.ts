@@ -63,6 +63,9 @@ describe("loadVatEntries", () => {
     if (!g.ok) throw new Error(g.error);
     const e = await loadVatEntries(db, "2026-10-01", "2026-10-31");
     expect(e.map((x) => x.entryType).sort()).toEqual(["purchase", "sale"]);
+    const [first] = await db.select({ id: vouchers.id, no: vouchers.no }).from(vouchers).where(eq(vouchers.id, e[0].voucherId));
+    expect(first).toBeDefined();
+    expect(e[0]).toMatchObject({ date: "2026-10-01", voucherNo: `20261001-${String(first.no).padStart(4, "0")}` });
     expect(e[0]).toMatchObject({ businessNumber: "1234567890", partnerName: "협력사", partnerKey: "1234567890", cardNo: null, paperTaxInvoice: false, unregisteredCard: false });
   });
 

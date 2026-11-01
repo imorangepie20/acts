@@ -18,3 +18,7 @@ export const ENTER_DIRECTLY = "직접 입력";
 
 /** Under (1)–(4) when the summed 세액 is not 금액 × 10/100. */
 export const taxDiffNotice = (diff: number): string => `금액 × 10%와 ${formatWon(Math.abs(diff))}원 차이`;
+
+/** Under the 매입처별 세금계산서합계표 when 매입 세금계산서 have no 사업자등록번호 (they count as 주민등록번호 발급분). */
+export const purchasesWithoutBusinessNumberNotice = (n: number): string =>
+  `사업자등록번호가 없는 매입 세금계산서 ${n}건 — 거래처 정보를 확인하세요`;

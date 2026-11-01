@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import { buildVatReturn } from "@/lib/vat/return";
 import type { VatSelection } from "@/lib/vat/periods";
 import type { VatEntry } from "@/lib/vat/types";
+import { purchasesWithoutBusinessNumberNotice } from "@/lib/vat/notices";
 import { NOT_COMPUTED_TEXT } from "@/lib/withholding/return-rows";
 import { buildVatSheets } from "./sheets";
 import type { VatView } from "./view";
 
 const entry = (over: Partial<VatEntry>): VatEntry => ({
+  voucherId: "v",
+  voucherNo: "20030101-0001",
+  date: "2003-01-01",
   entryType: "purchase",
   evidenceType: "tax_invoice",
   vatType: "taxable",
@@ -71,5 +75,23 @@ describe("buildVatSheets", () => {
     expect(purchases.rows).toContainEqual(
       expect.objectContaining({ businessNumber: "220-81-62517", name: "종이상사", count: 1, supplyAmount: 50_000, vatAmount: 5_000 }),
     );
+  });
+
+  it("매입처별 sheet lists 세금계산서 without a business number", () => {
+    const { sheets } = buildVatSheets(
+      view([
+        entry({ businessNumber: null, partnerKey: "none", voucherNo: "20030115-0002", date: "2003-01-15", partnerName: "무번호" }),
+        entry({ entryType: "sale", businessNumber: null, partnerKey: "none", voucherNo: "20030116-0001" }),
+      ]),
+    );
+    const [, sales, purchases] = sheets;
+    const text = (rows: typeof purchases.rows) => rows.map((r) => Object.values(r).join(" "));
+    const notice = purchasesWithoutBusinessNumberNotice(1);
+    expect(notice).toBe("사업자등록번호가 없는 매입 세금계산서 1건 — 거래처 정보를 확인하세요");
+    expect(text(purchases.rows)).toContainEqual(expect.stringContaining(notice));
+    expect(text(purchases.rows)).toContainEqual(expect.stringMatching(/20030115-0002.*2003-01-15.*무번호/));
+    expect(purchases.emphasis).toContain(purchases.rows.findIndex((r) => r.label === notice));
+    expect(text(sales.rows).join(" | ")).not.toContain("20030116-0001");
+    expect(text(sales.rows).join(" | ")).not.toContain("사업자등록번호가 없는");
   });
 });

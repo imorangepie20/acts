@@ -6,6 +6,9 @@ import type { VatSelection } from "./periods";
 import type { VatEntry } from "./types";
 
 const entry = (over: Partial<VatEntry>): VatEntry => ({
+  voucherId: "v",
+  voucherNo: "20260101-0001",
+  date: "2026-01-01",
   entryType: "sale",
   evidenceType: "tax_invoice",
   vatType: "taxable",
@@ -258,6 +261,31 @@ describe("buildVatReturn", () => {
     expect(c.total).toEqual({ count: 6, supplyAmount: r44.amount + r45.amount, vatAmount: r44.tax + r45.tax });
   });
 
+  it("lists 매입 세금계산서 without a business number, by date then number", () => {
+    const none = { businessNumber: null, partnerKey: "none" };
+    const r = buildVatReturn(
+      [
+        purchase({ ...none, voucherId: "b", voucherNo: "20260205-0002", date: "2026-02-05", partnerName: "을" }),
+        purchase({ ...none, voucherId: "a", voucherNo: "20260205-0001", date: "2026-02-05", partnerName: null }),
+        purchase({ ...none, voucherId: "c", voucherNo: "20260110-0003", date: "2026-01-10", paperTaxInvoice: true, partnerName: "갑" }),
+        purchase({ voucherId: "with-bn" }),
+        purchase({ ...none, voucherId: "card", evidenceType: "card" }),
+        purchase({ ...none, voucherId: "invoice", evidenceType: "invoice", vatType: "exempt" }),
+        sale({ ...none, voucherId: "sale" }),
+      ],
+      sel(),
+    );
+    expect(r.purchasesWithoutBusinessNumber).toEqual([
+      { voucherId: "c", voucherNo: "20260110-0003", date: "2026-01-10", partnerName: "갑" },
+      { voucherId: "a", voucherNo: "20260205-0001", date: "2026-02-05", partnerName: null },
+      { voucherId: "b", voucherNo: "20260205-0002", date: "2026-02-05", partnerName: "을" },
+    ]);
+    // totals unchanged: they still count in the 주민등록번호 rows
+    expect(r.purchases.electronic.rrn.count).toBe(2);
+    expect(r.purchases.other.rrn.count).toBe(1);
+    expect(r.sales.electronic.rrn.count).toBe(1);
+  });
+
   it("fills exactly the rows marked computed in rows.ts", () => {
     const r = buildVatReturn([], sel());
     const marked = [...PAGE1_GROUPS, ...PAGE4_GROUPS].flatMap((g) => g.rows).filter((x) => x.computed).map((x) => x.no);
@@ -274,5 +302,6 @@ describe("buildVatReturn", () => {
     expect(r.rows.get(30)).toEqual(amt(0, 0));
     expect(r.sales.otherByPartner).toEqual([]);
     expect(r.card.otherDetail).toEqual([]);
+    expect(r.purchasesWithoutBusinessNumber).toEqual([]);
   });
 });

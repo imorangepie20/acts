@@ -17,12 +17,13 @@ import {
   BY_REASON_NOTICE,
   EMPTY_VAT_NOTICE,
   ENTER_DIRECTLY,
+  purchasesWithoutBusinessNumberNotice,
   taxDiffNotice,
   VAT_SOURCE_NOTICE,
   ZERO_ASSUMED_NOTICE,
 } from "@/lib/vat/notices";
 import { PAGE1_GROUPS, PAGE4_GROUPS, type VatRowGroup } from "@/lib/vat/rows";
-import type { InvoiceSummary, PartnerTally, Tally } from "@/lib/vat/types";
+import type { InvoiceSummary, PartnerTally, PurchaseWithoutBusinessNumber, Tally } from "@/lib/vat/types";
 import { NOT_COMPUTED_TEXT } from "@/lib/withholding/return-rows";
 import type { SheetSpec } from "@/server/exports/xlsx";
 import type { VatView } from "./view";
@@ -99,7 +100,14 @@ const partnerRow = (label: string, t: PartnerTally): Row => ({
   vatAmount: t.vatAmount,
 });
 
-function invoiceSheet(title: string, side: "매출처" | "매입처", s: InvoiceSummary, fileName: string, meta: string[]): SheetSpec {
+function invoiceSheet(
+  title: string,
+  side: "매출처" | "매입처",
+  s: InvoiceSummary,
+  fileName: string,
+  meta: string[],
+  withoutBn: PurchaseWithoutBusinessNumber[] = [],
+): SheetSpec {
   const issued = side === "매입처" ? "발급받은 분" : "발급분";
   const rows: Row[] = [
     partnerRow("합계", s.total),
@@ -122,6 +130,12 @@ function invoiceSheet(title: string, side: "매출처" | "매입처", s: Invoice
     ),
     ...(s.otherByPartner.length > INVOICE_DETAIL_ROWS ? [{ label: invoiceOverflowNotice }] : []),
   ];
+  const emphasis = [0, 7];
+  if (withoutBn.length > 0) {
+    emphasis.push(rows.length);
+    rows.push({ label: purchasesWithoutBusinessNumberNotice(withoutBn.length) });
+    for (const v of withoutBn) rows.push({ label: `${v.voucherNo} (${v.date})`, name: v.partnerName });
+  }
   return {
     fileName,
     title,
@@ -136,7 +150,7 @@ function invoiceSheet(title: string, side: "매출처" | "매입처", s: Invoice
       { header: "세액", key: "vatAmount", width: 16, money: true },
     ],
     rows,
-    emphasis: [0, 7],
+    emphasis,
   };
 }
 
@@ -202,7 +216,7 @@ export function buildVatSheets(view: VatView): { fileName: string; sheets: Sheet
     sheets: [
       formSheet(view, fileName, meta),
       invoiceSheet("매출처별 합계표", "매출처", view.result.sales, fileName, meta),
-      invoiceSheet("매입처별 합계표", "매입처", view.result.purchases, fileName, meta),
+      invoiceSheet("매입처별 합계표", "매입처", view.result.purchases, fileName, meta, view.result.purchasesWithoutBusinessNumber),
       cardSheet(view, fileName, meta),
     ],
   };

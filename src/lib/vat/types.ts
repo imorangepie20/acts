@@ -4,6 +4,10 @@ import type { EvidenceType, VatType } from "@/lib/vouchers/types";
 
 /** One approved purchase or sale voucher, summarised by the loader (src/server/vat/). */
 export type VatEntry = {
+  voucherId: string;
+  /** formatVoucherNo(date, no) */
+  voucherNo: string;
+  date: string;
   entryType: "purchase" | "sale";
   evidenceType: EvidenceType;
   vatType: VatType;
@@ -44,3 +48,6 @@ export type CardStatement = {
   /** ⑧ by (cardNo, businessNumber); cardNo null = 직접 입력 */
   otherDetail: (Tally & { cardNo: string | null; businessNumber: string | null })[];
 };
+
+/** A 매입 세금계산서 whose partner has no 사업자등록번호 (it counts in the 주민등록번호 rows). */
+export type PurchaseWithoutBusinessNumber = { voucherId: string; voucherNo: string; date: string; partnerName: string | null };

@@ -1,11 +1,22 @@
+import Link from "next/link";
 import { formatBusinessNumber } from "@/lib/business-number";
 import { formatWon } from "@/lib/money";
 import { INVOICE_DETAIL_ROWS, invoiceOverflowNotice } from "@/lib/vat/cells";
-import type { InvoiceSummary as Summary, PartnerTally } from "@/lib/vat/types";
+import { purchasesWithoutBusinessNumberNotice } from "@/lib/vat/notices";
+import type { InvoiceSummary as Summary, PartnerTally, PurchaseWithoutBusinessNumber } from "@/lib/vat/types";
 import { cell, num } from "./vat-return-form";
 
 /** 매출처별 / 매입처별 세금계산서합계표(갑): 총합계 and the 전자 외 발급분 처별 명세. */
-export function InvoiceSummary({ side, summary: s }: { side: "매출처" | "매입처"; summary: Summary }) {
+export function InvoiceSummary({
+  side,
+  summary: s,
+  withoutBusinessNumber = [],
+}: {
+  side: "매출처" | "매입처";
+  summary: Summary;
+  /** 매입 only: 세금계산서 whose partner has no 사업자등록번호 */
+  withoutBusinessNumber?: PurchaseWithoutBusinessNumber[];
+}) {
   const issued = side === "매입처" ? "발급받은 분" : "발급분";
   const tally = (label: string, t: PartnerTally, sub?: boolean) => (
     <tr key={label} className={sub ? "font-semibold" : undefined}>
@@ -78,6 +89,21 @@ export function InvoiceSummary({ side, summary: s }: { side: "매출처" | "매�
         </tbody>
       </table>
       {s.otherByPartner.length > INVOICE_DETAIL_ROWS && <p className="text-neutral-600">{invoiceOverflowNotice}</p>}
+      {withoutBusinessNumber.length > 0 && (
+        <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900 print:hidden">
+          <p className="font-medium">{purchasesWithoutBusinessNumberNotice(withoutBusinessNumber.length)}</p>
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {withoutBusinessNumber.map((v) => (
+              <li key={v.voucherId} className="tabular-nums">
+                <Link href={`/vouchers/${v.voucherId}`} className="underline underline-offset-2">
+                  {v.voucherNo}
+                </Link>{" "}
+                · {v.date} · {v.partnerName ?? "거래처 없음"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
