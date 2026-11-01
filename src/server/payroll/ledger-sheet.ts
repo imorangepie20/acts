@@ -1,4 +1,4 @@
-import { DEDUCTION_KEYS, DEDUCTION_LABELS, ledgerFileName, RUN_STATUS_LABELS, runTitle } from "@/lib/payroll/labels";
+import { DEDUCTION_KEYS, DEDUCTION_LABELS, deductionOf, ledgerFileName, RUN_STATUS_LABELS, runTitle } from "@/lib/payroll/labels";
 import type { SheetColumn, SheetSpec } from "@/server/exports/xlsx";
 import type { RunDetail } from "./runs";
 
@@ -39,7 +39,7 @@ export function buildPayrollLedgerSheet(run: RunDetail, companyName: string): Sh
       netPay: l.result.netPay,
     };
     for (const i of run.items) row[`item:${i.code}`] = l.amounts[i.code] ?? 0;
-    for (const k of DEDUCTION_KEYS) row[`ded:${k}`] = l.result.deductions[k];
+    for (const k of DEDUCTION_KEYS) row[`ded:${k}`] = deductionOf(l.result.deductions, k);
     return row;
   });
   const total: Row = { employeeNo: "합계", name: `${run.lines.length}명`, rrn: null, site: null, department: null };

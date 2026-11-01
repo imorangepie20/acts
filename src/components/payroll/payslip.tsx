@@ -1,4 +1,4 @@
-import { DEDUCTION_KEYS, DEDUCTION_LABELS, RUN_TYPE_LABELS } from "@/lib/payroll/labels";
+import { DEDUCTION_KEYS, DEDUCTION_LABELS, deductionOf, isManualDeduction, RUN_TYPE_LABELS } from "@/lib/payroll/labels";
 import { formatWon } from "@/lib/money";
 import type { RunDetail, RunLineView } from "@/server/payroll/runs";
 
@@ -34,9 +34,12 @@ export function Payslip({ companyName, run, line }: { companyName: string; run: 
   const earnings: [string, number][] = run.items
     .filter((i) => (line.amounts[i.code] ?? 0) > 0)
     .map((i) => [i.name, line.amounts[i.code]]);
-  const deductions: [string, number][] = DEDUCTION_KEYS.map((k) => [
-    `${DEDUCTION_LABELS[k]}${line.overrides[k] !== undefined ? " (직접 입력)" : ""}`,
-    r.deductions[k],
+  // Manual deductions (정산분, 연말정산) show only when used; they are always typed by hand.
+  const deductions: [string, number][] = DEDUCTION_KEYS.filter(
+    (k) => !isManualDeduction(k) || deductionOf(r.deductions, k) !== 0,
+  ).map((k) => [
+    `${DEDUCTION_LABELS[k]}${!isManualDeduction(k) && line.overrides[k] !== undefined ? " (직접 입력)" : ""}`,
+    deductionOf(r.deductions, k),
   ]);
   const basis: [string, string][] = [
     ["기준소득월액 (국민연금)", s.calc.insPension ? `${formatWon(s.calc.pensionBase)}원` : "미가입"],

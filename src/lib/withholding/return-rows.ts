@@ -3,8 +3,8 @@
 export type ReturnRowCode = { code: string; label: string };
 export type ReturnRowGroup = { label: string; rows: ReturnRowCode[] };
 
-/** acts computes only these rows (근로소득 간이세액 and the totals). */
-export const COMPUTED_ROW_CODES = ["A01", "A10", "A99"] as const;
+/** acts computes only these rows (근로소득 간이세액, 연말정산 합계 from the 급여 대장, and the totals). */
+export const COMPUTED_ROW_CODES = ["A01", "A04", "A10", "A99"] as const;
 
 export const NOT_COMPUTED_TEXT = "이 프로그램에서 계산하지 않음";
 

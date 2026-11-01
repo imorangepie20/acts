@@ -1,14 +1,44 @@
-import type { DeductionKey } from "./types";
+import type { DeductionKey, Deductions, ManualDeductionKey } from "./types";
 
-export const DEDUCTION_KEYS: readonly DeductionKey[] = ["pension", "health", "ltc", "employment", "incomeTax", "localTax"];
+/** Every deduction column, in ledger order (the manual ones next to their kind). */
+export const DEDUCTION_KEYS: readonly DeductionKey[] = [
+  "pension",
+  "health",
+  "ltc",
+  "healthSettlement",
+  "ltcSettlement",
+  "employment",
+  "incomeTax",
+  "localTax",
+  "settlementIncomeTax",
+  "settlementLocalTax",
+];
+
+/** Typed by hand, may be negative (환급), no 계산값. */
+export const MANUAL_DEDUCTION_KEYS: readonly ManualDeductionKey[] = [
+  "healthSettlement",
+  "ltcSettlement",
+  "settlementIncomeTax",
+  "settlementLocalTax",
+];
+
+export const isManualDeduction = (k: DeductionKey): k is ManualDeductionKey =>
+  (MANUAL_DEDUCTION_KEYS as readonly string[]).includes(k);
+
+/** A deduction amount; manual keys are absent (0) on lines computed before they existed. */
+export const deductionOf = (d: Deductions, k: DeductionKey): number => d[k] ?? 0;
 
 export const DEDUCTION_LABELS: Record<DeductionKey, string> = {
   pension: "국민연금",
   health: "건강보험",
   ltc: "장기요양",
+  healthSettlement: "건강보험 정산분",
+  ltcSettlement: "장기요양 정산분",
   employment: "고용보험",
   incomeTax: "소득세",
   localTax: "지방소득세",
+  settlementIncomeTax: "연말정산 소득세",
+  settlementLocalTax: "연말정산 지방소득세",
 };
 
 export const RUN_TYPE_LABELS = { regular: "정기", bonus: "상여" } as const;

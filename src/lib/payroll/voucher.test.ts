@@ -184,3 +184,27 @@ describe("buildPayrollVoucher", () => {
     expect(sum(v, "debit")).toBe(sum(v, "credit"));
   });
 });
+
+describe("manual deductions (정산분, 연말정산)", () => {
+  const staff = { isExecutive: false, siteId: 1, departmentId: null };
+  it("an additional amount is a 예수금 credit, a refund a 예수금 debit, and the voucher balances", () => {
+    const v = build([
+      line(staff, { basic: 3_000_000 }, {
+        ...FULL_D,
+        healthSettlement: 50_000,
+        ltcSettlement: 6_000,
+        settlementIncomeTax: -150_000,
+        settlementLocalTax: -15_000,
+      }, FULL_C),
+    ]);
+    const find = (d: string) => v.lines.find((l) => l.description === d);
+    expect(find("건강·장기요양보험 정산분")).toMatchObject({ accountId: 254, side: "credit", amount: 56_000, partnerId: 12 });
+    expect(find("연말정산 소득세")).toMatchObject({ accountId: 254, side: "debit", amount: 150_000, partnerId: 14 });
+    expect(find("연말정산 지방소득세")).toMatchObject({ accountId: 254, side: "debit", amount: 15_000, partnerId: 15 });
+    expect(sum(v, "debit")).toBe(sum(v, "credit"));
+  });
+  it("drops zero manual lines", () => {
+    const v = build([line(staff, { basic: 3_000_000 }, FULL_D, FULL_C)]);
+    expect(v.lines.some((l) => /정산/.test(l.description))).toBe(false);
+  });
+});

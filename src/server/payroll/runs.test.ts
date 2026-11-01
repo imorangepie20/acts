@@ -188,6 +188,25 @@ describe("createRun", () => {
 });
 
 describe("editing a draft run", () => {
+  it("stores manual deductions (연말정산 환급 as a negative) and lowers the deductions by them", async () => {
+    const e = await emp();
+    const id = await run(regular("2026-06", "2026-06-25"));
+    let d = await detail(id);
+    const before = d.lines[0].result;
+    const r = await updateRunLines(db, admin, id, d.version, [
+      { employeeId: e, overrides: { settlementIncomeTax: -150_000, settlementLocalTax: -15_000, healthSettlement: 20_000 } },
+    ]);
+    expect(r.ok).toBe(true);
+    d = await detail(id);
+    expect(d.lines[0].result.deductions.settlementIncomeTax).toBe(-150_000);
+    expect(d.lines[0].result.netPay).toBe(before.netPay + 145_000);
+    expect(d.lines[0].result.deductions.incomeTax).toBe(before.deductions.incomeTax);
+    const tooBig = await updateRunLines(db, admin, id, d.version, [
+      { employeeId: e, overrides: { settlementIncomeTax: 1.5 } },
+    ]);
+    expect(tooBig.ok).toBe(false);
+  });
+
   it("recomputes changed lines, sets and clears overrides, rejects negatives", async () => {
     const e = await emp();
     const id = await run(regular("2026-06", "2026-06-25"));

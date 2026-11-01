@@ -210,3 +210,20 @@ describe("income tax", () => {
     expect(calc({ overrides: { health: 100_000, ltc: 5 } }).deductions.ltc).toBe(5);
   });
 });
+
+describe("manual deductions (정산분, 연말정산)", () => {
+  it("default to 0 and do not change the calculated deductions", () => {
+    const l = calc();
+    expect(l.deductions).toMatchObject({ healthSettlement: 0, ltcSettlement: 0, settlementIncomeTax: 0, settlementLocalTax: 0 });
+  });
+  it("take the typed amount, count in the total, and a refund raises the net pay", () => {
+    const plain = calc();
+    const l = calc({
+      overrides: { settlementIncomeTax: -150_000, settlementLocalTax: -15_000, healthSettlement: 50_000, ltcSettlement: 6_000 },
+    });
+    expect(l.deductions.incomeTax).toBe(plain.deductions.incomeTax);
+    expect(l.deductions.settlementIncomeTax).toBe(-150_000);
+    expect(l.totalDeductions).toBe(plain.totalDeductions - 150_000 - 15_000 + 50_000 + 6_000);
+    expect(l.netPay).toBe(plain.netPay + 109_000);
+  });
+});

@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, inArray, isNull, like, lt, lte, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { bonusIncomeTax, bonusPeriod } from "@/lib/payroll/bonus";
-import { DEDUCTION_KEYS } from "@/lib/payroll/labels";
+import { DEDUCTION_KEYS, isManualDeduction } from "@/lib/payroll/labels";
 import { computeLine, splitTaxable } from "@/lib/payroll/calc";
 import { maskAccount, maskRrn } from "@/lib/payroll/rrn";
 import { SETTING_CODE_FIELDS, SETTING_LABELS, type SettingCodeField } from "@/lib/payroll/settings";
@@ -147,6 +147,8 @@ const lastDayOf = (ym: string) => {
   return `${ym}-${pad(new Date(Date.UTC(y, m, 0)).getUTCDate())}`;
 };
 const isAmount = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0 && (n as number) <= MAX_WON;
+/** Manual deductions (정산분, 연말정산) may be negative: a refund. */
+const isSignedAmount = (n: unknown): n is number => Number.isSafeInteger(n) && Math.abs(n as number) <= MAX_WON;
 
 type RunHead = {
   id: string;
@@ -497,7 +499,8 @@ function sameResult(a: LineResult, b: LineResult): boolean {
     a.employmentBase === b.employmentBase &&
     a.totalDeductions === b.totalDeductions &&
     a.netPay === b.netPay &&
-    DEDUCTION_KEYS.every((k) => a.deductions?.[k] === b.deductions?.[k]) &&
+    // Absent manual deductions (lines from before they existed) are 0.
+    DEDUCTION_KEYS.every((k) => (a.deductions?.[k] ?? 0) === (b.deductions?.[k] ?? 0)) &&
     // Keys absent on lines computed before they existed count as 0.
     COMPANY_KEYS.every((k) => (a.company?.[k] ?? 0) === (b.company?.[k] ?? 0))
   );
@@ -581,7 +584,8 @@ function cleanChanges(changes: RunLineChange[], itemCodes: Set<string>): Result<
     }
     for (const [key, v] of Object.entries(c.overrides ?? {})) {
       if (!DEDUCTION_KEYS.includes(key as DeductionKey)) return fail(ERR_OVERRIDE);
-      if (v !== null && !isAmount(v)) return fail(ERR_AMOUNT);
+      const valid = isManualDeduction(key as DeductionKey) ? isSignedAmount : isAmount;
+      if (v !== null && !valid(v)) return fail(ERR_AMOUNT);
     }
     const prev = merged.get(c.employeeId);
     merged.set(c.employeeId, {

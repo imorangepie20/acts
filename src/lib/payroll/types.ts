@@ -86,7 +86,16 @@ export type EmployeeCalcInput = {
   healthBase: number;
 };
 
-export type DeductionKey = "pension" | "health" | "ltc" | "employment" | "incomeTax" | "localTax";
+/** Deductions computeLine calculates (an override replaces the 계산값). */
+export type CalcDeductionKey = "pension" | "health" | "ltc" | "employment" | "incomeTax" | "localTax";
+/**
+ * Deductions typed by hand on a line (no 계산값; absent = 0). They may be negative (a refund raises the
+ * net pay): 건강·장기요양 정산분 (보수총액 정산) and 연말정산 소득세·지방소득세 (추가 납부 or 환급).
+ */
+export type ManualDeductionKey = "healthSettlement" | "ltcSettlement" | "settlementIncomeTax" | "settlementLocalTax";
+export type DeductionKey = CalcDeductionKey | ManualDeductionKey;
+/** Lines computed before the manual deductions existed have no manual keys. */
+export type Deductions = Record<CalcDeductionKey, number> & Partial<Record<ManualDeductionKey, number>>;
 
 export type LineResult = {
   gross: number;
@@ -95,7 +104,7 @@ export type LineResult = {
   /** The part of `nontaxable` from items flagged excludeFromTotalPaid; absent on lines computed before Phase 3. */
   excludedNontaxable?: number;
   employmentBase: number;
-  deductions: Record<DeductionKey, number>;
+  deductions: Deductions;
   /** employmentStability / industrialAccident are absent on lines computed before they existed (= 0). */
   company: {
     pension: number;
@@ -141,7 +150,7 @@ export type RunLineSnapshot = {
   /** Rates of the 귀속월 1일. */
   rates: Rates;
   /** The deductions before overrides (the 계산값 shown next to an overridden cell). */
-  calculated: Record<DeductionKey, number>;
+  calculated: Deductions;
   /** Bonus runs only. */
   bonus: BonusBasis | null;
 };

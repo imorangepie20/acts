@@ -1,5 +1,6 @@
 import type {
   DeductionKey,
+  Deductions,
   EmployeeCalcInput,
   ItemDef,
   LineResult,
@@ -127,21 +128,21 @@ export function computeLine(input: {
   }
 
   const incomeTaxFinal = overrides.incomeTax ?? incomeTax;
-  const deductions: Record<DeductionKey, number> = {
+  // Manual deductions (정산분, 연말정산) have no 계산값: the typed amount or 0; negative = 환급.
+  const deductions: Deductions = {
     pension: overrides.pension ?? pensionEmp,
     health: overrides.health ?? healthEmp,
     ltc: overrides.ltc ?? ltcEmp,
+    healthSettlement: overrides.healthSettlement ?? 0,
+    ltcSettlement: overrides.ltcSettlement ?? 0,
     employment: overrides.employment ?? employmentEmp,
     incomeTax: incomeTaxFinal,
     localTax: overrides.localTax ?? floor10(incomeTaxFinal / 10),
+    settlementIncomeTax: overrides.settlementIncomeTax ?? 0,
+    settlementLocalTax: overrides.settlementLocalTax ?? 0,
   };
-  const totalDeductions =
-    deductions.pension +
-    deductions.health +
-    deductions.ltc +
-    deductions.employment +
-    deductions.incomeTax +
-    deductions.localTax;
+  // Includes the manual deductions with their sign: a refund lowers the total and raises the net pay.
+  const totalDeductions = Object.values(deductions).reduce((s, v) => s + (v ?? 0), 0);
 
   return {
     ...split,

@@ -14,8 +14,8 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { MoneyInput } from "@/components/vouchers/money-input";
-import { DEDUCTION_KEYS, DEDUCTION_LABELS } from "@/lib/payroll/labels";
-import type { DeductionKey, LineResult } from "@/lib/payroll/types";
+import { DEDUCTION_KEYS, DEDUCTION_LABELS, deductionOf, isManualDeduction } from "@/lib/payroll/labels";
+import type { DeductionKey, Deductions, LineResult } from "@/lib/payroll/types";
 import { formatWon } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { RunLineChange } from "@/server/payroll/runs";
@@ -27,7 +27,7 @@ export type GridLine = {
   amounts: Record<string, number>;
   overrides: Partial<Record<DeductionKey, number>>;
   /** The deductions before overrides (계산값). */
-  calculated: Record<DeductionKey, number>;
+  calculated: Deductions;
   result: LineResult;
 };
 
@@ -50,6 +50,7 @@ function WonCell({
   value,
   emptyIs,
   clearable = false,
+  signed = false,
   resetNonce,
   onCommit,
 }: {
@@ -58,6 +59,8 @@ function WonCell({
   emptyIs: number | null;
   /** An override that an empty cell clears. */
   clearable?: boolean;
+  /** Accepts a negative amount (환급). */
+  signed?: boolean;
   /** Bumped after a failed save: every cell drops its typed value and shows the stored one. */
   resetNonce: number;
   onCommit: (v: number | null) => void;
@@ -74,6 +77,7 @@ function WonCell({
     <MoneyInput
       aria-label={label}
       value={v}
+      signed={signed}
       onValueChange={setV}
       className="h-8 w-28 px-2"
       onBlur={(e) => {
@@ -192,7 +196,9 @@ export function RunGrid({ runId, version, editable, items, lines, candidates }: 
                 ))}
                 <TableCell className="text-right font-medium tabular-nums">{money(l.result.gross)}</TableCell>
                 {DEDUCTION_KEYS.map((k) => {
-                  const overridden = l.overrides[k] !== undefined;
+                  // Manual deductions have no 계산값: no marker, an empty cell clears them back to 0.
+                  const manual = isManualDeduction(k);
+                  const overridden = !manual && l.overrides[k] !== undefined;
                   const label = `${l.employeeNo} ${DEDUCTION_LABELS[k]}`;
                   return (
                     <TableCell key={k} className="text-right tabular-nums">
@@ -204,25 +210,26 @@ export function RunGrid({ runId, version, editable, items, lines, candidates }: 
                                 <span
                                   role="img"
                                   tabIndex={0}
-                                  aria-label={`${label} 직접 입력 (계산값 ${money(l.calculated[k])}원)`}
+                                  aria-label={`${label} 직접 입력 (계산값 ${money(deductionOf(l.calculated, k))}원)`}
                                   className="inline-block size-2 shrink-0 rounded-full bg-amber-500"
                                 />
                               }
                             />
-                            <TooltipContent>계산값 {money(l.calculated[k])}원</TooltipContent>
+                            <TooltipContent>계산값 {money(deductionOf(l.calculated, k))}원</TooltipContent>
                           </Tooltip>
                         )}
                         {editable ? (
                           <WonCell
                             label={label}
-                            value={l.result.deductions[k]}
+                            value={deductionOf(l.result.deductions, k)}
                             emptyIs={null}
                             resetNonce={resetNonce}
-                            clearable={overridden}
+                            clearable={overridden || (manual && l.overrides[k] !== undefined)}
+                            signed={manual}
                             onCommit={(v) => save({ employeeId: l.employeeId, overrides: { [k]: v } })}
                           />
                         ) : (
-                          <span className={cn(overridden && "font-medium")}>{money(l.result.deductions[k])}</span>
+                          <span className={cn(overridden && "font-medium")}>{money(deductionOf(l.result.deductions, k))}</span>
                         )}
                         {editable && overridden && (
                           <Button
@@ -274,7 +281,7 @@ export function RunGrid({ runId, version, editable, items, lines, candidates }: 
                 <TableCell className="text-right tabular-nums">{money(sum((l) => l.result.gross))}</TableCell>
                 {DEDUCTION_KEYS.map((k) => (
                   <TableCell key={k} className="text-right tabular-nums">
-                    {money(sum((l) => l.result.deductions[k]))}
+                    {money(sum((l) => deductionOf(l.result.deductions, k)))}
                   </TableCell>
                 ))}
                 <TableCell className="text-right tabular-nums">{money(sum((l) => l.result.totalDeductions))}</TableCell>

@@ -40,6 +40,8 @@ export function payrollDescription(type: "regular" | "bonus", yearMonth: string)
  * - Credit: the employee parts on `withholding` and the company parts on `companyPayable`, one line
  *   per 기관 partner (국민연금 / 건강·장기요양 / 고용 / 소득세 / 지방소득세; 산재 also on the 근로복지공단
  *   partner, as a separate line); 실지급액 on `netPay`.
+ * - 건강·장기요양 정산분 and 연말정산 소득세·지방소득세 (manual, signed) go to `withholding` too: an
+ *   additional amount is a credit, a refund (negative total) a debit line on the same account.
  * Zero lines are dropped.
  */
 export function buildPayrollVoucher(input: {
@@ -63,6 +65,9 @@ export function buildPayrollVoucher(input: {
     [a.withholding, p.employment, "고용보험 근로자 부담분"],
     [a.withholding, p.tax, "근로소득세"],
     [a.withholding, p.localTax, "지방소득세"],
+    [a.withholding, p.health, "건강·장기요양보험 정산분"],
+    [a.withholding, p.tax, "연말정산 소득세"],
+    [a.withholding, p.localTax, "연말정산 지방소득세"],
     [a.companyPayable, p.pension, "국민연금 사업주 부담분"],
     [a.companyPayable, p.health, "건강·장기요양보험 사업주 부담분"],
     [a.companyPayable, p.employment, "고용보험 사업주 부담분"],
@@ -98,6 +103,9 @@ export function buildPayrollVoucher(input: {
       d.employment,
       d.incomeTax,
       d.localTax,
+      (d.healthSettlement ?? 0) + (d.ltcSettlement ?? 0),
+      d.settlementIncomeTax ?? 0,
+      d.settlementLocalTax ?? 0,
       c.pension,
       c.health + c.ltc,
       c.employment + stability,
@@ -122,7 +130,9 @@ export function buildPayrollVoucher(input: {
     const g = groups.get(key)!;
     credits.get(key)!.forEach((amount, i) => {
       const [accountId, partnerId, description] = CREDITS[i];
-      if (amount !== 0) lines.push({ accountId, side: "credit", amount, partnerId, ...g, description });
+      // A negative total (연말정산 환급, 정산분 환급) is a debit on the same account.
+      if (amount > 0) lines.push({ accountId, side: "credit", amount, partnerId, ...g, description });
+      else if (amount < 0) lines.push({ accountId, side: "debit", amount: -amount, partnerId, ...g, description });
     });
   }
 

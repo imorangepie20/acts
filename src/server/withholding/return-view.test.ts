@@ -84,7 +84,7 @@ it("a refund larger than the first form's 소득세 carries into the next form o
   expect(second.carriedOut).toBe(refund - tax1 - second.adjusted);
 });
 
-it("semiannual covers the half and the sheet has A01/A10/A99 and the refund block", async () => {
+it("semiannual covers the half and the sheet has A01/A04/A10/A99 and the refund block", async () => {
   await createPayrollVoucher(db, admin, { yearMonth: "2026-06", payDate: "2026-06-25" });
   const v = await loadReturnView(db, { mode: "semiannual", year: "2026", half: "1", refund: "100" });
   expect(v.forms[0].a01.people).toBe(1);
@@ -93,10 +93,12 @@ it("semiannual covers the half and the sheet has A01/A10/A99 and the refund bloc
   expect(fileName).toBe("원천징수이행상황신고서_2026_상반기");
   expect(sheets[0].rows.map((r) => r.code ?? r.label)).toEqual([
     "A01",
+    "A04",
     "A10",
     "A99",
     "환급세액 조정",
     "⑫ 전월 미환급세액",
+    "⑬ 당월 발생 환급세액(일반환급)",
     "⑲ 당월조정 환급세액계",
     "⑳ 차월이월 환급세액",
     "지방소득세(위택스 신고용)",

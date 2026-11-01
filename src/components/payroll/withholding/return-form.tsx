@@ -16,7 +16,7 @@ export function ReturnForm({
   semiannual: boolean;
 }) {
   const computed: readonly string[] = COMPUTED_ROW_CODES;
-  const rowFigures = { A01: f.a01, A10: f.a10, A99: f.a99 } as const;
+  const rowFigures = { A01: f.a01, A04: f.a04, A10: f.a10, A99: f.a99 } as const;
   const range = `${yearMonthLabel(f.attributionMonth)} ~ ${yearMonthLabel(f.paymentMonth)}`;
 
   return (
@@ -90,7 +90,7 @@ export function ReturnForm({
                     {fig ? (
                       <>
                         <td className={num}>{fig.people}</td>
-                        <td className={num}>{formatWon(fig.totalPaid)}</td>
+                        <td className={num}>{fig.totalPaid === null ? "" : formatWon(fig.totalPaid)}</td>
                         <td className={num}>{formatWon(fig.incomeTax)}</td>
                         <td className={cell} />
                         <td className={cell} />
@@ -121,6 +121,7 @@ export function ReturnForm({
           <thead>
             <tr className="bg-neutral-100">
               <th className={cell}>⑫ 전월 미환급세액</th>
+              <th className={cell}>⑬ 당월 발생 환급세액(일반환급)</th>
               <th className={cell}>⑱ 조정대상 환급세액</th>
               <th className={cell}>⑲ 당월조정 환급세액계</th>
               <th className={cell}>⑳ 차월이월 환급세액 (⑱-⑲)</th>
@@ -129,14 +130,16 @@ export function ReturnForm({
           <tbody>
             <tr>
               <td className={num}>{formatWon(f.refund.carriedIn)}</td>
-              <td className={num}>{formatWon(f.refund.carriedIn)}</td>
+              <td className={num}>{formatWon(f.refund.arising)}</td>
+              <td className={num}>{formatWon(f.refund.carriedIn + f.refund.arising)}</td>
               <td className={num}>{formatWon(f.refund.adjusted)}</td>
               <td className={num}>{formatWon(f.refund.carriedOut)}</td>
             </tr>
           </tbody>
         </table>
         <p className="mt-1 text-neutral-600">
-          ⑬~⑰, ㉑ 환급 신청액: {NOT_COMPUTED_TEXT}. ⑱은 ⑫와 같다고 보고 계산했습니다.
+          ⑬은 연말정산 환급이 그달 소득세보다 클 때 생기는 일반환급입니다. ⑭~⑰, ㉑ 환급 신청액: {NOT_COMPUTED_TEXT}.
+          ⑱은 ⑫+⑬으로 계산했습니다. A04 ⑤ 총지급액(연말정산 총급여)은 급여 대장에 없어 비워 두었습니다.
         </p>
       </div>
 

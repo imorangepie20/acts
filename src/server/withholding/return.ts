@@ -58,6 +58,8 @@ export async function loadReturnRuns(db: Db, range: { payFrom: string; payTo: st
       excludedNontaxable,
       incomeTax: r.result.deductions.incomeTax,
       localTax: r.result.deductions.localTax,
+      settlementIncomeTax: r.result.deductions.settlementIncomeTax ?? 0,
+      settlementLocalTax: r.result.deductions.settlementLocalTax ?? 0,
     });
   }
   return [...byRun.values()];
