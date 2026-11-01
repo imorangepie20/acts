@@ -82,15 +82,15 @@ test("전표: 수정·취소분 매입은 차변·대변이 바뀌고 수정 화
   await page.goto("/vouchers/new");
   await page.getByLabel("적요").fill(desc);
   await pick(page, "계정", "811");
-  await pick(page, "결제 계정", "253");
+  await pick(page, "결제 계정", "101");
   await page.getByLabel("합계").fill("11000");
   await page.getByRole("switch", { name: "수정·취소분(마이너스)" }).click();
 
   const preview = page.getByRole("table", { name: "분개 미리보기" });
   await expect(preview.getByRole("row", { name: /811 복리후생비/ }).getByRole("cell").first()).toHaveText("대변");
   await expect(preview.getByRole("row", { name: /135 부가세대급금/ }).getByRole("cell").first()).toHaveText("대변");
-  await expect(preview.getByRole("row", { name: /253 미지급금/ })).toContainText("차변");
-  await expect(preview.getByRole("row", { name: /253 미지급금/ })).toContainText("11,000");
+  await expect(preview.getByRole("row", { name: /101 현금/ })).toContainText("차변");
+  await expect(preview.getByRole("row", { name: /101 현금/ })).toContainText("11,000");
 
   await page.getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByText("저장되었습니다.")).toBeVisible();
