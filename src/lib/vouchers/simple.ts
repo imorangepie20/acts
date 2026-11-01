@@ -16,6 +16,7 @@ export type TradeInput = {
   evidenceType: EvidenceType;
   vatType: VatType;
   vatDeductible: boolean;
+  /** Negative (with vatAmount 0 or negative too) for a 수정·취소분: the lines swap sides. */
   supplyAmount: number;
   vatAmount: number;
 };
@@ -47,11 +48,15 @@ export function defaultVat(supplyAmount: number): number {
   return Math.floor(supplyAmount / 10);
 }
 
-function validateTrade(i: TradeInput): string | null {
-  if (!Number.isInteger(i.supplyAmount) || i.supplyAmount < 1 || i.supplyAmount > MAX_WON) {
-    return "금액을 입력하세요.";
-  }
-  if (!Number.isInteger(i.vatAmount) || i.vatAmount < 0) return "부가세가 올바르지 않습니다.";
+export const ERR_SIGN = "공급가액과 부가세의 부호가 같아야 합니다.";
+
+/** Size rules apply to the magnitudes; a 수정·취소분 has a negative supply and a VAT of 0 or less. */
+function validateTrade(input: TradeInput): string | null {
+  if (!Number.isInteger(input.supplyAmount)) return "금액을 입력하세요.";
+  if (!Number.isInteger(input.vatAmount)) return "부가세가 올바르지 않습니다.";
+  if (input.supplyAmount < 0 ? input.vatAmount > 0 : input.vatAmount < 0) return ERR_SIGN;
+  const i = { ...input, supplyAmount: Math.abs(input.supplyAmount), vatAmount: Math.abs(input.vatAmount) };
+  if (i.supplyAmount < 1 || i.supplyAmount > MAX_WON) return "금액을 입력하세요.";
   if (i.evidenceType === "invoice" && i.vatType !== "exempt") {
     return "계산서는 면세 거래에만 사용할 수 있습니다.";
   }
@@ -118,7 +123,9 @@ function emitSimple(input: SimpleInput, vat: VatAccounts): VoucherInput {
     };
   }
 
-  const { supplyAmount: supply, vatAmount: tax } = input;
+  const negative = input.supplyAmount < 0;
+  const supply = Math.abs(input.supplyAmount);
+  const tax = Math.abs(input.vatAmount);
   const lines: LineInput[] = [];
   if (input.type === "purchase") {
     if (input.vatDeductible) {
@@ -133,6 +140,8 @@ function emitSimple(input: SimpleInput, vat: VatAccounts): VoucherInput {
     lines.push(line(input.mainAccountId, "credit", supply));
     if (tax > 0) lines.push(line(vat.outputAccountId, "credit", tax));
   }
+  // A 수정·취소분 is the same entry reversed: same line order, sides swapped.
+  if (negative) for (const l of lines) l.side = l.side === "debit" ? "credit" : "debit";
 
   return {
     date: input.date,
@@ -143,8 +152,8 @@ function emitSimple(input: SimpleInput, vat: VatAccounts): VoucherInput {
     evidenceType: input.evidenceType,
     vatType: input.vatType,
     vatDeductible: input.type === "purchase" ? input.vatDeductible : null,
-    supplyAmount: supply,
-    vatAmount: tax,
+    supplyAmount: input.supplyAmount,
+    vatAmount: input.vatAmount,
     lines,
   };
 }
@@ -199,8 +208,10 @@ export function toSimpleInput(v: VoucherInput, vat: VatAccounts): SimpleInput | 
     if (isPurchase && v.vatDeductible === null) return null;
     // purchase: main is the first debit, counter the (only) credit
     // sale: counter is the (only) debit, main the first credit
-    const mainLine = v.lines.find((l) => l.side === (isPurchase ? "debit" : "credit"));
-    const counterLine = v.lines.find((l) => l.side === (isPurchase ? "credit" : "debit"));
+    // (sides swapped for a 수정·취소분, whose supply amount is negative)
+    const mainIsDebit = isPurchase !== v.supplyAmount < 0;
+    const mainLine = v.lines.find((l) => l.side === (mainIsDebit ? "debit" : "credit"));
+    const counterLine = v.lines.find((l) => l.side === (mainIsDebit ? "credit" : "debit"));
     if (!mainLine || !counterLine) return null;
     candidate = {
       type: v.entryType,

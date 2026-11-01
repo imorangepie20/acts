@@ -4,13 +4,14 @@ import { findHeader, isBlankRow, parseDate, parseWon } from "./sheet";
 import {
   ERR_BAD_AMOUNT,
   ERR_BAD_DATE,
-  ERR_NEGATIVE,
+  ERR_MIXED_SIGN,
   ERR_SERVICE_CHARGE,
   ERR_TOO_MANY_ROWS,
   MAX_IMPORT_ROWS,
   type Cell,
   type ParsedRow,
   type ParseResult,
+  signProblem,
 } from "./types";
 
 const REQUIRED = {
@@ -92,8 +93,8 @@ export function parseCardPurchases(grid: Cell[][]): ParseResult {
     let problem: string | null = null;
     if (!date) problem = ERR_BAD_DATE;
     else if (total === null) problem = ERR_BAD_AMOUNT;
-    else if (total <= 0) problem = ERR_NEGATIVE;
-    else if (serviceCharge > 0) problem = ERR_SERVICE_CHARGE;
+    else if (serviceCharge !== 0) problem = ERR_SERVICE_CHARGE;
+    else problem = signProblem(supply, vat) ?? (Math.sign(supply) !== Math.sign(total) ? ERR_MIXED_SIGN : null);
 
     rows.push({
       key,

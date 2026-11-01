@@ -136,6 +136,22 @@ describe("imports", () => {
     expect((await preview(await purchaseFile())).every((x) => x.status === "duplicate" && x.partnerId !== null)).toBe(true);
   });
 
+  it("commits a (−) 수정세금계산서 as the reversed entry with negative header amounts", async () => {
+    const file = await book([TAX_HEAD, taxRow("2026-10-20", "20261020-1000-m1", -1000000, "반품")]);
+    const [row] = await preview(file);
+    expect(row).toMatchObject({ status: "ready", supplyAmount: -1000000, vatAmount: -100000 });
+    const r = await commitImport(db, staff, commitInput([toCommit(row)]));
+    expect(r.failed).toEqual([]);
+    const [v] = await db.select().from(vouchers);
+    expect(v).toMatchObject({ entryType: "purchase", supplyAmount: -1000000, vatAmount: -100000 });
+    const lines = await db.select().from(voucherLines).where(eq(voucherLines.voucherId, v.id)).orderBy(voucherLines.lineNo);
+    expect(lines.map((l) => [l.side, l.accountId, l.amount])).toEqual([
+      ["credit", acc["811"], 1000000],
+      ["credit", acc["135"], 100000],
+      ["debit", acc["251"], 1100000],
+    ]);
+  });
+
   it("re-import is flagged and refused", async () => {
     const rows = await preview(await purchaseFile());
     await commitImport(db, staff, commitInput(rows.map((x) => toCommit(x))));

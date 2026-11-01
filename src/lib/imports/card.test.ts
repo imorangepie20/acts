@@ -94,15 +94,30 @@ describe("parseCardPurchases", () => {
     expect(row.problem).toBe("봉사료가 있는 건은 직접 입력하세요.");
   });
 
-  it("blocks 봉사료 and negative totals", () => {
+  it("blocks 봉사료 and zero totals; a negative total is a 취소분", () => {
     const grid: Cell[][] = [
       ["승인일자", "가맹점명", "합계", "봉사료"],
       ["2026-10-15", "식당", 11000, 1000],
       ["2026-10-15", "취소", -5000, null],
+      ["2026-10-15", "영", 0, null],
     ];
-    const [a, b] = rowsOf(parseCardPurchases(grid));
+    const [a, b, c] = rowsOf(parseCardPurchases(grid));
     expect(a.problem).toBe("봉사료가 있는 건은 직접 입력하세요.");
-    expect(b.problem).toBe("음수 금액(수정·취소분)은 전표 입력 화면에서 직접 입력하세요.");
+    expect(b).toMatchObject({ problem: null, supplyAmount: -5000, vatAmount: 0 });
+    expect(c.problem).toBe("공급가액이 0원인 건은 전표 입력 화면에서 직접 입력하세요.");
+  });
+
+  it("takes a negative 공급가액/세액 pair and refuses signs that disagree with the total", () => {
+    const grid: Cell[][] = [
+      ["가맹점명", "승인일자", "공급가액(원)", "세액(원)", "합계(원)"],
+      ["취소", "2026-10-15", -10000, -1000, -11000],
+      ["섞임", "2026-10-15", 10000, -1000, 9000],
+      ["반대", "2026-10-15", 10000, 1000, -11000],
+    ];
+    const [a, b, c] = rowsOf(parseCardPurchases(grid));
+    expect(a).toMatchObject({ problem: null, supplyAmount: -10000, vatAmount: -1000 });
+    expect(b.problem).toBe("공급가액과 세액의 부호가 다른 건은 전표 입력 화면에서 직접 입력하세요.");
+    expect(c.problem).toBe("공급가액과 세액의 부호가 다른 건은 전표 입력 화면에서 직접 입력하세요.");
   });
 
   it("numbers identical rows without an approval number", () => {

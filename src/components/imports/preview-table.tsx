@@ -106,7 +106,7 @@ export function PreviewTable({ rows, states, accounts, onChange, onToggleAll }: 
               </TableCell>
               {purchase && (
                 <TableCell>
-                  {r.vatAmount > 0 && (
+                  {r.vatAmount !== 0 && (
                     <Switch
                       aria-label={`${name || r.description} 공제`}
                       checked={s.deductible}

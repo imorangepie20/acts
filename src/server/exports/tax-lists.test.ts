@@ -70,6 +70,16 @@ describe("listTaxInvoices", () => {
     expect(rows[0].siteName).not.toBe("");
   });
 
+  it("lists a 수정·취소분 with negative amounts", async () => {
+    await make({});
+    await make({ date: "2026-10-05", supplyAmount: -400, vatAmount: -40 });
+    const rows = await listTaxInvoices(db, "2026-10-01", "2026-10-31");
+    expect(rows.map((r) => [r.supplyAmount, r.vatAmount, r.total])).toEqual([
+      [1000, 100, 1100],
+      [-400, -40, -440],
+    ]);
+  });
+
   it("shows the imported approval number and prefers import meta", async () => {
     const id = await make({ type: "sale", evidenceType: "invoice", vatType: "exempt", vatAmount: 0 });
     await db.insert(voucherImports).values({

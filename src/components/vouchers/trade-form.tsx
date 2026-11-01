@@ -79,15 +79,15 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
   const [evidence, setEvidence] = useState<EvidenceType>(init?.evidenceType ?? setup.evidence);
   const [vatType, setVatType] = useState<VatType>(init?.vatType ?? "taxable");
   const [deductibleOn, setDeductibleOn] = useState(init ? init.vatDeductible : true);
-  const [amounts, setAmounts] = useState<Amounts>(
-    init
-      ? {
-          total: init.supplyAmount === null || init.vatAmount === null ? null : init.supplyAmount + init.vatAmount,
-          supply: init.supplyAmount,
-          vat: init.vatAmount,
-        }
-      : { total: null, supply: null, vat: null },
-  );
+  // A 수정·취소분 is typed as positive amounts with this switch on; it is sent negated.
+  const [reversal, setReversal] = useState((init?.supplyAmount ?? 0) < 0);
+  const [amounts, setAmounts] = useState<Amounts>(() => {
+    if (!init) return { total: null, supply: null, vat: null };
+    const supply = init.supplyAmount === null ? null : Math.abs(init.supplyAmount);
+    const vat = init.vatAmount === null ? null : Math.abs(init.vatAmount);
+    return { total: supply === null || vat === null ? null : supply + vat, supply, vat };
+  });
+  const sign = reversal ? -1 : 1;
 
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const partnerId = partner?.id ?? null;
@@ -141,8 +141,8 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
     evidenceType: evidence,
     vatType: effectiveVatType,
     vatDeductible: deductible,
-    supplyAmount: amounts.supply ?? 0,
-    vatAmount: amounts.vat ?? 0,
+    supplyAmount: sign * (amounts.supply ?? 0),
+    vatAmount: sign * (amounts.vat ?? 0),
   };
   const built = buildSimpleVoucher(input, ctx.vat);
 
@@ -239,6 +239,10 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
             <Label htmlFor={`${p}-deductible`}>공제 여부</Label>
           </div>
         )}
+        <div className="flex items-end gap-3 pb-1.5">
+          <Switch id={`${p}-reversal`} checked={reversal} onCheckedChange={setReversal} />
+          <Label htmlFor={`${p}-reversal`}>수정·취소분(마이너스)</Label>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

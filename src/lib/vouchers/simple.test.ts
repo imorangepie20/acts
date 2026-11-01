@@ -127,7 +127,7 @@ describe("VAT rules", () => {
     expect(err({ ...purchase, supplyAmount: MAX_WON + 1 })).toBe("금액을 입력하세요.");
     expect(err({ ...purchase, supplyAmount: 10.5 })).toBe("금액을 입력하세요.");
     expect(err({ ...transfer, amount: 0 })).toBe("금액을 입력하세요.");
-    expect(err({ ...purchase, vatAmount: -1 })).toBe("부가세가 올바르지 않습니다.");
+    expect(err({ ...purchase, vatAmount: -1 })).toBe("공급가액과 부가세의 부호가 같아야 합니다.");
     expect(err({ ...purchase, vatAmount: 1.5 })).toBe("부가세가 올바르지 않습니다.");
   });
   it("2: invoice only for exempt", () => {
@@ -150,6 +150,34 @@ describe("VAT rules", () => {
   });
 });
 
+describe("수정·취소분 (negative supply)", () => {
+  it("reverses a purchase: same line order, sides swapped, positive line amounts", () => {
+    const v = built({ ...purchase, supplyAmount: -9091, vatAmount: -909 });
+    expect(amounts(v)).toEqual([
+      ["credit", MAIN, 9091],
+      ["credit", vat.inputAccountId, 909],
+      ["debit", COUNTER, 10000],
+    ]);
+    expect(v).toMatchObject({ entryType: "purchase", supplyAmount: -9091, vatAmount: -909 });
+  });
+  it("reverses a sale", () => {
+    expect(amounts(built({ ...sale, supplyAmount: -100000, vatAmount: -10000 }))).toEqual([
+      ["credit", COUNTER, 110000],
+      ["debit", MAIN, 100000],
+      ["debit", vat.outputAccountId, 10000],
+    ]);
+  });
+  it("applies the size and VAT rules to the magnitudes", () => {
+    expect(err({ ...purchase, supplyAmount: -9091, vatAmount: 909 })).toBe("공급가액과 부가세의 부호가 같아야 합니다.");
+    expect(err({ ...purchase, supplyAmount: 0, vatAmount: -1 })).toBe("공급가액과 부가세의 부호가 같아야 합니다.");
+    expect(err({ ...purchase, supplyAmount: -100, vatAmount: -101 })).toBe("부가세가 공급가액보다 클 수 없습니다.");
+    expect(err({ ...sale, vatType: "exempt", supplyAmount: -100, vatAmount: -10 })).toBe(
+      "영세·면세 거래는 부가세가 0원이어야 합니다.",
+    );
+    expect(err({ ...purchase, supplyAmount: -1_000_000_000_000_000, vatAmount: 0 })).toBe("금액을 입력하세요.");
+  });
+});
+
 describe("toSimpleInput", () => {
   it("round-trips every case", () => {
     const cases: SimpleInput[] = [
@@ -159,6 +187,10 @@ describe("toSimpleInput", () => {
       { ...purchase, supplyAmount: 10000, vatAmount: 0, vatDeductible: false },
       sale,
       { ...sale, vatType: "exempt", vatAmount: 0 },
+      { ...purchase, supplyAmount: -9091, vatAmount: -909 },
+      { ...purchase, supplyAmount: -9091, vatAmount: -909, vatDeductible: false },
+      { ...sale, supplyAmount: -100000, vatAmount: -10000 },
+      { ...sale, vatType: "exempt", supplyAmount: -100000, vatAmount: 0 },
       transfer,
     ];
     for (const c of cases) {

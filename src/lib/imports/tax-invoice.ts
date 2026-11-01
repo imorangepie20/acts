@@ -4,12 +4,12 @@ import { findHeader, isBlankRow, parseDate, parseWon } from "./sheet";
 import {
   ERR_BAD_AMOUNT,
   ERR_BAD_DATE,
-  ERR_NEGATIVE,
   ERR_TOO_MANY_ROWS,
   MAX_IMPORT_ROWS,
   type Cell,
   type ParsedRow,
   type ParseResult,
+  signProblem,
 } from "./types";
 
 const REQUIRED = {
@@ -78,8 +78,7 @@ export function parseTaxInvoices(grid: Cell[][], direction: "purchase" | "sale")
     if (!date) problem = ERR_BAD_DATE;
     else if (!approvalNo) problem = "승인번호가 없습니다.";
     else if (supplyRaw === null || vatRaw === null) problem = ERR_BAD_AMOUNT;
-    else if (supply <= 0 || vat < 0) problem = ERR_NEGATIVE;
-    else if (vat > supply) problem = "세액이 공급가액보다 큽니다.";
+    else problem = signProblem(supply, vat) ?? (Math.abs(vat) > Math.abs(supply) ? "세액이 공급가액보다 큽니다." : null);
 
     rows.push({
       key: `nts:${approvalNo.replace(/-/g, "")}`,

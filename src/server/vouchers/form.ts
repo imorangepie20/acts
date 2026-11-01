@@ -8,8 +8,8 @@ export type Parsed<T> = { ok: true; data: T } | { ok: false };
 // Shapes only; amounts, dates and references are validated by the service.
 const id = z.number().int().positive();
 const amount = z.number().finite();
-/** Header supply/VAT: never a float, so nothing non-integer can reach a bigint column. */
-const headerAmount = z.number().int().min(0).max(MAX_WON);
+/** Header supply/VAT: never a float, so nothing non-integer can reach a bigint column; negative for a 수정·취소분. */
+const headerAmount = z.number().int().min(-MAX_WON).max(MAX_WON);
 const evidenceType = z.enum(["tax_invoice", "invoice", "card", "cash_receipt", "simple_receipt", "none"]);
 const vatType = z.enum(["taxable", "zero_rated", "exempt"]);
 const dims = {

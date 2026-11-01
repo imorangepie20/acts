@@ -306,6 +306,39 @@ describe("simple entry types", () => {
     ]);
   });
 
+  it("stores a 수정·취소분 purchase and refuses one whose lines were not swapped", async () => {
+    const vat = await getVatAccountIds(db);
+    const input = {
+      type: "purchase" as const,
+      date: "2026-10-30",
+      description: "반품",
+      mainAccountId: acc["811"],
+      counterAccountId: acc["101"],
+      partnerId: partnerA,
+      siteId,
+      departmentId: null,
+      evidenceType: "tax_invoice" as const,
+      vatType: "taxable" as const,
+      vatDeductible: true,
+      supplyAmount: -10000,
+      vatAmount: -1000,
+    };
+    const b = buildSimpleVoucher(input, vat);
+    if (!b.ok) throw new Error(b.error);
+    const id = await create(b.value);
+    const v = await getVoucher(db, id, { hidePayroll: false });
+    expect(v).toMatchObject({ entryType: "purchase", supplyAmount: -10000, vatAmount: -1000 });
+    expect(v!.lines.map((l) => [l.account.code, l.side, l.amount])).toEqual([
+      ["811", "credit", 10000],
+      ["135", "credit", 1000],
+      ["101", "debit", 11000],
+    ]);
+    const unswapped = buildSimpleVoucher({ ...input, supplyAmount: 10000, vatAmount: 1000 }, vat);
+    if (!unswapped.ok) throw new Error(unswapped.error);
+    const r = await createVoucher(db, staff, { ...unswapped.value, supplyAmount: -10000, vatAmount: -1000 });
+    expect(r.ok).toBe(false);
+  });
+
   it("re-checks the VAT rules for a simple receipt that claims VAT", async () => {
     const r = await createVoucher(db, staff, {
       date: "2026-10-30",

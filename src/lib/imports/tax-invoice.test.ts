@@ -162,14 +162,25 @@ describe("parseTaxInvoices", () => {
     }
   });
 
-  it("flags negative rows and bad dates", () => {
-    const [neg, bad, over] = rowsOf(
+  it("keeps a (−) 수정세금계산서 negative and flags zero, mixed-sign, oversized and bad-date rows", () => {
+    const [neg, bad, over, zero, mixed, negOver] = rowsOf(
       parseTaxInvoices(
-        [HEAD, data({ 10: -1000000, 11: -100000 }), data({ 0: "2026-02-30", 1: "x2" }), data({ 1: "x3", 11: 2000000 })],
+        [
+          HEAD,
+          data({ 10: -1000000, 11: -100000 }),
+          data({ 0: "2026-02-30", 1: "x2" }),
+          data({ 1: "x3", 11: 2000000 }),
+          data({ 1: "x4", 10: 0, 11: -100000 }),
+          data({ 1: "x5", 10: -1000000, 11: 100000 }),
+          data({ 1: "x6", 10: -1000, 11: -2000 }),
+        ],
         "purchase",
       ),
     );
-    expect(neg.problem).toBe("음수 금액(수정·취소분)은 전표 입력 화면에서 직접 입력하세요.");
+    expect(neg).toMatchObject({ problem: null, supplyAmount: -1000000, vatAmount: -100000 });
+    expect(zero.problem).toBe("공급가액이 0원인 건은 전표 입력 화면에서 직접 입력하세요.");
+    expect(mixed.problem).toBe("공급가액과 세액의 부호가 다른 건은 전표 입력 화면에서 직접 입력하세요.");
+    expect(negOver.problem).toBe("세액이 공급가액보다 큽니다.");
     expect(bad.problem).toBe("날짜를 읽을 수 없습니다.");
     expect(bad.date).toBeNull();
     expect(over.problem).toBe("세액이 공급가액보다 큽니다.");
