@@ -11,6 +11,7 @@ import {
   REPORT_KEYS,
   SIMPLIFIED_STATEMENT_KEY,
   TAX_LIST_KEYS,
+  VAT_RETURN_KEY,
   WITHHOLDING_RETURN_KEY,
   type ReportKey,
   type TaxListKey,
@@ -19,6 +20,8 @@ import { renderWorkbook } from "@/server/exports/xlsx";
 import { getCompany } from "@/server/company/service";
 import { buildPayrollLedgerSheet } from "@/server/payroll/ledger-sheet";
 import { getRun } from "@/server/payroll/runs";
+import { buildVatSheets } from "@/server/vat/sheets";
+import { loadVatView } from "@/server/vat/view";
 import { buildReturnSheets } from "@/server/withholding/return-sheet";
 import { loadReturnView } from "@/server/withholding/return-view";
 import {
@@ -47,7 +50,8 @@ function xlsxResponse(body: Buffer, fileName: string) {
  * the tax lists (`tax-invoices`, `card-purchases`) need `export:tax` and take `from`/`to` only;
  * `payroll-run` (the 급여 대장, masked 주민등록번호 only) needs `payroll:manage` and takes `run`;
  * `withholding-return` (the 원천징수이행상황신고서) needs `payroll:manage` and takes the page's period params;
- * `simplified-statement` (the 간이지급명세서 preview, masked 주민등록번호) needs `payroll:manage` and takes `year`, `half`.
+ * `simplified-statement` (the 간이지급명세서 preview, masked 주민등록번호) needs `payroll:manage` and takes `year`, `half`;
+ * `vat-return` (the 부가세 신고 자료) needs `export:tax`, takes the page's params and is built even for an empty period.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ report: string }> }) {
   const user = await verifySession();
@@ -67,6 +71,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
     const built = buildReturnSheets(await loadReturnView(db, sp));
     if (!built) return new Response(sp.mode === "semiannual" ? EMPTY_SEMIANNUAL_NOTICE : EMPTY_MONTHLY_NOTICE, { status: 404 });
     const { fileName, sheets } = built;
+    return xlsxResponse(await renderWorkbook(sheets), fileName);
+  }
+
+  if (report === VAT_RETURN_KEY) {
+    const { fileName, sheets } = buildVatSheets(await loadVatView(db, sp));
     return xlsxResponse(await renderWorkbook(sheets), fileName);
   }
 

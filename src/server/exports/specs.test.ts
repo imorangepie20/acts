@@ -5,7 +5,7 @@ import { accounts, sites, users } from "@/server/db/schema";
 import { createVoucher } from "@/server/vouchers/service";
 import { getTestDb, resetDb, seedReference } from "../../../tests/helpers/db";
 import { createPayrollVoucher } from "../../../tests/helpers/payroll";
-import { buildSheetSpec } from "./specs";
+import { buildSheetSpec, exportPermission } from "./specs";
 
 const db = getTestDb();
 let acc: Record<string, number>;
@@ -112,5 +112,11 @@ describe("payroll vouchers in the ledger sheets", () => {
   it("the trial balance keeps the payroll totals", async () => {
     const tb = await buildSheetSpec(db, "trial-balance", { to: "2026-06-30" }, { hidePayroll: true });
     expect(tb!.rows.find((r) => String(r.name).startsWith("802"))!.debitTotal).toBeGreaterThan(0);
+  });
+});
+
+describe("exportPermission", () => {
+  it("the VAT return needs export:tax", () => {
+    expect(exportPermission("vat-return")).toBe("export:tax");
   });
 });

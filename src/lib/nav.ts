@@ -45,6 +45,7 @@ export const navGroups: NavGroup[] = [
       { title: "월 마감", href: "/closing", icon: Lock, permission: "period:close" },
       { title: "기초잔액·이월", href: "/closing/opening", icon: ArrowRightLeft, permission: "period:close" },
       { title: "세무사 자료", href: "/exports", icon: FileSpreadsheet, permission: "export:tax" },
+      { title: "부가세 신고 자료", href: "/exports/vat-return", icon: FileText, permission: "export:tax" },
     ],
   },
   {

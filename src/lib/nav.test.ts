@@ -18,8 +18,8 @@ describe("navGroupsFor", () => {
     expect(h).toContain("/reports/balance-sheet");
     expect(h).not.toContain("/vouchers/new");
   });
-  it("admin sees all 23 items", () => {
-    expect(hrefs("admin")).toHaveLength(23);
+  it("admin sees all 24 items", () => {
+    expect(hrefs("admin")).toHaveLength(24);
   });
   it("payroll menus need payroll:manage", () => {
     for (const role of ["manager", "admin"] as const) {
@@ -41,6 +41,7 @@ describe("breadcrumbTrail", () => {
     expect(breadcrumbTrail("/reports/income-statement")).toEqual([
       { href: "/reports/income-statement", label: "손익계산서" },
     ]);
+    expect(breadcrumbTrail("/exports/vat-return").map((c) => c.label)).toEqual(["세무사 자료", "부가세 신고 자료"]);
   });
   it("builds voucher trails", () => {
     expect(breadcrumbTrail("/vouchers/new")).toEqual([
