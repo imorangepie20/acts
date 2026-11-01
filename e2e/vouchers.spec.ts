@@ -77,6 +77,36 @@ test("전표: 매입·비용 입력 → 목록 → 수정 이력 → 삭제", as
   await expect(page.getByRole("row", { name: new RegExp(desc) })).toHaveCount(0);
 });
 
+test("전표: 수정·취소분 매입은 차변·대변이 바뀌고 수정 화면에서 스위치가 켜진다", async ({ page }) => {
+  const desc = `E2E 반품 ${Date.now()}`;
+  await page.goto("/vouchers/new");
+  await page.getByLabel("적요").fill(desc);
+  await pick(page, "계정", "811");
+  await pick(page, "결제 계정", "253");
+  await page.getByLabel("합계").fill("11000");
+  await page.getByRole("switch", { name: "수정·취소분(마이너스)" }).click();
+
+  const preview = page.getByRole("table", { name: "분개 미리보기" });
+  await expect(preview.getByRole("row", { name: /811 복리후생비/ }).getByRole("cell").first()).toHaveText("대변");
+  await expect(preview.getByRole("row", { name: /135 부가세대급금/ }).getByRole("cell").first()).toHaveText("대변");
+  await expect(preview.getByRole("row", { name: /253 미지급금/ })).toContainText("차변");
+  await expect(preview.getByRole("row", { name: /253 미지급금/ })).toContainText("11,000");
+
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.goto(`/vouchers?q=${encodeURIComponent(desc)}`);
+  await page.getByRole("row", { name: new RegExp(desc) }).click();
+  await expect(page.getByText("-10,000 / -1,000")).toBeVisible();
+  await page.getByRole("button", { name: "수정" }).click();
+  await expect(page.getByRole("switch", { name: "수정·취소분(마이너스)" })).toBeChecked();
+  await expect(page.getByLabel("합계")).toHaveValue("11,000");
+  await page.goBack();
+  await page.getByRole("button", { name: "삭제" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "삭제" }).click();
+  await expect(page).toHaveURL(/\/vouchers$/);
+});
+
 test("일반 전표: 차액이 있으면 저장할 수 없다", async ({ page }) => {
   await page.goto("/vouchers/new");
   await page.getByRole("tab", { name: "일반 전표" }).click();
