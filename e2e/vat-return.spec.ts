@@ -64,4 +64,14 @@ test("부가세 신고 자료: 종이 세금계산서 매입이 매입처별 명
   const res = await page.request.get(href!);
   expect(res.status()).toBe(200);
   expect(res.headers()["content-type"]).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+  // Remove the voucher so 2003 Q1 does not pile up across runs.
+  await page.goto(`/vouchers?from=2003-02-01&to=2003-02-28&q=${encodeURIComponent(desc)}`);
+  await page.getByRole("row", { name: new RegExp(desc) }).click();
+  await expect(page).toHaveURL(/\/vouchers\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "삭제" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "삭제" }).click();
+  await expect(page).toHaveURL(/\/vouchers$/);
+  await page.goto(`/vouchers?from=2003-02-01&to=2003-02-28&q=${encodeURIComponent(desc)}`);
+  await expect(page.getByRole("row", { name: new RegExp(desc) })).toHaveCount(0);
 });
