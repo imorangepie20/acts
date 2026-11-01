@@ -92,9 +92,13 @@ describe("describeChanges", () => {
     };
     expect(describeChanges(base, next, names)).toEqual(["분개 줄 변경"]);
   });
-});
 
-it("describes a 종이 세금계산서 change", () => {
-  // An old snapshot carries neither flag.
-  expect(describeChanges(base, { ...base, paperTaxInvoice: true }, names)).toContain("종이 세금계산서: 아니요 → 예");
+  it("describes a 종이 세금계산서 change", () => {
+    // An old snapshot carries neither flag.
+    expect(describeChanges(base, { ...base, paperTaxInvoice: true }, names)).toContain("종이 세금계산서: 아니요 → 예");
+  });
+
+  it("describes a 홈택스 미등록 카드 change", () => {
+    expect(describeChanges(base, { ...base, unregisteredCard: true }, names)).toEqual(["홈택스 미등록 카드: 아니요 → 예"]);
+  });
 });

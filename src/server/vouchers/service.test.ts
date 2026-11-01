@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { MAX_WON } from "@/lib/money";
 import { todayInSeoul } from "@/lib/vouchers/dates";
-import { buildSimpleVoucher } from "@/lib/vouchers/simple";
+import { buildSimpleVoucher, ERR_PAPER } from "@/lib/vouchers/simple";
 import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
 import { getVatAccountIds } from "@/server/accounts/service";
 import type { SessionUser } from "@/server/auth/service";
@@ -343,6 +343,30 @@ describe("simple entry types", () => {
       paperTaxInvoice: false,
       unregisteredCard: false,
     });
+  });
+
+  it("refuses a card purchase marked 종이 세금계산서 with ERR_PAPER", async () => {
+    const card = buildSimpleVoucher(
+      {
+        type: "purchase",
+        date: "2026-10-30",
+        description: "카드",
+        mainAccountId: acc["811"],
+        counterAccountId: acc["253"],
+        partnerId: partnerA,
+        siteId,
+        departmentId: null,
+        evidenceType: "card",
+        vatType: "taxable",
+        vatDeductible: true,
+        supplyAmount: 10000,
+        vatAmount: 1000,
+      },
+      await getVatAccountIds(db),
+    );
+    if (!card.ok) throw new Error(card.error);
+    const r = await createVoucher(db, staff, { ...card.value, paperTaxInvoice: true });
+    expect(r).toEqual({ ok: false, error: ERR_PAPER });
   });
 
   it("stores a 수정·취소분 purchase and refuses one whose lines were not swapped", async () => {

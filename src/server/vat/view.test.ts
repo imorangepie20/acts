@@ -34,6 +34,14 @@ describe("loadVatView", () => {
     expect(v.period).toEqual({ from: "2026-01-01", to: "2026-06-30" });
   });
 
+  it("a corporation defaults to 예정신고를 했음, so 확정 covers three months", async () => {
+    await setType("corporation");
+    const v = await loadVatView(db, { year: "2026", term: "2", kind: "final" });
+    expect(v.company.businessType).toBe("corporation");
+    expect(v.selection.prelimFiled).toBe(true);
+    expect(v.period).toEqual({ from: "2026-10-01", to: "2026-12-31" });
+  });
+
   it("invalid notice falls back to 0 with an error", async () => {
     const v = await loadVatView(db, { year: "2026", term: "1", kind: "final", notice: "abc" });
     expect(v.selection.notice).toBe(0);
