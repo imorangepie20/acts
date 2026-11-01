@@ -228,6 +228,8 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
             onChange={(e) => {
               const vt = e.target.value as VatType;
               setVatType(vt);
+              // 면세·영세 purchases are usually not deducted; the user may switch it back on.
+              if (vt !== "taxable") setDeductibleOn(false);
               setAmounts((a) => fromTotal(a.total, vatApplies(evidence, vt)));
             }}
           >

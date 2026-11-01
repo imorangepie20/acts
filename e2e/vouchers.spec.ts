@@ -133,6 +133,35 @@ test("전표: 종이 세금계산서 스위치가 저장되고 수정 화면에�
   await expect(page).toHaveURL(/\/vouchers$/);
 });
 
+test("전표: 과세 구분을 영세·면세로 바꾸면 공제가 꺼지고, 저장된 공제는 수정 화면에서 유지된다", async ({ page }) => {
+  const desc = `E2E 영세 공제 ${Date.now()}`;
+  await page.goto("/vouchers/new");
+  await page.getByLabel("적요").fill(desc);
+  await pick(page, "계정", "811");
+  await pick(page, "결제 계정", "101");
+  const deductible = page.getByRole("switch", { name: "공제 여부" });
+  await expect(deductible).toBeChecked();
+  await page.getByLabel("과세 구분").selectOption({ label: "영세" });
+  await expect(deductible).not.toBeChecked();
+  await deductible.click(); // the user may turn it back on
+  await expect(deductible).toBeChecked();
+  await page.getByLabel("합계").fill("10000");
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.goto(`/vouchers?q=${encodeURIComponent(desc)}`);
+  await page.getByRole("row", { name: new RegExp(desc) }).click();
+  await page.getByRole("button", { name: "수정" }).click();
+  await expect(page.getByLabel("과세 구분")).toHaveValue("zero_rated");
+  await expect(deductible).toBeChecked(); // loading the voucher does not flip the stored value
+  await page.getByLabel("과세 구분").selectOption({ label: "면세" });
+  await expect(deductible).not.toBeChecked();
+  await page.goBack();
+  await page.getByRole("button", { name: "삭제" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "삭제" }).click();
+  await expect(page).toHaveURL(/\/vouchers$/);
+});
+
 test("일반 전표: 차액이 있으면 저장할 수 없다", async ({ page }) => {
   await page.goto("/vouchers/new");
   await page.getByRole("tab", { name: "일반 전표" }).click();

@@ -55,6 +55,7 @@ export function defaultVat(supplyAmount: number): number {
 export const ERR_SIGN = "공급가액과 부가세의 부호가 같아야 합니다.";
 export const ERR_PAPER = "종이 세금계산서는 세금계산서 증빙에만 표시할 수 있습니다.";
 export const ERR_UNREGISTERED_CARD = "홈택스 미등록 카드는 신용카드 매입에만 표시할 수 있습니다.";
+export const ERR_TAX_INVOICE_EXEMPT = "면세 거래는 증빙을 계산서로 선택하세요.";
 
 /** Size rules apply to the magnitudes; a 수정·취소분 has a negative supply and a VAT of 0 or less. */
 function validateTrade(input: TradeInput): string | null {
@@ -70,6 +71,7 @@ function validateTrade(input: TradeInput): string | null {
   if (i.evidenceType === "invoice" && i.vatType !== "exempt") {
     return "계산서는 면세 거래에만 사용할 수 있습니다.";
   }
+  if (i.evidenceType === "tax_invoice" && i.vatType === "exempt") return ERR_TAX_INVOICE_EXEMPT;
   if ((i.vatType === "zero_rated" || i.vatType === "exempt") && i.vatAmount > 0) {
     return "영세·면세 거래는 부가세가 0원이어야 합니다.";
   }

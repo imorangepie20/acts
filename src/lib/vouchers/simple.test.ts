@@ -4,6 +4,7 @@ import {
   buildSimpleVoucher,
   defaultVat,
   ERR_PAPER,
+  ERR_TAX_INVOICE_EXEMPT,
   ERR_UNREGISTERED_CARD,
   splitVatFromTotal,
   toSimpleInput,
@@ -145,6 +146,11 @@ describe("VAT rules", () => {
     expect(err({ ...purchase, evidenceType: "simple_receipt" })).toBe(msg);
     expect(err({ ...purchase, evidenceType: "none" })).toBe(msg);
   });
+  it("6: a tax invoice cannot be exempt", () => {
+    expect(err({ ...purchase, evidenceType: "tax_invoice", vatType: "exempt", vatAmount: 0 })).toBe(ERR_TAX_INVOICE_EXEMPT);
+    expect(err({ ...sale, vatType: "exempt", vatAmount: 0 })).toBe(ERR_TAX_INVOICE_EXEMPT);
+    expect(err({ ...sale, vatType: "zero_rated", vatAmount: 0 })).toBeNull();
+  });
   it("5: vat above supply", () => {
     expect(err({ ...purchase, supplyAmount: 100, vatAmount: 101 })).toBe(
       "부가세가 공급가액보다 클 수 없습니다.",
@@ -173,7 +179,7 @@ describe("수정·취소분 (negative supply)", () => {
     expect(err({ ...purchase, supplyAmount: -9091, vatAmount: 909 })).toBe("공급가액과 부가세의 부호가 같아야 합니다.");
     expect(err({ ...purchase, supplyAmount: 0, vatAmount: -1 })).toBe("공급가액과 부가세의 부호가 같아야 합니다.");
     expect(err({ ...purchase, supplyAmount: -100, vatAmount: -101 })).toBe("부가세가 공급가액보다 클 수 없습니다.");
-    expect(err({ ...sale, vatType: "exempt", supplyAmount: -100, vatAmount: -10 })).toBe(
+    expect(err({ ...sale, evidenceType: "invoice", vatType: "exempt", supplyAmount: -100, vatAmount: -10 })).toBe(
       "영세·면세 거래는 부가세가 0원이어야 합니다.",
     );
     expect(err({ ...purchase, supplyAmount: -1_000_000_000_000_000, vatAmount: 0 })).toBe("금액을 입력하세요.");
@@ -188,11 +194,11 @@ describe("toSimpleInput", () => {
       { ...purchase, supplyAmount: 10000, vatAmount: 0 },
       { ...purchase, supplyAmount: 10000, vatAmount: 0, vatDeductible: false },
       sale,
-      { ...sale, vatType: "exempt", vatAmount: 0 },
+      { ...sale, evidenceType: "invoice", vatType: "exempt", vatAmount: 0 },
       { ...purchase, supplyAmount: -9091, vatAmount: -909 },
       { ...purchase, supplyAmount: -9091, vatAmount: -909, vatDeductible: false },
       { ...sale, supplyAmount: -100000, vatAmount: -10000 },
-      { ...sale, vatType: "exempt", supplyAmount: -100000, vatAmount: 0 },
+      { ...sale, evidenceType: "invoice", vatType: "exempt", supplyAmount: -100000, vatAmount: 0 },
       transfer,
     ];
     for (const c of cases) {
