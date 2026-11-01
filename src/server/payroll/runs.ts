@@ -221,6 +221,8 @@ async function loadFacts(conn: Conn, ids: number[]): Promise<Map<number, Facts>>
           insPension: e.insPension,
           insHealth: e.insHealth,
           insEmployment: e.insEmployment,
+          // 산재보험 covers 근로자 only: a 등기임원 (임원) is outside it unless treated as a 근로자.
+          insIndustrialAccident: !e.isExecutive,
           pensionBase: e.pensionBase,
           healthBase: e.healthBase,
         },
@@ -486,7 +488,7 @@ const fromStored = (l: typeof payrollRunLines.$inferSelect, rates: Rates): LineI
   rates,
 });
 
-const COMPANY_KEYS = ["pension", "health", "ltc", "employment"] as const;
+const COMPANY_KEYS = ["pension", "health", "ltc", "employment", "employmentStability", "industrialAccident"] as const;
 function sameResult(a: LineResult, b: LineResult): boolean {
   return (
     a.gross === b.gross &&
@@ -496,7 +498,8 @@ function sameResult(a: LineResult, b: LineResult): boolean {
     a.totalDeductions === b.totalDeductions &&
     a.netPay === b.netPay &&
     DEDUCTION_KEYS.every((k) => a.deductions?.[k] === b.deductions?.[k]) &&
-    COMPANY_KEYS.every((k) => a.company?.[k] === b.company?.[k])
+    // Keys absent on lines computed before they existed count as 0.
+    COMPANY_KEYS.every((k) => (a.company?.[k] ?? 0) === (b.company?.[k] ?? 0))
   );
 }
 

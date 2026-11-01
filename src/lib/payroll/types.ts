@@ -55,6 +55,10 @@ export type Rates = {
   ltcCompany: number;
   employmentEmployee: number;
   employmentCompany: number;
+  /** 고용안정·직업능력개발 (사업주만, 규모별 0.25~0.85%); company-specific, 0 when not entered. */
+  employmentStabilityCompany: number;
+  /** 산재보험 (사업주만, 업종별 요율); company-specific, 0 when not entered. */
+  industrialAccidentCompany: number;
 };
 
 export type ItemDef = {
@@ -76,6 +80,8 @@ export type EmployeeCalcInput = {
   insPension: boolean;
   insHealth: boolean;
   insEmployment: boolean;
+  /** 산재보험 대상 (등기임원 제외). Absent on snapshots taken before 산재 was computed = false. */
+  insIndustrialAccident?: boolean;
   pensionBase: number;
   healthBase: number;
 };
@@ -90,7 +96,15 @@ export type LineResult = {
   excludedNontaxable?: number;
   employmentBase: number;
   deductions: Record<DeductionKey, number>;
-  company: { pension: number; health: number; ltc: number; employment: number };
+  /** employmentStability / industrialAccident are absent on lines computed before they existed (= 0). */
+  company: {
+    pension: number;
+    health: number;
+    ltc: number;
+    employment: number;
+    employmentStability?: number;
+    industrialAccident?: number;
+  };
   totalDeductions: number;
   netPay: number;
 };

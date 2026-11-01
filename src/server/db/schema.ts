@@ -388,6 +388,8 @@ export const payrollRateKind = pgEnum("payroll_rate_kind", [
   "ltc_company",
   "employment_employee",
   "employment_company",
+  "employment_stability_company",
+  "industrial_accident_company",
 ]);
 export const payrollRunType = pgEnum("payroll_run_type", ["regular", "bonus"]);
 export const payrollRunStatus = pgEnum("payroll_run_status", ["draft", "confirmed"]);

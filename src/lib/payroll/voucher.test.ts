@@ -150,8 +150,29 @@ describe("buildPayrollVoucher", () => {
     expect(v.lines.filter((l) => l.side === "debit").every((l) => l.partnerId === null)).toBe(true);
   });
 
-  it("keeps null partners null", () => {
-    const v = buildPayrollVoucher({
+  it("books 고용안정·직업능력개발 with 고용보험 and 산재 on its own line, both on the 근로복지공단 partner", () => {
+    const c = { ...FULL_C, employmentStability: 7_500, industrialAccident: 27_000 };
+    const v = build([line({ isExecutive: false, siteId: 1, departmentId: null }, { basic: 3_000_000 }, FULL_D, c)]);
+    expect(sum(v, "debit")).toBe(sum(v, "credit"));
+    expect(v.lines.find((l) => l.side === "debit" && l.accountId === 811)?.amount).toBe(
+      107_850 + 14_170 + 27_000 + 7_500 + 27_000,
+    );
+    const companyCredits = v.lines.filter((l) => l.side === "credit" && l.accountId === 262);
+    expect(companyCredits.map((l) => [l.partnerId, l.description, l.amount])).toEqual([
+      [PARTNERS.pension, "국민연금 사업주 부담분", 135_000],
+      [PARTNERS.health, "건강·장기요양보험 사업주 부담분", 107_850 + 14_170],
+      [PARTNERS.employment, "고용보험 사업주 부담분", 27_000 + 7_500],
+      [PARTNERS.employment, "산재보험 사업주 부담분", 27_000],
+    ]);
+  });
+
+  it("treats company parts missing on old lines as 0", () => {
+    const v = build([line({ isExecutive: false, siteId: 1, departmentId: null }, { basic: 3_000_000 }, FULL_D, FULL_C)]);
+    expect(v.lines.some((l) => l.description === "산재보험 사업주 부담분")).toBe(false);
+    expect(sum(v, "debit")).toBe(sum(v, "credit"));
+  });
+
+  it("keeps null partners null", () => {    const v = buildPayrollVoucher({
       payDate: "2026-06-25",
       description: "2026년 6월 급여",
       lines: [line({ isExecutive: false, siteId: 1, departmentId: null }, { basic: 3_000_000 }, FULL_D, FULL_C)],

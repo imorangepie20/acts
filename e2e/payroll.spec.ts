@@ -221,3 +221,30 @@ test("실무자에게는 급여 전표의 내용이 보이지 않는다", async 
   expect(edit?.status()).toBe(404);
   await ctx.close();
 });
+
+test("급여 설정: 사업주 부담 요율을 추가하고 삭제한다", async ({ page }) => {
+  // Dated 2099 so no run in the shared e2e DB picks it up; deleted at the end.
+  await page.goto("/payroll/settings");
+  const card = page.getByRole("table", { name: "사업주 부담 요율" });
+  const row = card.getByRole("row").filter({ hasText: "2099-01-01" });
+  await expect(page.getByRole("heading", { name: "급여 설정" })).toBeVisible();
+  const del = row.getByRole("button", { name: "산재보험 2099-01-01 삭제" });
+  if ((await row.count()) > 0) {
+    // A leftover from an interrupted earlier run.
+    await del.click();
+    await expect(row).toHaveCount(0);
+  }
+  await page.getByLabel("종류", { exact: true }).selectOption({ label: "산재보험" });
+  await page.getByLabel("적용 시작일", { exact: true }).fill("2099-01-01");
+  await page.getByLabel("요율(%)", { exact: true }).fill("0.123");
+  await page.getByRole("button", { name: "요율 추가", exact: true }).click();
+  await expect(row).toContainText("산재보험");
+  await expect(row).toContainText("0.123%");
+
+  await page.getByLabel("요율(%)", { exact: true }).fill("0.5");
+  await page.getByRole("button", { name: "요율 추가", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "같은 종류와 적용 시작일의 요율이 이미 있습니다." })).toBeVisible();
+
+  await del.click();
+  await expect(row).toHaveCount(0);
+});

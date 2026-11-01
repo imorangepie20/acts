@@ -24,7 +24,7 @@ export type PayrollSettingsInput = Record<SettingCodeField, string> & Record<Set
 /** Korean labels, also used in error messages. */
 export const SETTING_LABELS: Record<SettingCodeField | SettingPartnerField, string> = {
   pensionCompanyCode: "사업주 국민연금",
-  insuranceCompanyCode: "사업주 건강·장기요양·고용보험",
+  insuranceCompanyCode: "사업주 건강·장기요양·고용·산재보험",
   withholdingCode: "예수금(근로자 부담분·소득세)",
   companyPayableCode: "사업주 부담 4대보험 미지급",
   netPayCode: "실지급액",

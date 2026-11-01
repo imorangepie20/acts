@@ -35,9 +35,11 @@ export function payrollDescription(type: "regular" | "bonus", yearMonth: string)
  * The single payroll voucher of a confirmed run: account totals, not one line per employee,
  * split per (site, department).
  * - Debit: each item's amount on its account (null = executive / staff by 임원 여부); company
- *   국민연금 on `pensionCompany`; company 건강 + 장기요양 + 고용 on `insuranceCompany`.
+ *   국민연금 on `pensionCompany`; company 건강 + 장기요양 + 고용 (실업급여 + 고용안정·직업능력개발)
+ *   + 산재 on `insuranceCompany`.
  * - Credit: the employee parts on `withholding` and the company parts on `companyPayable`, one line
- *   per 기관 partner (국민연금 / 건강·장기요양 / 고용 / 소득세 / 지방소득세); 실지급액 on `netPay`.
+ *   per 기관 partner (국민연금 / 건강·장기요양 / 고용 / 소득세 / 지방소득세; 산재 also on the 근로복지공단
+ *   partner, as a separate line); 실지급액 on `netPay`.
  * Zero lines are dropped.
  */
 export function buildPayrollVoucher(input: {
@@ -64,6 +66,7 @@ export function buildPayrollVoucher(input: {
     [a.companyPayable, p.pension, "국민연금 사업주 부담분"],
     [a.companyPayable, p.health, "건강·장기요양보험 사업주 부담분"],
     [a.companyPayable, p.employment, "고용보험 사업주 부담분"],
+    [a.companyPayable, p.employment, "산재보험 사업주 부담분"],
     [a.netPay, null, "실지급액"],
   ];
 
@@ -82,8 +85,11 @@ export function buildPayrollVoucher(input: {
       addDebit(item.accountId ?? (line.employee.isExecutive ? a.executive : a.staff), amount);
     }
     const { deductions: d, company: c } = line.result;
+    // Absent on lines computed before these were calculated.
+    const stability = c.employmentStability ?? 0;
+    const accident = c.industrialAccident ?? 0;
     addDebit(a.pensionCompany, c.pension);
-    addDebit(a.insuranceCompany, c.health + c.ltc + c.employment);
+    addDebit(a.insuranceCompany, c.health + c.ltc + c.employment + stability + accident);
 
     const credit = credits.get(key)!;
     [
@@ -94,7 +100,8 @@ export function buildPayrollVoucher(input: {
       d.localTax,
       c.pension,
       c.health + c.ltc,
-      c.employment,
+      c.employment + stability,
+      accident,
       line.result.netPay,
     ].forEach((amount, i) => (credit[i] += amount));
   }

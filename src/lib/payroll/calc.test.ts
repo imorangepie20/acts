@@ -31,6 +31,8 @@ const rates: Rates = {
   ltcCompany: 13.14,
   employmentEmployee: 0.9,
   employmentCompany: 0.9,
+  employmentStabilityCompany: 0,
+  industrialAccidentCompany: 0,
 };
 
 const base: EmployeeCalcInput = {
@@ -93,7 +95,14 @@ describe("insurance", () => {
     expect(l.deductions.health).toBe(107_850);
     expect(l.deductions.ltc).toBe(14_170); // 107,850 × 13.14% = 14,171.49
     expect(l.deductions.employment).toBe(27_000);
-    expect(l.company).toEqual({ pension: 142_500, health: 107_850, ltc: 14_170, employment: 27_000 });
+    expect(l.company).toEqual({
+      pension: 142_500,
+      health: 107_850,
+      ltc: 14_170,
+      employment: 27_000,
+      employmentStability: 0,
+      industrialAccident: 0,
+    });
   });
   it("does not drift at an exact 10원 boundary", () => {
     const emp = (salary: number) => calc({ amounts: { salary } }).deductions.employment;
@@ -106,10 +115,24 @@ describe("insurance", () => {
   it("employee not enrolled in an insurance pays 0 for it, company too", () => {
     const l = calc({}, { insPension: false, insHealth: false, insEmployment: false });
     expect(l.deductions.pension + l.deductions.health + l.deductions.ltc + l.deductions.employment).toBe(0);
-    expect(l.company).toEqual({ pension: 0, health: 0, ltc: 0, employment: 0 });
+    expect(l.company).toEqual({ pension: 0, health: 0, ltc: 0, employment: 0, employmentStability: 0, industrialAccident: 0 });
   });
-  it("bonus run has no pension, health or ltc", () => {
-    const l = calc({ type: "bonus", bonusTax: 50_000 });
+  it("charges 고용안정·직업능력개발 with 고용보험 and 산재 to every 근로자, company only", () => {
+    const own = { ...rates, employmentStabilityCompany: 0.25, industrialAccidentCompany: 0.9 };
+    const l = calc({ rates: own, amounts: { salary: 3_000_000, meal: 200_000 } }, { insIndustrialAccident: true });
+    // 보수 = 고용보험 base (비과세 식대 excluded): 3,000,000 × 0.25% = 7,500, × 0.9% = 27,000
+    expect(l.company.employmentStability).toBe(7_500);
+    expect(l.company.industrialAccident).toBe(27_000);
+    expect(l.totalDeductions).toBe(calc({ amounts: { salary: 3_000_000, meal: 200_000 } }).totalDeductions);
+    // 고용보험 미가입 (임원): no 고용안정; 산재 follows its own flag
+    const exec = calc({ rates: own }, { insEmployment: false, insIndustrialAccident: false });
+    expect(exec.company.employmentStability).toBe(0);
+    expect(exec.company.industrialAccident).toBe(0);
+    expect(calc({ rates: own }, { insEmployment: false, insIndustrialAccident: true }).company.industrialAccident).toBe(27_000);
+    // An old snapshot without the flag is not charged 산재
+    expect(calc({ rates: own }).company.industrialAccident).toBe(0);
+  });
+  it("bonus run has no pension, health or ltc", () => {    const l = calc({ type: "bonus", bonusTax: 50_000 });
     expect(l.deductions.pension).toBe(0);
     expect(l.deductions.health).toBe(0);
     expect(l.deductions.ltc).toBe(0);

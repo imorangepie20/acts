@@ -2,7 +2,20 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getTestDb, resetDb } from "../../../tests/helpers/db";
 import { seed } from "../../../scripts/seed";
 import type { WithholdingTable } from "@/lib/payroll/types";
-import { loadRates, loadWithholdingTable } from "./rates";
+import { payrollRates, users } from "@/server/db/schema";
+import type { SessionUser } from "@/server/auth/service";
+import {
+  addEmployerRate,
+  deleteEmployerRate,
+  ERR_RATE_DATE,
+  ERR_RATE_DUPLICATE,
+  ERR_RATE_KIND,
+  ERR_RATE_NOT_FOUND,
+  ERR_RATE_VALUE,
+  listEmployerRates,
+  loadRates,
+  loadWithholdingTable,
+} from "./rates";
 
 const db = getTestDb();
 const opts = { email: "admin@acts.kr", password: "pw-12345678" };
@@ -42,6 +55,8 @@ describe("loadRates", () => {
       ltcCompany: 12.95,
       employmentEmployee: 0.9,
       employmentCompany: 0.9,
+      employmentStabilityCompany: 0,
+      industrialAccidentCompany: 0,
     });
   });
 
@@ -107,5 +122,51 @@ describe("withholding table spot checks", () => {
       [87_000_000, 31_034_600, 100, 45],
     ]);
     expect(t.familyOver11).toEqual({ baseCount: 11, stepFromCount: 10 });
+  });
+});
+
+describe("사업주 부담 요율 (고용안정·직업능력개발, 산재)", () => {
+  const admin = (): Promise<SessionUser> =>
+    db
+      .select()
+      .from(users)
+      .then(([u]) => ({ id: u.id, email: u.email, name: u.name, role: "admin" }) as SessionUser);
+
+  it("are 0 until entered, then follow the dated rows", async () => {
+    const a = await admin();
+    expect(await loadRates(db, "2025-01-01")).toMatchObject({ employmentStabilityCompany: 0, industrialAccidentCompany: 0 });
+    expect((await addEmployerRate(db, a, { kind: "employment_stability_company", effectiveFrom: "2025-02-01", value: 0.25 })).ok).toBe(true);
+    expect((await addEmployerRate(db, a, { kind: "industrial_accident_company", effectiveFrom: "2025-01-01", value: 0.9 })).ok).toBe(true);
+    expect((await addEmployerRate(db, a, { kind: "industrial_accident_company", effectiveFrom: "2026-01-01", value: 0.85 })).ok).toBe(true);
+    expect(await loadRates(db, "2025-01-01")).toMatchObject({ employmentStabilityCompany: 0, industrialAccidentCompany: 0.9 });
+    expect(await loadRates(db, "2025-06-01")).toMatchObject({ employmentStabilityCompany: 0.25, industrialAccidentCompany: 0.9 });
+    expect(await loadRates(db, "2026-01-01")).toMatchObject({ employmentStabilityCompany: 0.25, industrialAccidentCompany: 0.85 });
+
+    const rows = await listEmployerRates(db);
+    expect(rows.map((r) => [r.kind, r.effectiveFrom, r.value])).toEqual([
+      ["employment_stability_company", "2025-02-01", 0.25],
+      ["industrial_accident_company", "2025-01-01", 0.9],
+      ["industrial_accident_company", "2026-01-01", 0.85],
+    ]);
+    expect((await deleteEmployerRate(db, a, rows[2].id)).ok).toBe(true);
+    expect(await loadRates(db, "2026-01-01")).toMatchObject({ industrialAccidentCompany: 0.9 });
+  });
+
+  it("validates the input and refuses duplicates and statutory rows", async () => {
+    const a = await admin();
+    const add = (over: object) =>
+      addEmployerRate(db, a, { kind: "industrial_accident_company", effectiveFrom: "2025-01-01", value: 0.9, ...over } as never);
+    expect(await add({ kind: "health_company" })).toEqual({ ok: false, error: ERR_RATE_KIND });
+    expect(await add({ effectiveFrom: "2025-02-30" })).toEqual({ ok: false, error: ERR_RATE_DATE });
+    expect(await add({ value: 10.5 })).toEqual({ ok: false, error: ERR_RATE_VALUE });
+    expect(await add({ value: 0.1234 })).toEqual({ ok: false, error: ERR_RATE_VALUE });
+    expect(await add({ value: -1 })).toEqual({ ok: false, error: ERR_RATE_VALUE });
+    expect((await add({})).ok).toBe(true);
+    expect(await add({ value: 1 })).toEqual({ ok: false, error: ERR_RATE_DUPLICATE });
+
+    const [statutory] = await db.select().from(payrollRates);
+    expect(await deleteEmployerRate(db, a, statutory.id)).toEqual({ ok: false, error: ERR_RATE_NOT_FOUND });
+    const viewer: SessionUser = { ...a, role: "staff" };
+    expect((await addEmployerRate(db, viewer, { kind: "industrial_accident_company", effectiveFrom: "2027-01-01", value: 1 })).ok).toBe(false);
   });
 });

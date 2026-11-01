@@ -113,6 +113,10 @@ export function computeLine(input: {
 
   const employmentEmp = e.insEmployment ? pct10(split.employmentBase, r.employmentEmployee) : 0;
   const employmentCo = e.insEmployment ? pct10(split.employmentBase, r.employmentCompany) : 0;
+  // 사업주만 내는 보험료, on the same 보수 as 고용보험: 고용안정·직업능력개발 follows 고용보험 가입;
+  // 산재 covers every 근로자 (not 등기임원), whatever the 고용보험 가입.
+  const stabilityCo = e.insEmployment ? pct10(split.employmentBase, r.employmentStabilityCompany) : 0;
+  const accidentCo = e.insIndustrialAccident ? pct10(split.employmentBase, r.industrialAccidentCompany) : 0;
 
   let incomeTax: number;
   if (type === "bonus") {
@@ -142,7 +146,14 @@ export function computeLine(input: {
   return {
     ...split,
     deductions,
-    company: { pension: pensionCo, health: healthCo, ltc: ltcCo, employment: employmentCo },
+    company: {
+      pension: pensionCo,
+      health: healthCo,
+      ltc: ltcCo,
+      employment: employmentCo,
+      employmentStability: stabilityCo,
+      industrialAccident: accidentCo,
+    },
     totalDeductions,
     netPay: split.gross - totalDeductions,
   };

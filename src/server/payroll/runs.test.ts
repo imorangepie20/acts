@@ -30,7 +30,7 @@ import {
 } from "@/server/vouchers/service";
 import { createEmployee, type EmployeeInput } from "./employees";
 import { ERR_FORBIDDEN } from "./items";
-import { loadRates, loadWithholdingTable } from "./rates";
+import { addEmployerRate, loadRates, loadWithholdingTable } from "./rates";
 import {
   addEmployeeToRun,
   cancelConfirm,
@@ -573,6 +573,25 @@ describe("confirm refuses figures that moved since the last edit", () => {
     const d = await confirm(id);
     expect(d.status).toBe("confirmed");
     expect(d.lines[0].snapshot.rates.healthEmployee).toBe(3.7);
+  });
+
+  it("사업주 부담 요율 (고용안정·산재) entered later refuse the confirm until 재계산, then reach the voucher", async () => {
+    const staffId = await emp();
+    const execId = await emp({ isExecutive: true, insEmployment: false, defaultAmounts: { basic: 5_000_000 } });
+    const id = await run(regular("2026-06", "2026-06-25"));
+    expect((await addEmployerRate(db, admin, { kind: "employment_stability_company", effectiveFrom: "2026-01-01", value: 0.25 })).ok).toBe(true);
+    expect((await addEmployerRate(db, admin, { kind: "industrial_accident_company", effectiveFrom: "2026-01-01", value: 0.9 })).ok).toBe(true);
+    expect(await confirmRun(db, admin, id, (await detail(id)).version)).toEqual(STALE);
+    expect((await recomputeRun(db, admin, id, (await detail(id)).version)).ok).toBe(true);
+    const d = await confirm(id);
+    const company = (e: number) => d.lines.find((l) => l.employeeId === e)!.result.company;
+    // 보수 3,000,000 (비과세 식대 제외): 고용안정 7,500, 산재 27,000; 등기임원 (고용 미가입) none
+    expect(company(staffId)).toMatchObject({ employmentStability: 7_500, industrialAccident: 27_000 });
+    expect(company(execId)).toMatchObject({ employmentStability: 0, industrialAccident: 0 });
+    const lines = await db.select().from(voucherLines).where(eq(voucherLines.voucherId, d.voucherId!));
+    expect(lines.find((l) => l.description === "산재보험 사업주 부담분")?.amount).toBe(27_000);
+    const sum = (side: string) => lines.filter((l) => l.side === side).reduce((s, l) => s + Number(l.amount), 0);
+    expect(sum("debit")).toBe(sum("credit"));
   });
 
   it("updateRunLines also computes with the current rates", async () => {
