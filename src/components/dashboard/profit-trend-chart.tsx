@@ -12,19 +12,21 @@ import {
 } from "@/components/ui/chart";
 import { formatKoreanShort, formatWon } from "@/lib/money";
 
-export type TrendPoint = { month: string; revenue: number; operatingProfit: number; netProfit: number };
+export type TrendPoint = { month: string; revenue: number; operatingProfit: number; netProfit: number; priorRevenue: number | null };
 
 // Categorical slots 1 (blue) and 2 (orange) of the validated dataviz palette, light / dark steps.
 const config = {
   revenue: { label: "매출액", theme: { light: "#2a78d6", dark: "#3987e5" } },
   operatingProfit: { label: "영업이익", theme: { light: "#eb6834", dark: "#d95926" } },
+  priorRevenue: { label: "전년 동월 매출액", theme: { light: "#71717a", dark: "#a1a1aa" } },
 } satisfies ChartConfig;
 
 const monthLabel = (m: string) => `${Number(m.slice(5))}월`;
 
-/** 월별 손익 추이: bars for 매출액, a line for 영업이익, on one shared won axis. */
+/** 월별 손익 추이: bars for 매출액, a line for 영업이익 and a dashed 전년 동월 매출액 line, on one won axis. */
 export function ProfitTrendChart({ data }: { data: TrendPoint[] }) {
   const rows = data.map((d) => ({ ...d, label: monthLabel(d.month) }));
+  const hasPrior = data.some((d) => d.priorRevenue !== null);
   return (
     <Card>
       <CardHeader>
@@ -60,7 +62,18 @@ export function ProfitTrendChart({ data }: { data: TrendPoint[] }) {
               }
             />
             <ChartLegend content={<ChartLegendContent />} />
-            <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} maxBarSize={36} />
+            <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} maxBarSize={36} isAnimationActive={false} />
+            {hasPrior && (
+              <Line
+                dataKey="priorRevenue"
+                type="monotone"
+                stroke="var(--color-priorRevenue)"
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                dot={false}
+                isAnimationActive={false}
+              />
+            )}
             <Line
               dataKey="operatingProfit"
               type="monotone"
@@ -68,6 +81,7 @@ export function ProfitTrendChart({ data }: { data: TrendPoint[] }) {
               strokeWidth={2}
               dot={{ r: 4 }}
               activeDot={{ r: 5 }}
+              isAnimationActive={false}
             />
           </ComposedChart>
         </ChartContainer>
@@ -80,6 +94,7 @@ export function ProfitTrendChart({ data }: { data: TrendPoint[] }) {
                 <th className="py-1 text-right font-medium">매출액</th>
                 <th className="py-1 text-right font-medium">영업이익</th>
                 <th className="py-1 text-right font-medium">당기순이익</th>
+                {hasPrior && <th className="py-1 text-right font-medium">전년 동월 매출액</th>}
               </tr>
             </thead>
             <tbody>
@@ -89,6 +104,7 @@ export function ProfitTrendChart({ data }: { data: TrendPoint[] }) {
                   <td className="py-1 text-right">{formatWon(d.revenue)}</td>
                   <td className="py-1 text-right">{formatWon(d.operatingProfit)}</td>
                   <td className="py-1 text-right">{formatWon(d.netProfit)}</td>
+                  {hasPrior && <td className="py-1 text-right">{formatWon(d.priorRevenue ?? 0)}</td>}
                 </tr>
               ))}
             </tbody>
