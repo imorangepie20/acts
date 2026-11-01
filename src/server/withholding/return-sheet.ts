@@ -51,8 +51,9 @@ export function buildReturnSheet(f: ReturnFigures, companyName: string, fileName
   };
 }
 
-/** One sheet per form of a view (monthly: per 귀속월 paid that month). */
-export function buildReturnSheets(view: ReturnView): { fileName: string; sheets: SheetSpec[] } {
+/** One sheet per form of a view (monthly: per 귀속월 paid that month); null when there is no form (an empty workbook is corrupt). */
+export function buildReturnSheets(view: ReturnView): { fileName: string; sheets: SheetSpec[] } | null {
+  if (view.forms.length === 0) return null;
   const s = view.selection;
   const fileName =
     s.mode === "monthly"

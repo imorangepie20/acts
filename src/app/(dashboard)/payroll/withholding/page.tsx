@@ -25,9 +25,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<Sea
       <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
         <h1 className="text-2xl font-semibold">원천세 신고</h1>
         <div className="flex gap-2">
-          <Button variant="outline" nativeButton={false} render={<a href={`/api/exports/withholding-return?${qs}`} />}>
-            Excel
-          </Button>
+          {view.forms.length > 0 && (
+            <Button variant="outline" nativeButton={false} render={<a href={`/api/exports/withholding-return?${qs}`} />}>
+              Excel
+            </Button>
+          )}
           <PrintButton />
         </div>
       </div>

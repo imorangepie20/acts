@@ -54,7 +54,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
   }
 
   if (report === WITHHOLDING_RETURN_KEY) {
-    const { fileName, sheets } = buildReturnSheets(await loadReturnView(db, sp));
+    const built = buildReturnSheets(await loadReturnView(db, sp));
+    if (!built) return new Response("이 지급연월에 확정된 급여 대장이 없습니다.", { status: 404 });
+    const { fileName, sheets } = built;
     return xlsxResponse(await renderWorkbook(sheets), fileName);
   }
 

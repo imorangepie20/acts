@@ -46,6 +46,7 @@ it("one form per 귀속월 paid in the 지급월; attr narrows; default is the l
   expect(other.forms[0].a01).toEqual({ people: 0, totalPaid: 0, incomeTax: 0 });
   const empty = await loadReturnView(db, { pay: "2026-09" });
   expect(empty.forms).toEqual([]);
+  expect(buildReturnSheets(empty)).toBeNull();
 });
 
 it("semiannual covers the half and the sheet has A01/A10/A99 and the refund block", async () => {
@@ -53,7 +54,7 @@ it("semiannual covers the half and the sheet has A01/A10/A99 and the refund bloc
   const v = await loadReturnView(db, { mode: "semiannual", year: "2026", half: "1", refund: "100" });
   expect(v.forms[0].a01.people).toBe(1);
   expect(v.forms[0].refund.carriedIn).toBe(100);
-  const { fileName, sheets } = buildReturnSheets(v);
+  const { fileName, sheets } = buildReturnSheets(v)!;
   expect(fileName).toBe("원천징수이행상황신고서_2026_상반기");
   expect(sheets[0].rows.map((r) => r.code ?? r.label)).toEqual([
     "A01",
