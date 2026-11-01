@@ -306,6 +306,42 @@ describe("simple entry types", () => {
     ]);
   });
 
+  it("saves a purchase split over two accounts (계정 나누기)", async () => {
+    const vat = await getVatAccountIds(db);
+    const b = buildSimpleVoucher(
+      {
+        type: "purchase",
+        date: "2026-10-30",
+        description: "임차료·관리비",
+        mainAccountId: acc["819"],
+        counterAccountId: acc["103"],
+        partnerId: partnerA,
+        siteId,
+        departmentId: null,
+        evidenceType: "tax_invoice",
+        vatType: "taxable",
+        vatDeductible: true,
+        supplyAmount: 3_400_000,
+        vatAmount: 340_000,
+        splits: [
+          { accountId: acc["819"], amount: 3_000_000 },
+          { accountId: acc["815"], amount: 400_000 },
+        ],
+      },
+      vat,
+    );
+    if (!b.ok) throw new Error(b.error);
+    const id = await create(b.value);
+    const v = await getVoucher(db, id, { hidePayroll: false });
+    expect(v).toMatchObject({ entryType: "purchase", supplyAmount: 3_400_000, vatAmount: 340_000 });
+    expect(v!.lines.map((l) => [l.account.code, l.side, l.amount])).toEqual([
+      ["819", "debit", 3_000_000],
+      ["815", "debit", 400_000],
+      ["135", "debit", 340_000],
+      ["103", "credit", 3_740_000],
+    ]);
+  });
+
   it("stores 종이 세금계산서 and re-validates it", async () => {
     const vat = await getVatAccountIds(db);
     const input = {

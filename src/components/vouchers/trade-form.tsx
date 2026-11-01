@@ -1,16 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { PlusIcon, XIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { recommendAccountsAction } from "@/app/(dashboard)/vouchers/actions";
 import { Switch } from "@/components/ui/switch";
 import type { AccountGroup } from "@/lib/accounts";
+import { formatWon } from "@/lib/money";
 import type { Recommendation } from "@/lib/recommend";
 import {
   buildSimpleVoucher,
   defaultVat,
   splitVatFromTotal,
   type TradeInput,
+  type TradeSplit,
 } from "@/lib/vouchers/simple";
 import {
   EVIDENCE_TYPE_LABELS,
@@ -56,9 +60,13 @@ export type TradeInitial = {
     counterAccountId: number | null;
     supplyAmount: number | null;
     vatAmount: number | null;
+    splits?: TradeSplit[];
   };
   partner: PartnerValue;
 };
+
+/** A 계정 나누기 row; the first row's account is the voucher's main account. */
+type SplitRow = { key: number; accountId: number | null; amount: number | null };
 
 type Amounts = { total: number | null; supply: number | null; vat: number | null };
 
@@ -74,6 +82,20 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
   const setup = SETUP[kind];
   const init = initial?.simple;
   const [mainId, setMainId] = useState<number | null>(init?.mainAccountId ?? null);
+  // null = one account for the whole supply amount. Keys of initial rows are their indexes.
+  const [splitRows, setSplitRows] = useState<SplitRow[] | null>(
+    init?.splits ? init.splits.map((s, i) => ({ key: i, accountId: s.accountId, amount: s.amount })) : null,
+  );
+  const nextKey = useRef(init?.splits?.length ?? 0);
+  // Event handlers only: reads the ref.
+  const splitRow = (accountId: number | null, amount: number | null): SplitRow => ({
+    key: nextKey.current++,
+    accountId,
+    amount,
+  });
+  const effectiveMainId = splitRows ? splitRows[0].accountId : mainId;
+  const updateSplit = (key: number, patch: Partial<SplitRow>) =>
+    setSplitRows((rows) => rows && rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const [counterId, setCounterId] = useState<number | null>(init?.counterAccountId ?? null);
   const [partner, setPartner] = useState<PartnerValue>(initial?.partner ?? null);
   const [evidence, setEvidence] = useState<EvidenceType>(init?.evidenceType ?? setup.evidence);
@@ -123,6 +145,8 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
         return a && a.id !== mainId ? [{ a, reason: r.reason }] : [];
       })
     : [];
+  const splitTotal = splitRows ? splitRows.reduce((s, r) => s + (r.amount ?? 0), 0) : 0;
+  const splitDiff = (amounts.supply ?? 0) - splitTotal;
 
   const p = kind;
   const noVatEvidence = kind === "purchase" && (evidence === "simple_receipt" || evidence === "none");
@@ -136,7 +160,7 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
     type: kind,
     date: ctx.common.date,
     description: ctx.common.description,
-    mainAccountId: mainId ?? 0,
+    mainAccountId: effectiveMainId ?? 0,
     counterAccountId: counterId ?? 0,
     partnerId: partner?.id ?? null,
     siteId: ctx.common.siteId,
@@ -148,6 +172,9 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
     unregisteredCard: kind === "purchase" && evidence === "card" && unregistered,
     supplyAmount: sign * (amounts.supply ?? 0),
     vatAmount: sign * (amounts.vat ?? 0),
+    ...(splitRows && {
+      splits: splitRows.map((r) => ({ accountId: r.accountId ?? 0, amount: r.amount ?? 0 })),
+    }),
   };
   const built = buildSimpleVoucher(input, ctx.vat);
 
@@ -156,22 +183,36 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (mainId === null) return ctx.fail("계정을 선택하세요.");
+        if (splitRows?.some((r) => r.accountId === null)) return ctx.fail("나눌 계정을 선택하세요.");
+        if (effectiveMainId === null) return ctx.fail("계정을 선택하세요.");
         if (counterId === null) return ctx.fail(`${setup.counterLabel}을 선택하세요.`);
         ctx.submit({ mode: "simple", simple: input });
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="계정" htmlFor={`${p}-main`}>
-          <AccountPicker
-            id={`${p}-main`}
-            label="계정"
-            accounts={ctx.accounts}
-            groups={setup.groups}
-            value={mainId}
-            onChange={setMainId}
-          />
-          {chips.length > 0 && (
+          {splitRows ? (
+            <p className="flex h-9 items-center text-sm text-muted-foreground">아래 계정별 금액에서 나눠 입력합니다.</p>
+          ) : (
+            <>
+              <AccountPicker
+                id={`${p}-main`}
+                label="계정"
+                accounts={ctx.accounts}
+                groups={setup.groups}
+                value={mainId}
+                onChange={setMainId}
+              />
+              <button
+                type="button"
+                className="mt-1.5 self-start text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                onClick={() => setSplitRows([splitRow(mainId, amounts.supply), splitRow(null, null)])}
+              >
+                계정 나누기
+              </button>
+            </>
+          )}
+          {!splitRows && chips.length > 0 && (
             <div className="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="추천 계정">
               {chips.map(({ a, reason }) => (
                 <button
@@ -294,6 +335,99 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
         </Field>
       </div>
 
+      {splitRows && (
+        <div className="overflow-x-auto rounded-md border">
+          <table className="w-full min-w-[480px] text-sm" aria-label="계정별 금액">
+            <thead className="border-b bg-muted/40">
+              <tr>
+                <th className="w-10 p-2 text-left font-medium">#</th>
+                <th className="p-2 text-left font-medium">계정</th>
+                <th className="w-44 p-2 text-right font-medium">공급가액</th>
+                <th className="w-10" />
+              </tr>
+            </thead>
+            <tbody>
+              {splitRows.map((r, i) => (
+                <tr key={r.key} className="border-b align-top last:border-0">
+                  <td className="p-2 pt-3.5 text-muted-foreground tabular-nums">{i + 1}</td>
+                  <td className="p-2">
+                    <AccountPicker
+                      label={`나눌 계정 ${i + 1}`}
+                      accounts={ctx.accounts}
+                      groups={setup.groups}
+                      value={r.accountId}
+                      onChange={(id) => updateSplit(r.key, { accountId: id })}
+                    />
+                  </td>
+                  <td className="p-2">
+                    <MoneyInput
+                      aria-label={`나눌 금액 ${i + 1}`}
+                      value={r.amount}
+                      onValueChange={(v) => updateSplit(r.key, { amount: v })}
+                    />
+                  </td>
+                  <td className="p-2">
+                    {splitRows.length > 2 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`나눌 계정 ${i + 1} 삭제`}
+                        onClick={() => setSplitRows((rows) => rows && rows.filter((x) => x.key !== r.key))}
+                      >
+                        <XIcon />
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t bg-muted/40">
+              <tr>
+                <td colSpan={2} className="p-2">
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSplitRows((rows) => rows && [...rows, splitRow(null, null)])}
+                    >
+                      <PlusIcon />계정 추가
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setMainId(splitRows[0].accountId);
+                        setSplitRows(null);
+                      }}
+                    >
+                      나누기 취소
+                    </Button>
+                  </div>
+                </td>
+                <td colSpan={2} className="p-2 text-right tabular-nums">
+                  <div>
+                    <span className="mr-2 text-xs text-muted-foreground">나눈 합계</span>
+                    {formatWon(splitTotal)}
+                  </div>
+                  <div>
+                    <span className="mr-2 text-xs text-muted-foreground">남은 금액</span>
+                    <output
+                      aria-label="남은 금액"
+                      className={splitDiff !== 0 ? "font-medium text-destructive" : undefined}
+                    >
+                      {formatWon(splitDiff)}
+                    </output>
+                  </div>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
       {built.ok ? (
         <LinesPreview lines={built.value.lines} accounts={ctx.accounts} />
       ) : (
@@ -309,7 +443,7 @@ export function TradeForm({ kind, ctx, initial }: { kind: Kind; ctx: FormContext
                 ctx.saveAsTemplate({
                   type: kind,
                   description: ctx.common.description,
-                  mainAccountId: mainId,
+                  mainAccountId: effectiveMainId,
                   counterAccountId: counterId,
                   partnerId: partner?.id ?? null,
                   evidenceType: evidence,

@@ -2,6 +2,9 @@ import { MAX_WON } from "@/lib/money";
 import { fail, ok, type Result } from "@/server/result";
 import type { EvidenceType, LineInput, VatType, VoucherInput } from "./types";
 
+/** One account's share of a trade's supply amount (a positive magnitude). */
+export type TradeSplit = { accountId: number; amount: number };
+
 export type TradeInput = {
   type: "purchase" | "sale";
   date: string;
@@ -23,6 +26,12 @@ export type TradeInput = {
   paperTaxInvoice?: boolean;
   /** 홈택스 미등록 카드; a purchase with `card` evidence only. Absent = false. */
   unregisteredCard?: boolean;
+  /**
+   * 계정 나누기: one invoice posted to two or more main accounts (e.g. 월세 + 관리비 on one
+   * 세금계산서). Positive amounts summing to |supplyAmount|; the first is `mainAccountId`.
+   * Absent = the whole supply on `mainAccountId`.
+   */
+  splits?: TradeSplit[];
 };
 
 export type TransferInput = {
@@ -56,6 +65,21 @@ export const ERR_SIGN = "공급가액과 부가세의 부호가 같아야 합니
 export const ERR_PAPER = "종이 세금계산서는 세금계산서 증빙에만 표시할 수 있습니다.";
 export const ERR_UNREGISTERED_CARD = "홈택스 미등록 카드는 신용카드 매입에만 표시할 수 있습니다.";
 export const ERR_TAX_INVOICE_EXEMPT = "면세 거래는 증빙을 계산서로 선택하세요.";
+export const ERR_SPLIT_COUNT = "나눌 계정을 2개 이상 입력하세요.";
+export const ERR_SPLIT_AMOUNT = "나눌 금액을 입력하세요.";
+export const ERR_SPLIT_SUM = "나눈 금액의 합계가 공급가액과 같아야 합니다.";
+export const ERR_SPLIT_NON_DEDUCTIBLE = "불공제 매입은 계정을 나눌 수 없습니다. 전표를 따로 입력하세요.";
+
+function validateSplits(input: TradeInput, supply: number, tax: number): string | null {
+  const s = input.splits;
+  if (s === undefined) return null;
+  if (s.length < 2 || s[0].accountId !== input.mainAccountId) return ERR_SPLIT_COUNT;
+  if (s.some((x) => !Number.isInteger(x.amount) || x.amount < 1 || x.amount > MAX_WON)) return ERR_SPLIT_AMOUNT;
+  if (s.reduce((sum, x) => sum + x.amount, 0) !== supply) return ERR_SPLIT_SUM;
+  // Non-deducted VAT is added to the cost; with several accounts it would have to be apportioned.
+  if (input.type === "purchase" && !input.vatDeductible && tax > 0) return ERR_SPLIT_NON_DEDUCTIBLE;
+  return null;
+}
 
 /** Size rules apply to the magnitudes; a 수정·취소분 has a negative supply and a VAT of 0 or less. */
 function validateTrade(input: TradeInput): string | null {
@@ -83,7 +107,7 @@ function validateTrade(input: TradeInput): string | null {
     return "간이영수증·증빙 없음은 부가세를 공제받을 수 없습니다. 합계를 공급가액으로 입력하세요.";
   }
   if (i.vatAmount > i.supplyAmount) return "부가세가 공급가액보다 클 수 없습니다.";
-  return null;
+  return validateSplits(input, i.supplyAmount, i.vatAmount);
 }
 
 function validateSimple(input: SimpleInput): string | null {
@@ -140,18 +164,20 @@ function emitSimple(input: SimpleInput, vat: VatAccounts): VoucherInput {
   const negative = input.supplyAmount < 0;
   const supply = Math.abs(input.supplyAmount);
   const tax = Math.abs(input.vatAmount);
+  const mains: TradeSplit[] = input.splits ?? [{ accountId: input.mainAccountId, amount: supply }];
   const lines: LineInput[] = [];
   if (input.type === "purchase") {
     if (input.vatDeductible) {
-      lines.push(line(input.mainAccountId, "debit", supply));
+      for (const m of mains) lines.push(line(m.accountId, "debit", m.amount));
       if (tax > 0) lines.push(line(vat.inputAccountId, "debit", tax));
     } else {
-      lines.push(line(input.mainAccountId, "debit", supply + tax));
+      // Non-deducted VAT joins the cost (validation keeps splits to a VAT of 0 here).
+      mains.forEach((m, i) => lines.push(line(m.accountId, "debit", m.amount + (i === 0 ? tax : 0))));
     }
     lines.push(line(input.counterAccountId, "credit", supply + tax));
   } else {
     lines.push(line(input.counterAccountId, "debit", supply + tax));
-    lines.push(line(input.mainAccountId, "credit", supply));
+    for (const m of mains) lines.push(line(m.accountId, "credit", m.amount));
     if (tax > 0) lines.push(line(vat.outputAccountId, "credit", tax));
   }
   // A 수정·취소분 is the same entry reversed: same line order, sides swapped.
@@ -226,14 +252,17 @@ export function toSimpleInput(v: VoucherInput, vat: VatAccounts): SimpleInput | 
     // sale: counter is the (only) debit, main the first credit
     // (sides swapped for a 수정·취소분, whose supply amount is negative)
     const mainIsDebit = isPurchase !== v.supplyAmount < 0;
-    const mainLine = v.lines.find((l) => l.side === (mainIsDebit ? "debit" : "credit"));
+    const mainSide = v.lines.filter((l) => l.side === (mainIsDebit ? "debit" : "credit"));
     const counterLine = v.lines.find((l) => l.side === (mainIsDebit ? "credit" : "debit"));
-    if (!mainLine || !counterLine) return null;
+    // The VAT line, when there is one, follows the main lines on their side.
+    const hasVatLine = v.vatAmount !== 0 && (!isPurchase || v.vatDeductible === true);
+    const mains = hasVatLine ? mainSide.slice(0, -1) : mainSide;
+    if (mains.length === 0 || !counterLine) return null;
     candidate = {
       type: v.entryType,
       date: v.date,
       description: v.description,
-      mainAccountId: mainLine.accountId,
+      mainAccountId: mains[0].accountId,
       counterAccountId: counterLine.accountId,
       ...dims,
       evidenceType: v.evidenceType,
@@ -243,6 +272,7 @@ export function toSimpleInput(v: VoucherInput, vat: VatAccounts): SimpleInput | 
       vatAmount: v.vatAmount,
       paperTaxInvoice: v.paperTaxInvoice === true,
       unregisteredCard: v.unregisteredCard === true,
+      ...(mains.length > 1 && { splits: mains.map((l) => ({ accountId: l.accountId, amount: l.amount })) }),
     };
   } else {
     return null;

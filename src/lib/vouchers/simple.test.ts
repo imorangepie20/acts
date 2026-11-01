@@ -4,6 +4,10 @@ import {
   buildSimpleVoucher,
   defaultVat,
   ERR_PAPER,
+  ERR_SPLIT_AMOUNT,
+  ERR_SPLIT_COUNT,
+  ERR_SPLIT_NON_DEDUCTIBLE,
+  ERR_SPLIT_SUM,
   ERR_TAX_INVOICE_EXEMPT,
   ERR_UNREGISTERED_CARD,
   splitVatFromTotal,
@@ -231,6 +235,102 @@ describe("toSimpleInput", () => {
     const s = built(sale);
     const lines = s.lines.map((l, i) => (i === 2 ? { ...l, accountId: 7777 } : l));
     expect(toSimpleInput({ ...s, lines }, vat)).toBeNull();
+  });
+});
+
+describe("계정 나누기 (splits)", () => {
+  const OTHER = 9815;
+  // 세금계산서 한 장: 월세 3,000,000 + 관리비 400,000, 부가세 340,000
+  const rent: TradeInput = {
+    ...purchase,
+    evidenceType: "tax_invoice",
+    supplyAmount: 3_400_000,
+    vatAmount: 340_000,
+    splits: [
+      { accountId: MAIN, amount: 3_000_000 },
+      { accountId: OTHER, amount: 400_000 },
+    ],
+  };
+
+  it("posts one main line per split, then the VAT and the payment", () => {
+    const v = built(rent);
+    expect(amounts(v)).toEqual([
+      ["debit", MAIN, 3_000_000],
+      ["debit", OTHER, 400_000],
+      ["debit", vat.inputAccountId, 340_000],
+      ["credit", COUNTER, 3_740_000],
+    ]);
+    expect(v.supplyAmount).toBe(3_400_000);
+    expect(v.vatAmount).toBe(340_000);
+  });
+
+  it("splits a sale's revenue lines the same way", () => {
+    const v = built({ ...rent, type: "sale", vatDeductible: false });
+    expect(amounts(v)).toEqual([
+      ["debit", COUNTER, 3_740_000],
+      ["credit", MAIN, 3_000_000],
+      ["credit", OTHER, 400_000],
+      ["credit", vat.outputAccountId, 340_000],
+    ]);
+  });
+
+  it("swaps every side for a 수정·취소분", () => {
+    const v = built({ ...rent, supplyAmount: -3_400_000, vatAmount: -340_000 });
+    expect(amounts(v)).toEqual([
+      ["credit", MAIN, 3_000_000],
+      ["credit", OTHER, 400_000],
+      ["credit", vat.inputAccountId, 340_000],
+      ["debit", COUNTER, 3_740_000],
+    ]);
+  });
+
+  it("allows a split without VAT even when not deducted", () => {
+    const v = built({ ...rent, evidenceType: "invoice", vatType: "exempt", vatAmount: 0, vatDeductible: false });
+    expect(amounts(v)).toEqual([
+      ["debit", MAIN, 3_000_000],
+      ["debit", OTHER, 400_000],
+      ["credit", COUNTER, 3_400_000],
+    ]);
+  });
+
+  it("rejects splits that do not add up to the supply amount", () => {
+    expect(err({ ...rent, supplyAmount: 3_500_000, vatAmount: 350_000 })).toBe(ERR_SPLIT_SUM);
+    expect(err({ ...rent, splits: [{ accountId: MAIN, amount: 3_400_000 }, { accountId: OTHER, amount: 0 }] })).toBe(
+      ERR_SPLIT_AMOUNT,
+    );
+  });
+
+  it("rejects fewer than two splits or a first split that is not the main account", () => {
+    expect(err({ ...rent, splits: [{ accountId: MAIN, amount: 3_400_000 }] })).toBe(ERR_SPLIT_COUNT);
+    expect(
+      err({
+        ...rent,
+        splits: [
+          { accountId: OTHER, amount: 3_000_000 },
+          { accountId: MAIN, amount: 400_000 },
+        ],
+      }),
+    ).toBe(ERR_SPLIT_COUNT);
+  });
+
+  it("rejects a split of a non-deductible purchase with VAT", () => {
+    expect(err({ ...rent, vatDeductible: false })).toBe(ERR_SPLIT_NON_DEDUCTIBLE);
+  });
+
+  it("round-trips through toSimpleInput", () => {
+    const cases: TradeInput[] = [
+      rent,
+      { ...rent, supplyAmount: -3_400_000, vatAmount: -340_000 },
+      { ...rent, type: "sale", vatDeductible: false },
+      { ...rent, evidenceType: "invoice", vatType: "exempt", vatAmount: 0, vatDeductible: false },
+    ];
+    for (const c of cases) {
+      expect(toSimpleInput(built(c), vat)).toEqual({ paperTaxInvoice: false, unregisteredCard: false, ...c });
+    }
+  });
+
+  it("leaves a single-line trade without splits", () => {
+    expect(toSimpleInput(built(purchase), vat)).not.toHaveProperty("splits");
   });
 });
 

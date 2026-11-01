@@ -55,6 +55,7 @@ const tradeSchema = z.object({
   vatAmount: amount,
   paperTaxInvoice: z.boolean().optional(),
   unregisteredCard: z.boolean().optional(),
+  splits: z.array(z.object({ accountId: id, amount })).max(50).optional(),
 });
 const transferSchema = z.object({
   type: z.literal("transfer"),

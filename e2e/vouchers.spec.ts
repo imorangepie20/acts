@@ -107,6 +107,46 @@ test("전표: 수정·취소분 매입은 차변·대변이 바뀌고 수정 화
   await expect(page).toHaveURL(/\/vouchers$/);
 });
 
+test("전표: 세금계산서 한 장을 계정 두 개로 나눠 입력하고 수정 화면에서 그대로 보인다", async ({ page }) => {
+  const desc = `E2E 계정 나누기 ${Date.now()}`;
+  await page.goto("/vouchers/new");
+  await page.getByLabel("적요").fill(desc);
+  await pick(page, "계정", "819");
+  await pick(page, "결제 계정", "103");
+  await page.getByLabel("증빙").selectOption({ label: "세금계산서" });
+  await page.getByLabel("공급가액").fill("3400000");
+  await page.getByRole("button", { name: "계정 나누기" }).click();
+
+  const splits = page.getByRole("table", { name: "계정별 금액" });
+  await expect(page.getByRole("combobox", { name: "나눌 계정 1" })).toContainText("819");
+  await expect(page.getByLabel("나눌 금액 1")).toHaveValue("3,400,000");
+  await page.getByLabel("나눌 금액 1").fill("3000000");
+  await pick(page, "나눌 계정 2", "815");
+  await page.getByLabel("나눌 금액 2").fill("400000");
+  await expect(splits.getByRole("status", { name: "남은 금액" })).toHaveText("0");
+
+  const preview = page.getByRole("table", { name: "분개 미리보기" });
+  await expect(preview.getByRole("row", { name: /819 지급임차료/ })).toContainText("3,000,000");
+  await expect(preview.getByRole("row", { name: /815 수도광열비/ })).toContainText("400,000");
+  await expect(preview.getByRole("row", { name: /135 부가세대급금/ })).toContainText("340,000");
+  await expect(preview.getByRole("row", { name: /103 보통예금/ })).toContainText("3,740,000");
+
+  await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText("저장되었습니다.")).toBeVisible();
+
+  await page.goto(`/vouchers?q=${encodeURIComponent(desc)}`);
+  await page.getByRole("row", { name: new RegExp(desc) }).click();
+  await expect(page.getByText("3,400,000 / 340,000")).toBeVisible();
+  await page.getByRole("button", { name: "수정" }).click();
+  await expect(page.getByRole("tab", { name: "매입·비용" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("combobox", { name: "나눌 계정 2" })).toContainText("815");
+  await expect(page.getByLabel("나눌 금액 2")).toHaveValue("400,000");
+  await page.goBack();
+  await page.getByRole("button", { name: "삭제" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "삭제" }).click();
+  await expect(page).toHaveURL(/\/vouchers$/);
+});
+
 test("전표: 종이 세금계산서 스위치가 저장되고 수정 화면에서 켜져 있다", async ({ page }) => {
   const desc = `E2E 종이 ${Date.now()}`;
   await page.goto("/vouchers/new");
