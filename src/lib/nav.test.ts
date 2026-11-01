@@ -18,12 +18,12 @@ describe("navGroupsFor", () => {
     expect(h).toContain("/reports/balance-sheet");
     expect(h).not.toContain("/vouchers/new");
   });
-  it("admin sees all 22 items", () => {
-    expect(hrefs("admin")).toHaveLength(22);
+  it("admin sees all 23 items", () => {
+    expect(hrefs("admin")).toHaveLength(23);
   });
   it("payroll menus need payroll:manage", () => {
     for (const role of ["manager", "admin"] as const) {
-      expect(hrefs(role)).toEqual(expect.arrayContaining(["/payroll/runs", "/payroll/employees", "/payroll/withholding", "/payroll/settings"]));
+      expect(hrefs(role)).toEqual(expect.arrayContaining(["/payroll/runs", "/payroll/employees", "/payroll/withholding", "/payroll/simplified-statement", "/payroll/settings"]));
     }
     for (const role of ["staff", "executive"] as const) {
       expect(hrefs(role).some((h) => h.startsWith("/payroll"))).toBe(false);

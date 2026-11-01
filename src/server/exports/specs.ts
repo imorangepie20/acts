@@ -360,12 +360,15 @@ export const PAYROLL_RUN_KEY = "payroll-run";
 /** The 원천징수이행상황신고서 (same params as its page: `mode`, `pay`, `attr`, `year`, `half`, `refund`). */
 export const WITHHOLDING_RETURN_KEY = "withholding-return";
 
+/** The 간이지급명세서 preview list (params `year`, `half`; masked 주민등록번호). */
+export const SIMPLIFIED_STATEMENT_KEY = "simplified-statement";
+
 /**
  * Permission an export key needs: tax lists are `export:tax`, the 급여 대장 and 원천징수이행상황신고서 `payroll:manage`, the
  * 1C reports `ledger:view`.
  */
 export function exportPermission(key: string): Permission {
-  if (key === PAYROLL_RUN_KEY || key === WITHHOLDING_RETURN_KEY) return "payroll:manage";
+  if (key === PAYROLL_RUN_KEY || key === WITHHOLDING_RETURN_KEY || key === SIMPLIFIED_STATEMENT_KEY) return "payroll:manage";
   return (TAX_LIST_KEYS as readonly string[]).includes(key) ? "export:tax" : "ledger:view";
 }
 

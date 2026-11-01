@@ -8,6 +8,7 @@ import {
   exportPermission,
   PAYROLL_RUN_KEY,
   REPORT_KEYS,
+  SIMPLIFIED_STATEMENT_KEY,
   TAX_LIST_KEYS,
   WITHHOLDING_RETURN_KEY,
   type ReportKey,
@@ -19,6 +20,13 @@ import { buildPayrollLedgerSheet } from "@/server/payroll/ledger-sheet";
 import { getRun } from "@/server/payroll/runs";
 import { buildReturnSheets } from "@/server/withholding/return-sheet";
 import { loadReturnView } from "@/server/withholding/return-view";
+import {
+  buildSimplifiedSheet,
+  loadSimplifiedRows,
+  parseSimplifiedParams,
+} from "@/server/withholding/simplified";
+import { MissingEncryptionKeyError } from "@/server/crypto/secret";
+import { encryptionKeyMessage } from "@/server/auth/mfa";
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -37,7 +45,8 @@ function xlsxResponse(body: Buffer, fileName: string) {
  * Excel download of one report, built from the same filters as its page. The 1C reports need `ledger:view`;
  * the tax lists (`tax-invoices`, `card-purchases`) need `export:tax` and take `from`/`to` only;
  * `payroll-run` (the 급여 대장, masked 주민등록번호 only) needs `payroll:manage` and takes `run`;
- * `withholding-return` (the 원천징수이행상황신고서) needs `payroll:manage` and takes the page's period params.
+ * `withholding-return` (the 원천징수이행상황신고서) needs `payroll:manage` and takes the page's period params;
+ * `simplified-statement` (the 간이지급명세서 preview, masked 주민등록번호) needs `payroll:manage` and takes `year`, `half`.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ report: string }> }) {
   const user = await verifySession();
@@ -58,6 +67,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
     if (!built) return new Response("이 지급연월에 확정된 급여 대장이 없습니다.", { status: 404 });
     const { fileName, sheets } = built;
     return xlsxResponse(await renderWorkbook(sheets), fileName);
+  }
+
+  if (report === SIMPLIFIED_STATEMENT_KEY) {
+    const { year, half } = parseSimplifiedParams(sp);
+    try {
+      const spec = buildSimplifiedSheet(await loadSimplifiedRows(db, year, half), (await getCompany(db)).name, year, half);
+      if (!spec) return new Response("해당 반기에 확정된 급여가 없습니다.", { status: 404 });
+      return xlsxResponse(await renderWorkbook([spec]), spec.fileName);
+    } catch (e) {
+      if (e instanceof MissingEncryptionKeyError) return new Response(encryptionKeyMessage(e), { status: 500 });
+      throw e;
+    }
   }
 
   const isTax = (TAX_LIST_KEYS as readonly string[]).includes(report);
