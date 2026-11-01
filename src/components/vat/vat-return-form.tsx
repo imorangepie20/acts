@@ -11,9 +11,8 @@ import { BY_INDUSTRY_NOTICE, BY_REASON_NOTICE, taxDiffNotice, ZERO_ASSUMED_NOTIC
 import type { VatReturn } from "@/lib/vat/return";
 import type { VatRowGroup } from "@/lib/vat/rows";
 import { NOT_COMPUTED_TEXT } from "@/lib/withholding/return-rows";
+import { cell, num } from "./cells";
 
-export const cell = "border border-neutral-400 px-2 py-1";
-export const num = `${cell} text-right tabular-nums whitespace-nowrap`;
 const note = "mt-0.5 text-[11px] font-normal text-neutral-600";
 
 function Value({ v, col }: { v: VatCell; col: "amount" | "tax" }) {
@@ -88,9 +87,9 @@ export function VatReturnForm({ title, groups, result }: { title: string; groups
                       <td className={`${cell} text-center whitespace-nowrap`}>{r.rate ?? ""}</td>
                     </>
                   )}
-                  {isByIndustryRow(r.no) ? null : tax !== null && diff !== undefined ? (
+                  {isByIndustryRow(r.no) ? null : typeof tax === "number" && diff !== undefined ? (
                     <td className={num} data-col="tax">
-                      {formatWon(tax as number)}
+                      {formatWon(tax)}
                       <p className={note}>{taxDiffNotice(diff)}</p>
                     </td>
                   ) : r.no === 30 && typeof tax === "number" && tax < 0 ? (

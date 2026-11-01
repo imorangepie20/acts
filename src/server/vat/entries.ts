@@ -55,16 +55,17 @@ export async function loadVatEntries(db: Db, from: string, to: string): Promise<
     for (const l of lines) if (!mainGroup.has(l.voucherId)) mainGroup.set(l.voucherId, l.group);
   }
 
-  return rows.map((r) => {
+  return rows.flatMap((r) => {
+    // Trade vouchers always carry a vat type (buildSimpleVoucher sets it); skip a row without one rather than guess.
+    if (r.vatType === null) return [];
     const businessNumber = tenDigits(r.meta?.merchantBusinessNumber ?? r.partnerBn);
-    return {
+    const entry = {
       voucherId: r.id,
       voucherNo: formatVoucherNo(r.date, r.no),
       date: r.date,
       entryType: r.entryType === "sale" ? "sale" : "purchase",
       evidenceType: r.evidenceType,
-      // Trade vouchers always carry a vat type; the fallback only keeps the type total.
-      vatType: r.vatType ?? ((r.vatAmount ?? 0) !== 0 ? "taxable" : "exempt"),
+      vatType: r.vatType,
       vatDeductible: r.vatDeductible,
       supplyAmount: r.supplyAmount ?? 0,
       vatAmount: r.vatAmount ?? 0,
@@ -76,5 +77,6 @@ export async function loadVatEntries(db: Db, from: string, to: string): Promise<
       partnerKey: businessNumber ?? (r.partnerId !== null ? `p:${r.partnerId}` : "none"),
       cardNo: r.meta?.cardNo ?? null,
     } satisfies VatEntry;
+    return [entry];
   });
 }

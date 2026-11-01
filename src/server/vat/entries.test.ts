@@ -85,11 +85,18 @@ describe("loadVatEntries", () => {
       importKey: "c1", voucherId: id, source: "card",
       meta: { approvalNo: "1", merchantName: "맛집", merchantBusinessNumber: "111-11-11111", cardNo: "1234-****" },
     });
-    const bad = await make({ date: "2026-10-02", partnerId: null, counterAccountId: acc["101"] });
-    void bad;
+    await make({ date: "2026-10-02", partnerId: null, counterAccountId: acc["101"] });
     const e = await loadVatEntries(db, "2026-10-01", "2026-10-31");
     expect(e[0]).toMatchObject({ partnerName: "맛집", businessNumber: "1111111111", partnerKey: "1111111111", cardNo: "1234-****" });
     expect(e[1]).toMatchObject({ businessNumber: null, partnerKey: "none", partnerName: null });
+  });
+
+  it("skips a trade voucher without a vat type", async () => {
+    const id = await make({});
+    await make({ date: "2026-10-02" });
+    await db.update(vouchers).set({ vatType: null }).where(eq(vouchers.id, id));
+    const e = await loadVatEntries(db, "2026-10-01", "2026-10-31");
+    expect(e.map((x) => x.date)).toEqual(["2026-10-02"]);
   });
 
   it("keys a partner without a valid business number by id", async () => {

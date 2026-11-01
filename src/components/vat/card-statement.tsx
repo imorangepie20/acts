@@ -4,7 +4,7 @@ import { CARD_DETAIL_ROWS, cardOverflowNotice, sortedCardDetail } from "@/lib/va
 import { ENTER_DIRECTLY } from "@/lib/vat/notices";
 import type { CardStatement as Statement, Tally } from "@/lib/vat/types";
 import { NOT_COMPUTED_TEXT } from "@/lib/withholding/return-rows";
-import { cell, num } from "./vat-return-form";
+import { cell, num } from "./cells";
 
 /** 신용카드매출전표등 수령명세서(갑): ④–⑧ 합계 and the ⑧ 명세. */
 export function CardStatement({ card: c }: { card: Statement }) {

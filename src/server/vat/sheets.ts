@@ -128,9 +128,12 @@ function invoiceSheet(
         vatAmount: p.vatAmount,
       }),
     ),
-    ...(s.otherByPartner.length > INVOICE_DETAIL_ROWS ? [{ label: invoiceOverflowNotice }] : []),
   ];
   const emphasis = [0, 7];
+  if (s.otherByPartner.length > INVOICE_DETAIL_ROWS) {
+    emphasis.push(rows.length);
+    rows.push({ label: invoiceOverflowNotice });
+  }
   if (withoutBn.length > 0) {
     emphasis.push(rows.length);
     rows.push({ label: purchasesWithoutBusinessNumberNotice(withoutBn.length) });
@@ -181,8 +184,12 @@ function cardSheet(view: VatView, fileName: string, meta: string[]): SheetSpec {
         vatAmount: d.vatAmount,
       }),
     ),
-    ...(detail.length > CARD_DETAIL_ROWS ? [{ label: cardOverflowNotice }] : []),
   ];
+  const emphasis = [0, 5];
+  if (detail.length > CARD_DETAIL_ROWS) {
+    emphasis.push(rows.length);
+    rows.push({ label: cardOverflowNotice });
+  }
   return {
     fileName,
     title: "신용카드 수령명세서",
@@ -196,7 +203,7 @@ function cardSheet(view: VatView, fileName: string, meta: string[]): SheetSpec {
       { header: "세액", key: "vatAmount", width: 16, money: true },
     ],
     rows,
-    emphasis: [0, 5],
+    emphasis,
   };
 }
 

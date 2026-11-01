@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { buildVatReturn } from "@/lib/vat/return";
 import type { VatSelection } from "@/lib/vat/periods";
 import type { VatEntry } from "@/lib/vat/types";
-import { purchasesWithoutBusinessNumberNotice } from "@/lib/vat/notices";
+import { cardOverflowNotice, invoiceOverflowNotice } from "@/lib/vat/cells";
+import { ENTER_DIRECTLY, purchasesWithoutBusinessNumberNotice } from "@/lib/vat/notices";
 import { NOT_COMPUTED_TEXT } from "@/lib/withholding/return-rows";
 import { buildVatSheets } from "./sheets";
 import type { VatView } from "./view";
@@ -93,5 +94,56 @@ describe("buildVatSheets", () => {
     expect(purchases.emphasis).toContain(purchases.rows.findIndex((r) => r.label === notice));
     expect(text(sales.rows).join(" | ")).not.toContain("20030116-0001");
     expect(text(sales.rows).join(" | ")).not.toContain("사업자등록번호가 없는");
+  });
+
+  it("합계표 sheets with 6+ 전자 외 partners end with the (을) notice row, emphasised", () => {
+    const paper = (entryType: "sale" | "purchase", i: number) => {
+      const bn = `22081625${String(i).padStart(2, "0")}`;
+      return entry({ entryType, paperTaxInvoice: true, businessNumber: bn, partnerKey: bn, supplyAmount: 1000, vatAmount: 100 });
+    };
+    const entries = [1, 2, 3, 4, 5, 6].flatMap((i) => [paper("sale", i), paper("purchase", i)]);
+    const { sheets } = buildVatSheets(view(entries));
+    for (const sheet of [sheets[1], sheets[2]]) {
+      const at = sheet.rows.findIndex((r) => r.label === invoiceOverflowNotice);
+      expect(at).toBe(sheet.rows.length - 1);
+      expect(sheet.emphasis).toContain(at);
+    }
+    // five partners: no notice
+    const five = buildVatSheets(view(entries.filter((e) => e.businessNumber !== "2208162506"))).sheets;
+    expect(five[1].rows.some((r) => r.label === invoiceOverflowNotice)).toBe(false);
+  });
+
+  it("card sheet: ⑥ not computed, 직접 입력, sorted ⑧ rows and the overflow row", () => {
+    const card = (cardNo: string | null, businessNumber: string | null) =>
+      entry({ evidenceType: "card", unregisteredCard: true, cardNo, businessNumber, partnerKey: businessNumber ?? "none", supplyAmount: 1000, vatAmount: 100 });
+    const small = buildVatSheets(
+      view([card("2222", "3333333333"), card(null, "1111111111"), card("1111", null), card("1111", "2222222222"), card("1111", "1111111111")]),
+    ).sheets[3];
+    expect(small.rows.find((r) => r.label === "⑥ 화물운전자복지카드")).toMatchObject({
+      count: NOT_COMPUTED_TEXT,
+      supplyAmount: NOT_COMPUTED_TEXT,
+      vatAmount: NOT_COMPUTED_TEXT,
+    });
+    const detail = small.rows.slice(small.rows.findIndex((r) => r.label === "⑧ 그 밖의 신용카드 등 명세") + 1);
+    expect(detail.map((r) => [r.cardNo, r.businessNumber])).toEqual([
+      ["1111", "111-11-11111"],
+      ["1111", "222-22-22222"],
+      ["1111", null],
+      ["2222", "333-33-33333"],
+      [ENTER_DIRECTLY, "111-11-11111"],
+    ]);
+    expect(small.rows.some((r) => r.label === cardOverflowNotice)).toBe(false);
+
+    const many = buildVatSheets(view(Array.from({ length: 16 }, (_, i) => card(String(1000 + i), null)))).sheets[3];
+    const at = many.rows.findIndex((r) => r.label === cardOverflowNotice);
+    expect(at).toBe(many.rows.length - 1);
+    expect(many.emphasis).toContain(at);
+  });
+
+  it("a period with no entries still builds the four sheets", () => {
+    const { sheets } = buildVatSheets(view([]));
+    expect(sheets.map((s) => s.title)).toEqual(["신고서", "매출처별 합계표", "매입처별 합계표", "신용카드 수령명세서"]);
+    expect(sheets[0].meta).toContain("이 기간에 승인된 매입·매출 전표가 없습니다.");
+    expect(sheets[2].rows.some((r) => typeof r.label === "string" && r.label.includes("사업자등록번호가 없는"))).toBe(false);
   });
 });

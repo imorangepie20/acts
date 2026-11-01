@@ -4,7 +4,7 @@ import { formatWon } from "@/lib/money";
 import { INVOICE_DETAIL_ROWS, invoiceOverflowNotice } from "@/lib/vat/cells";
 import { purchasesWithoutBusinessNumberNotice } from "@/lib/vat/notices";
 import type { InvoiceSummary as Summary, PartnerTally, PurchaseWithoutBusinessNumber } from "@/lib/vat/types";
-import { cell, num } from "./vat-return-form";
+import { cell, num } from "./cells";
 
 /** 매출처별 / 매입처별 세금계산서합계표(갑): 총합계 and the 전자 외 발급분 처별 명세. */
 export function InvoiceSummary({
