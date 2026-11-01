@@ -97,7 +97,7 @@ export function VoucherList({ rows, total, page, pageSize, filters, options, can
           </Field>
           {options.showSite && (
             <Field label="사업장" htmlFor="filter-site">
-              <select id="filter-site" name="site" defaultValue={filters.siteId?.toString() ?? ""} className={selectClass}>
+              <select id="filter-site" name="site" defaultValue={filters.siteId?.toString() ?? ""} className={`${selectClass} max-w-48`}>
                 <option value="">전체</option>
                 {options.sites.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -109,7 +109,7 @@ export function VoucherList({ rows, total, page, pageSize, filters, options, can
           )}
           {options.showDepartment && (
             <Field label="부서" htmlFor="filter-dept">
-              <select id="filter-dept" name="dept" defaultValue={filters.departmentId?.toString() ?? ""} className={selectClass}>
+              <select id="filter-dept" name="dept" defaultValue={filters.departmentId?.toString() ?? ""} className={`${selectClass} max-w-48`}>
                 <option value="">전체</option>
                 {options.departments.map((d) => (
                   <option key={d.id} value={d.id}>
