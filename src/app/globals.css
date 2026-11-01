@@ -149,10 +149,12 @@
     box-shadow: none !important;
     border: 0 !important;
   }
-  .payslip {
+  .payslip,
+  .return-form {
     break-after: page;
   }
-  .payslip:last-child {
+  .payslip:last-child,
+  .return-form:last-child {
     break-after: auto;
   }
 }

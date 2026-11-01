@@ -9,6 +9,7 @@ import {
   PAYROLL_RUN_KEY,
   REPORT_KEYS,
   TAX_LIST_KEYS,
+  WITHHOLDING_RETURN_KEY,
   type ReportKey,
   type TaxListKey,
 } from "@/server/exports/specs";
@@ -16,6 +17,8 @@ import { renderWorkbook } from "@/server/exports/xlsx";
 import { getCompany } from "@/server/company/service";
 import { buildPayrollLedgerSheet } from "@/server/payroll/ledger-sheet";
 import { getRun } from "@/server/payroll/runs";
+import { buildReturnSheets } from "@/server/withholding/return-sheet";
+import { loadReturnView } from "@/server/withholding/return-view";
 
 const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -33,7 +36,8 @@ function xlsxResponse(body: Buffer, fileName: string) {
 /**
  * Excel download of one report, built from the same filters as its page. The 1C reports need `ledger:view`;
  * the tax lists (`tax-invoices`, `card-purchases`) need `export:tax` and take `from`/`to` only;
- * `payroll-run` (the 급여 대장, masked 주민등록번호 only) needs `payroll:manage` and takes `run`.
+ * `payroll-run` (the 급여 대장, masked 주민등록번호 only) needs `payroll:manage` and takes `run`;
+ * `withholding-return` (the 원천징수이행상황신고서) needs `payroll:manage` and takes the page's period params.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ report: string }> }) {
   const user = await verifySession();
@@ -47,6 +51,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ repo
     if (!run) return new Response(null, { status: 404 });
     const spec = buildPayrollLedgerSheet(run, (await getCompany(db)).name);
     return xlsxResponse(await renderWorkbook([spec]), spec.fileName);
+  }
+
+  if (report === WITHHOLDING_RETURN_KEY) {
+    const { fileName, sheets } = buildReturnSheets(await loadReturnView(db, sp));
+    return xlsxResponse(await renderWorkbook(sheets), fileName);
   }
 
   const isTax = (TAX_LIST_KEYS as readonly string[]).includes(report);

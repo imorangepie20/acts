@@ -357,12 +357,15 @@ export const TAX_LIST_KEYS: readonly TaxListKey[] = ["tax-invoices", "card-purch
 /** The 급여 대장 of one run (`?run=<id>`). */
 export const PAYROLL_RUN_KEY = "payroll-run";
 
+/** The 원천징수이행상황신고서 (same params as its page: `mode`, `pay`, `attr`, `year`, `half`, `refund`). */
+export const WITHHOLDING_RETURN_KEY = "withholding-return";
+
 /**
- * Permission an export key needs: tax lists are `export:tax`, the 급여 대장 `payroll:manage`, the
+ * Permission an export key needs: tax lists are `export:tax`, the 급여 대장 and 원천징수이행상황신고서 `payroll:manage`, the
  * 1C reports `ledger:view`.
  */
 export function exportPermission(key: string): Permission {
-  if (key === PAYROLL_RUN_KEY) return "payroll:manage";
+  if (key === PAYROLL_RUN_KEY || key === WITHHOLDING_RETURN_KEY) return "payroll:manage";
   return (TAX_LIST_KEYS as readonly string[]).includes(key) ? "export:tax" : "ledger:view";
 }
 

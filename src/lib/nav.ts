@@ -52,6 +52,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { title: "급여 대장", href: "/payroll/runs", icon: Wallet, permission: "payroll:manage" },
       { title: "사원", href: "/payroll/employees", icon: IdCard, permission: "payroll:manage" },
+      { title: "원천세 신고", href: "/payroll/withholding", icon: FileText, permission: "payroll:manage" },
       { title: "급여 설정", href: "/payroll/settings", icon: SlidersHorizontal, permission: "payroll:manage" },
     ],
   },
