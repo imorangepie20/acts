@@ -140,7 +140,7 @@ export function PartnersCard({
         <ol className="space-y-1 text-sm">
           {rows.map((r, i) => (
             <li key={`${r.name}-${i}`} className="flex min-w-0 justify-between gap-3">
-              <Link href={r.href} className={cn("truncate", linkClass)}>
+              <Link href={r.href} title={r.name} className={cn("truncate", linkClass)}>
                 {i + 1}. {r.name}
               </Link>
               <span className="shrink-0 font-medium whitespace-nowrap">{won(r.amount)}</span>
@@ -157,7 +157,8 @@ export function PartnersCard({
         <CardDescription>거래처별 잔액 상위 5곳 · 받을 돈 108·110·120, 줄 돈 251·252·253</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2">
+        {/* Stacked from xl up: the card is a third of the row there, too narrow for two columns of names. */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
           {list("받을 돈 상위 거래처", receivables)}
           {list("줄 돈 상위 거래처", payables)}
         </div>

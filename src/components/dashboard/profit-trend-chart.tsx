@@ -66,11 +66,13 @@ export function ProfitTrendChart({ data }: { data: TrendPoint[] }) {
             {hasPrior && (
               <Line
                 dataKey="priorRevenue"
-                type="monotone"
+                // Straight segments with a dot per month: a smoothed curve between sparse months reads as
+                // swings that never happened.
+                type="linear"
                 stroke="var(--color-priorRevenue)"
-                strokeWidth={2}
+                strokeWidth={1.5}
                 strokeDasharray="5 4"
-                dot={false}
+                dot={{ r: 2.5 }}
                 isAnimationActive={false}
               />
             )}
