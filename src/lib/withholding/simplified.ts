@@ -49,6 +49,21 @@ export function buildSimplifiedStatement(input: SimplifiedInput): SimplifiedResu
   const { year, half, company } = input;
   if (input.employees.length === 0) return fail("해당 반기에 확정된 급여가 없습니다.");
 
+  const required: [string, string][] = [
+    [company.name, "회사명(상호)을"],
+    [company.representative, "대표자 성명을"],
+    [company.hometaxId, "홈택스 ID를"],
+    [company.contactDept, "담당자 부서를"],
+    [company.contactName, "담당자 성명을"],
+    [company.contactPhone, "담당자 전화번호를"],
+  ];
+  for (const [value, label] of required) {
+    if (value.trim() === "") return fail(`${label} 입력하세요.`);
+  }
+  if (input.employees.some((e) => e.name.trim() === "")) {
+    return fail("성명이 비어 있는 사원이 있습니다.");
+  }
+
   const bizNo = stripDash(company.businessNumber);
   if (!/^\d{10}$/.test(bizNo)) return fail("회사: 사업자등록번호는 10자리 숫자여야 합니다.");
   const regNo = stripDash(company.registrationNumber);

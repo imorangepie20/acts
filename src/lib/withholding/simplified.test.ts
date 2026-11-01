@@ -131,6 +131,15 @@ describe("errors", () => {
     expect(err({ ...base, employees: [{ ...base.employees[0], name: "홍\u{1F600}" }] })).toMatch(/^홍.*:/);
     expect(err({ ...base, company: { ...base.company, name: "A\u{1F600}" } })).toMatch(/^회사:/);
   });
+  it("rejects a blank employee name", () => {
+    expect(err({ ...base, employees: [{ ...base.employees[0], name: "  " }] })).toBe(
+      "성명이 비어 있는 사원이 있습니다.",
+    );
+  });
+  it("rejects blank required company fields", () => {
+    expect(err({ ...base, company: { ...base.company, hometaxId: " " } })).toBe("홈택스 ID를 입력하세요.");
+    expect(err({ ...base, company: { ...base.company, contactPhone: "" } })).toMatch(/전화번호/);
+  });
   it("validates company numbers", () => {
     expect(err({ ...base, company: { ...base.company, businessNumber: "123" } })).toMatch(/사업자등록번호/);
     expect(err({ ...base, company: { ...base.company, registrationNumber: "1" } })).toMatch(/법인등록번호/);
