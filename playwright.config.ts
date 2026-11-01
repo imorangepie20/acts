@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 if (existsSync(".env")) process.loadEnvFile(".env");
 
-const settingsSpecs = /(admin|vouchers-approval|closing|payroll)\.spec\.ts$/;
+const settingsSpecs = /(admin|vouchers-approval|closing|payroll|withholding)\.spec\.ts$/;
 // Template showcase specs (components/dashboards/apps pages): flaky, so they live in their own project.
 const showcaseSpecs = /(components|dashboards|apps)-[^/]*\.spec\.ts$/;
 const admin = { ...devices["Desktop Chrome"], storageState: "e2e/.auth/admin.json" };
@@ -40,10 +40,10 @@ export default defineConfig({
       use: admin,
     },
     {
-      // Writes employees, a 2026-01 run and its payroll voucher; chained so it never runs alongside
+      // Writes employees, 2026-01 / 2026-02 runs and their payroll vouchers; chained so it never runs alongside
       // admin.spec (which toggles 전표 승인) or the approval spec.
       name: "settings-serial-payroll",
-      testMatch: /payroll\.spec\.ts$/,
+      testMatch: /(payroll|withholding)\.spec\.ts$/,
       fullyParallel: false,
       dependencies: ["settings-serial"],
       use: admin,
