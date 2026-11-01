@@ -8,6 +8,7 @@ const accounts: { id: number; code: string; name: string; group: AccountGroup }[
   { id: 3, code: "401", name: "상품매출", group: "revenue" },
   { id: 4, code: "331", name: "자본금", group: "equity" },
   { id: 5, code: "811", name: "복리후생비", group: "sga" },
+  { id: 6, code: "375", name: "이월이익잉여금", group: "equity" },
 ];
 const none = { bsTotals: [], plTotals: [], priorProfit: 0 };
 
@@ -43,6 +44,25 @@ describe("buildTrialBalance", () => {
     const idx = tb.rows.findIndex((r) => r.kind === "auto");
     expect(tb.rows[idx - 1]).toMatchObject({ kind: "group", label: "자본" });
     expect(tb.rows[idx + 1]).toMatchObject({ kind: "subtotal", label: "자본 계", creditTotal: 50000 });
+    expect(tb.balanced).toBe(true);
+  });
+
+  it("merges the prior profit into a posted 375 이월이익잉여금 row", () => {
+    const tb = buildTrialBalance({
+      accounts,
+      bsTotals: [
+        { accountId: 1, debit: 50000, credit: 0 },
+        { accountId: 6, debit: 3300, credit: 0 },
+        { accountId: 2, debit: 0, credit: 3300 },
+      ],
+      plTotals: [],
+      priorProfit: 50000,
+    });
+    const autos = tb.rows.filter((r) => r.kind === "auto");
+    expect(autos).toHaveLength(1);
+    expect(autos[0]).toMatchObject({ name: "375 이월이익잉여금", debitTotal: 3300, creditTotal: 50000, creditBalance: 46700, debitBalance: 0 });
+    expect(tb.rows.some((r) => r.kind === "account" && r.code === "375")).toBe(false);
+    expect(tb.rows.find((r) => r.kind === "subtotal" && r.label === "자본 계")).toMatchObject({ debitTotal: 3300, creditTotal: 50000, creditBalance: 46700 });
     expect(tb.balanced).toBe(true);
   });
 

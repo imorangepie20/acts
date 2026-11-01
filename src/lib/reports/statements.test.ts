@@ -14,6 +14,8 @@ const chart: [string, string, AccountGroup][] = [
   ["255", "부가세예수금", "current_liability"],
   ["293", "장기차입금", "noncurrent_liability"],
   ["331", "자본금", "equity"],
+  ["351", "이익준비금", "equity"],
+  ["375", "이월이익잉여금", "equity"],
   ["401", "상품매출", "revenue"],
   ["451", "상품매출원가", "cost_of_sales"],
   ["811", "복리후생비", "sga"],
@@ -164,6 +166,24 @@ describe("buildBalanceSheet", () => {
     expect(sec(bs, "total_liabilities_equity")).toMatchObject({ amount: 1500 });
     expect(named(bs, "이월이익잉여금(전기 손익)")).toMatchObject({ accountId: null, code: "", amount: 300 });
     expect(named(bs, "당기순이익")).toMatchObject({ accountId: null, code: "", amount: 200 });
+  });
+
+  it("merges the prior profit into the 375 이월이익잉여금 row once it has postings (배당 처분)", () => {
+    const bs = buildBalanceSheet(
+      accounts,
+      {
+        // 배당 결의: 이월이익잉여금 33 차감, 이익준비금 3 적립 (미지급배당금 30 is a liability)
+        bsTotals: [dr("101", 1000), cr("251", 30), cr("331", 500), dr("375", 33), cr("351", 3)],
+        priorProfit: 500,
+        currentProfit: 0,
+      },
+      noBs,
+    );
+    expect(named(bs, "이월이익잉여금(전기 손익)")).toBeUndefined();
+    expect(acct(bs, "375")).toMatchObject({ name: "이월이익잉여금", accountId: null, amount: 467 });
+    expect(acct(bs, "351")).toMatchObject({ amount: 3 });
+    expect(sec(bs, "total_equity")).toMatchObject({ amount: 970 });
+    expect(sec(bs, "total_liabilities_equity")).toMatchObject({ amount: 1000 });
   });
 
   it("profit rows appear when either column is non-zero", () => {

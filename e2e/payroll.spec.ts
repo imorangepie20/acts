@@ -125,6 +125,16 @@ test("정기 대장: 계산, 소득세 직접 입력, 확정, 명세서, 확정 
   await expect(page.getByLabel(`${EMP_NO} 지방소득세`, { exact: true })).toHaveValue("5,000");
   expect(await page.content()).not.toContain(RRN_DIGITS.slice(6));
 
+  // 2b. 연말정산 환급 is typed as a negative amount; an empty cell clears it back to 0.
+  const settlement = page.getByLabel(`${EMP_NO} 연말정산 소득세`, { exact: true });
+  await settlement.fill("-100000");
+  await settlement.press("Tab");
+  await expect(settlement).toHaveValue("-100,000");
+  await expect(page.getByRole("row").filter({ hasText: EMP_NO }).first()).toContainText("-100,000");
+  await settlement.fill("");
+  await settlement.press("Tab");
+  await expect(settlement).toHaveValue("0");
+
   // 3. 확정 shows the voucher preview, then writes a 급여 voucher.
   await page.getByRole("button", { name: "확정", exact: true }).click();
   const confirm = page.getByRole("alertdialog");

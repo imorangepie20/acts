@@ -13,6 +13,8 @@ export type AccountRow = { id: number; code: string; name: string; group: Accoun
 export type BsInput = { bsTotals: AccountTotal[]; priorProfit: number; currentProfit: number };
 
 export const PRIOR_PROFIT_LABEL = "이월이익잉여금(전기 손익)";
+/** The 이월이익잉여금 account: once it has postings (배당 처분 etc.) it shows merged with the computed prior profit. */
+export const RETAINED_EARNINGS_CODE = "375";
 export const CURRENT_PROFIT_LABEL = "당기순이익";
 
 type Pair = { amount: number; prior: number };
@@ -112,19 +114,31 @@ export function buildBalanceSheet(accounts: AccountRow[], current: BsInput, prio
   const liabilities = pair((c) => curLiab[c] + nonCurLiab[c]);
 
   const equityAccounts = s("equity", "Ⅰ. 자본");
+  const retained = accounts.find((a) => a.code === RETAINED_EARNINGS_CODE);
+  const retainedPosted =
+    retained !== undefined && ((cur.get(retained.id) ?? 0) !== 0 || (pri.get(retained.id) ?? 0) !== 0);
   const profitRows: StatementLine[] = [];
   const profit = (name: string, amount: number, priorAmount: number) => {
     if (amount !== 0 || priorAmount !== 0) {
       profitRows.push({ kind: "account", code: "", name, accountId: null, amount, prior: priorAmount });
     }
   };
-  profit(PRIOR_PROFIT_LABEL, current.priorProfit, prior.priorProfit);
+  // Without postings on 375 the prior profit is its own computed row; with them, one 이월이익잉여금 row
+  // (account balance + prior profit) replaces both. Not a link: the ledger holds only the account part.
+  if (!retainedPosted) profit(PRIOR_PROFIT_LABEL, current.priorProfit, prior.priorProfit);
   profit(CURRENT_PROFIT_LABEL, current.currentProfit, prior.currentProfit);
   const equity = {
     amount: equityAccounts.amount + current.priorProfit + current.currentProfit,
     prior: equityAccounts.prior + prior.priorProfit + prior.currentProfit,
   };
-  const [, ...equityBody] = equityAccounts.lines;
+  const [, ...equityLines] = equityAccounts.lines;
+  const equityBody = retainedPosted
+    ? equityLines.map((l) =>
+        l.kind === "account" && l.accountId === retained.id
+          ? { ...l, accountId: null, amount: l.amount + current.priorProfit, prior: l.prior + prior.priorProfit }
+          : l,
+      )
+    : equityLines;
   const liabEquity = pair((c) => liabilities[c] + equity[c]);
 
   return [

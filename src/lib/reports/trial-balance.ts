@@ -1,4 +1,5 @@
 import { ACCOUNT_GROUPS, ACCOUNT_GROUP_LABELS, type AccountGroup } from "@/lib/accounts";
+import { PRIOR_PROFIT_LABEL, RETAINED_EARNINGS_CODE } from "./statements";
 import type { AccountTotal } from "./types";
 
 type Amounts = { debitBalance: number; debitTotal: number; creditTotal: number; creditBalance: number };
@@ -6,7 +7,11 @@ type Amounts = { debitBalance: number; debitTotal: number; creditTotal: number; 
 export type TrialBalanceRow =
   | { kind: "group"; label: string }
   | ({ kind: "account"; accountId: number; code: string; name: string } & Amounts)
-  | ({ kind: "auto"; name: "이월이익잉여금(전기 손익)" } & Amounts)
+  /**
+   * Computed, not a link: the prior profit alone ("이월이익잉여금(전기 손익)"), or merged with the 375
+   * 이월이익잉여금 account once it has postings ("375 이월이익잉여금").
+   */
+  | ({ kind: "auto"; name: string } & Amounts)
   | ({ kind: "subtotal"; label: string } & Amounts);
 
 export type TrialBalance = { rows: TrialBalanceRow[]; total: Amounts; balanced: boolean };
@@ -51,12 +56,31 @@ export function buildTrialBalance(input: {
     }
     if (group === "equity" && input.priorProfit !== 0) {
       const p = input.priorProfit;
-      const amounts: Amounts =
-        p > 0
-          ? { ...zero(), creditTotal: p, creditBalance: p }
-          : { ...zero(), debitTotal: -p, debitBalance: -p };
-      body.push({ kind: "auto", name: "이월이익잉여금(전기 손익)", ...amounts });
-      add(sub, amounts);
+      const merged = body.findIndex((r) => r.kind === "account" && r.code === RETAINED_EARNINGS_CODE);
+      if (merged >= 0) {
+        // 375 has postings: one row with the prior profit added to its totals, balances recomputed.
+        const r = body[merged] as Extract<TrialBalanceRow, { kind: "account" }>;
+        const debitTotal = r.debitTotal + Math.max(-p, 0);
+        const creditTotal = r.creditTotal + Math.max(p, 0);
+        const amounts: Amounts = {
+          debitTotal,
+          creditTotal,
+          debitBalance: Math.max(debitTotal - creditTotal, 0),
+          creditBalance: Math.max(creditTotal - debitTotal, 0),
+        };
+        body[merged] = { kind: "auto", name: `${r.code} ${r.name}`, ...amounts };
+        sub.debitBalance += amounts.debitBalance - r.debitBalance;
+        sub.creditBalance += amounts.creditBalance - r.creditBalance;
+        sub.debitTotal += amounts.debitTotal - r.debitTotal;
+        sub.creditTotal += amounts.creditTotal - r.creditTotal;
+      } else {
+        const amounts: Amounts =
+          p > 0
+            ? { ...zero(), creditTotal: p, creditBalance: p }
+            : { ...zero(), debitTotal: -p, debitBalance: -p };
+        body.push({ kind: "auto", name: PRIOR_PROFIT_LABEL, ...amounts });
+        add(sub, amounts);
+      }
     }
     if (body.length === 0) continue;
     const label = ACCOUNT_GROUP_LABELS[group];
