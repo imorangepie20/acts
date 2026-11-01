@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { todayInSeoul } from "@/lib/vouchers/dates";
 import type { LineInput, VoucherInput } from "@/lib/vouchers/types";
@@ -9,7 +9,7 @@ import { addAttachment, removeAttachment } from "@/server/attachments/service";
 import type { SessionUser } from "@/server/auth/service";
 import { createAccount, updateAccount } from "@/server/accounts/service";
 import { getCompany, updateCompany } from "@/server/company/service";
-import { accounts, periodCloses, sites, users, voucherAttachments, voucherHistory, vouchers } from "@/server/db/schema";
+import { accounts, periodCloses, sites, users, voucherAttachments, voucherHistory, voucherLines, vouchers } from "@/server/db/schema";
 import {
   approveVoucher,
   createVoucher,
@@ -25,6 +25,7 @@ import {
   listMonthStatus,
   monthKey,
   monthOf,
+  PERIOD_LOCK,
   reopenMonth,
 } from "./periods";
 
@@ -460,6 +461,33 @@ describe("final-review guards", () => {
     const fresh = await createAccount(db, { code: "899", name: "새", group: "sga", requiresPartner: false });
     if (!fresh.ok) throw new Error(fresh.error);
     expect((await updateAccount(db, fresh.value.id, { group: "revenue" })).ok).toBe(true);
+  });
+
+  it("a group change waits for an in-flight voucher write, then sees its line", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let locked!: () => void;
+    const held = new Promise<void>((r) => (locked = r));
+    const r = await createVoucher(db, admin, { ...input("2020-01-10"), lines: [line("103", "debit", 10000), line("101", "credit", 10000)] });
+    if (!r.ok) throw new Error(r.error);
+    // An in-flight voucher edit: holds the period lock shared and has moved a line onto 811.
+    const writer = db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock_shared(${PERIOD_LOCK}::int, 0)`);
+      await tx
+        .update(voucherLines)
+        .set({ accountId: acc["811"] })
+        .where(and(eq(voucherLines.voucherId, r.value.id), eq(voucherLines.accountId, acc["103"])));
+      locked();
+      await gate;
+    });
+    await held;
+    let settled = false;
+    const change = updateAccount(db, acc["811"], { group: "revenue" }).finally(() => (settled = true));
+    await new Promise((r) => setTimeout(r, 200));
+    expect(settled).toBe(false);
+    release();
+    await writer;
+    expect(await change).toEqual({ ok: false, error: "전표가 있는 계정은 구분을 바꿀 수 없습니다." });
   });
 
   it("validates dashboardRole against the account group", async () => {

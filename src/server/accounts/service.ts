@@ -2,6 +2,7 @@ import { asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { type AccountGroup, type DashboardRole, VAT_INPUT_CODE, VAT_OUTPUT_CODE } from "@/lib/accounts";
 import type { Db } from "@/server/db/client";
 import { isUniqueViolation } from "@/server/db/errors";
+import { lockPeriodsExclusive } from "@/server/closing/periods";
 import { accounts, voucherLines } from "@/server/db/schema";
 import { fail, ok, type Result } from "@/server/result";
 import { STANDARD_ACCOUNTS } from "./standard-chart";
@@ -108,27 +109,32 @@ export async function updateAccount(
   if (patch.isActive !== undefined) set.isActive = patch.isActive;
   if (patch.dashboardRole !== undefined) set.dashboardRole = patch.dashboardRole;
 
-  const [target] = await db
-    .select({ code: accounts.code, group: accounts.group, dashboardRole: accounts.dashboardRole })
-    .from(accounts)
-    .where(eq(accounts.id, id));
-  if (!target) return fail(ERR_NOT_FOUND);
-  const group = patch.group ?? target.group;
-  const role = patch.dashboardRole !== undefined ? patch.dashboardRole : target.dashboardRole;
-  if (patch.group !== undefined && patch.group !== target.group) {
-    const [used] = await db
-      .select({ id: voucherLines.id })
-      .from(voucherLines)
-      .where(eq(voucherLines.accountId, id))
-      .limit(1);
-    if (used) return fail(ERR_GROUP_USED);
-  }
-  if (!roleFitsGroup(role, group)) return fail(ERR_ROLE);
-  if (patch.isActive === false && (target.code === VAT_INPUT_CODE || target.code === VAT_OUTPUT_CODE)) {
-    return fail(ERR_VAT);
-  }
-  await db.update(accounts).set(set).where(eq(accounts.id, id));
-  return ok();
+  // A group change takes the period lock exclusive first, so no voucher write can add a line on
+  // this account between the "no lines" check and the update (voucher writes take it shared).
+  return db.transaction(async (tx) => {
+    if (patch.group !== undefined) await lockPeriodsExclusive(tx);
+    const [target] = await tx
+      .select({ code: accounts.code, group: accounts.group, dashboardRole: accounts.dashboardRole })
+      .from(accounts)
+      .where(eq(accounts.id, id));
+    if (!target) return fail(ERR_NOT_FOUND);
+    const group = patch.group ?? target.group;
+    const role = patch.dashboardRole !== undefined ? patch.dashboardRole : target.dashboardRole;
+    if (patch.group !== undefined && patch.group !== target.group) {
+      const [used] = await tx
+        .select({ id: voucherLines.id })
+        .from(voucherLines)
+        .where(eq(voucherLines.accountId, id))
+        .limit(1);
+      if (used) return fail(ERR_GROUP_USED);
+    }
+    if (!roleFitsGroup(role, group)) return fail(ERR_ROLE);
+    if (patch.isActive === false && (target.code === VAT_INPUT_CODE || target.code === VAT_OUTPUT_CODE)) {
+      return fail(ERR_VAT);
+    }
+    await tx.update(accounts).set(set).where(eq(accounts.id, id));
+    return ok();
+  });
 }
 
 export async function getVatAccountIds(
